@@ -97,6 +97,18 @@ och bench --rx --tx --channels 1,2 --sample-rate 30.72M --seconds 10
 
 ## 命令行
 
+### 升级桥接固件
+
+CH32 桥接固件 1.0.0 及以上可直接通过 USB 升级，升级包从 [OmniCore-SDR-Firmware Releases](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) 下载：
+
+```bash
+och firmware info                                  # 当前版本与模式
+och firmware update OmniCore-Bridge-1.0.0.ocfw     # 约 5 秒，中断后可重新执行
+```
+
+`och firmware info` 显示 `legacy` 或 `Bootloader: none` 时，需先用 WCH-Link 烧录一次 `Merge.bin`。
+完整步骤见 [Firmware README：升级 CH32 桥接固件](https://github.com/Liren66/OmniCore-SDR-Firmware#升级-ch32-桥接固件)，命令与恢复说明见 [桥接固件升级](docs/firmware-update.md)。
+
 ### 命令一览
 
 | 类别 | 命令 |
@@ -263,6 +275,7 @@ USB2 测试的 TX 为 1 MHz 正弦、幅度 0.25、衰减 60 dB。启动后 1 �
 | PPS 监控 | Windows | 真实 PPS 下 30.72 MSPS 读数 122880000–122880001 Hz，频偏收敛至 0–0.008 ppm |
 | PPS 驯服晶振 | Windows | 4 种调谐模式与 300 次参考切换握手零丢失；空闲、RX 2×2 与 IQ8 全双工各 2 分钟全程锁定，相位 ≤ 158 ns，频偏 ≤ 0.016 ppm |
 | SDK 集成 | Linux | 独立 C / C++ CMake 工程链接发布包并运行；移动安装目录后仍可运行 |
+| 桥接固件 USB 升级 | Windows | USB3：连续 15 次成功，约 5 秒/次；USB2（480 Mbit/s）：连续 6 次成功，约 10 秒/次（Bootloader 先尝试 USB3）。两种链路下写入中途结束进程后设备停在 Bootloader，重新升级恢复；升级后 SDK 控制与 IQ 收发正常 |
 
 > [!NOTE]
 > 以上结果来自所列主机，USB 吞吐与主机控制器、端口和线材有关，更换环境后建议用 `och bench --json` 复核 `stability.pass`。测试只覆盖数据链路与控制功能，不包含 RF 功率、EVM、灵敏度等射频指标。

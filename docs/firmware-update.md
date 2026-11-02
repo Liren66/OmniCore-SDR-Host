@@ -6,7 +6,8 @@ OCH 0.5.0 起可以通过 USB 升级 CH32H417 桥接固件，不需要 WCH-Link�
 ## 前提
 
 - 设备上的桥接固件为 **1.0.0 及以上**（带 Bootloader）。更早的固件 `och firmware info` 显示 `legacy`，
-  需先用 WCH-Link 烧录一次 Firmware Release 中的 `Merge.bin`。
+  需先用 WCH-Link 烧录一次 Firmware Release 中的 `Merge.bin`，步骤见
+  [Firmware README：升级 CH32 桥接固件](https://github.com/Liren66/OmniCore-SDR-Firmware#升级-ch32-桥接固件)。
 - 没有其他程序打开设备（升级与 `och_open` 使用同一把设备锁，占用时返回 BUSY）。
 - Windows 沿用已安装的 libusbK 驱动，Linux 沿用 udev 规则：Bootloader 与应用的 VID/PID、序列号和端点相同。
 
@@ -16,7 +17,7 @@ OCH 0.5.0 起可以通过 USB 升级 CH32H417 桥接固件，不需要 WCH-Link�
 |---|---|
 | `och firmware` / `och firmware info` | 模式（application / bootloader / legacy）、版本、Bootloader 版本、构建号 |
 | `och firmware check FILE.ocfw` | 离线校验升级包（头、硬件 ID、CRC），显示版本 |
-| `och firmware update FILE.ocfw` | 进入 Bootloader → 擦除 → 写入 → 校验 → 重启，确认新版本运行 |
+| `och firmware update FILE.ocfw` | 进入 Bootloader → 擦除 → 写入 → 校验 → 重启，确认新版本运行（USB3 约 5 秒，USB2 约 10 秒） |
 | `och firmware boot` | 离开 Bootloader，启动已安装的应用 |
 | `och firmware enter` | 重启进入 Bootloader（恢复或调试用） |
 
