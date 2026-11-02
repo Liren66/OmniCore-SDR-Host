@@ -54,6 +54,12 @@ int och_set_rx_rssi_enabled(och_device* d,uint32_t enabled){return protect([&]{d
 int och_get_core_temperature(och_device* d,och_core_temperature* c){return protect([&]{device(d);out_struct(c);std::lock_guard<std::mutex> lock(d->state_mutex);*c=d->get_core_temperature();return OCH_OK;});}
 int och_set_rgb_enabled(och_device* d,uint32_t enabled){return protect([&]{device(d);std::lock_guard<std::mutex> lock(d->state_mutex);d->set_rgb_enabled(enabled);return OCH_OK;});}
 int och_set_fan_enabled(och_device* d,uint32_t enabled){return protect([&]{device(d);std::lock_guard<std::mutex> lock(d->state_mutex);d->set_fan_enabled(enabled);return OCH_OK;});}
+int och_firmware_query(const char* serial,och_firmware_info* p){return protect([&]{out_struct(p);*p=firmware_query(serial);return OCH_OK;});}
+int och_get_firmware_info(och_device* d,och_firmware_info* p){return protect([&]{device(d);out_struct(p);*p=d->firmware;return OCH_OK;});}
+int och_firmware_read_image(const char* path,och_firmware_image* p){return protect([&]{out_struct(p);*p=firmware_read_image(path);return OCH_OK;});}
+int och_firmware_update(const char* serial,const char* path,och_firmware_progress progress,void* user){return protect([&]{firmware_update(serial,path,progress,user);return OCH_OK;});}
+int och_firmware_enter_bootloader(const char* serial){return protect([&]{firmware_enter_bootloader(serial);return OCH_OK;});}
+int och_firmware_start_app(const char* serial){return protect([&]{firmware_start_app(serial);return OCH_OK;});}
 const char* och_version(){return OCH_VERSION;}
 const char* och_last_error(){return last_error.c_str();}
 void och_default_config(och_config* c){if(!c)return;*c={};c->struct_size=sizeof(*c);c->sample_rate=30720000;c->rx_mask=3;c->tx_mask=0;c->rx_frequency=c->tx_frequency=1000000000ULL;c->rx_bandwidth=c->tx_bandwidth=18000000;c->rx_gain[0]=c->rx_gain[1]=30;c->tx_attenuation[0]=c->tx_attenuation[1]=10;c->rx_agc=2;}

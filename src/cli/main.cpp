@@ -212,7 +212,10 @@ std::string power_json(const och_power_status& p) {
 void print_power(const och_power_status& p) {
     presentation::power(p, std::cout);
 }
-void print_info(const och_device_info& i, bool json_mode, const och_power_status* power = nullptr) {
+std::string firmware_json(const och_firmware_info& f);
+void print_firmware(const och_firmware_info& f);
+void print_info(const och_device_info& i, bool json_mode, const och_power_status* power = nullptr,
+                const och_firmware_info* bridge = nullptr) {
     if (json_mode) {
         std::cout << "{\"serial\":" << json(i.serial) << ",\"name\":" << json(i.name)
             << ",\"driver\":" << json(i.driver) << ",\"firmware\":" << json(i.firmware)
@@ -234,9 +237,13 @@ void print_info(const och_device_info& i, bool json_mode, const och_power_status
             }
             std::cout << "]}";
         }
+        if (bridge) std::cout << ",\"bridge\":" << firmware_json(*bridge);
         if (power) std::cout << ",\"power\":" << power_json(*power);
         std::cout << '}';
-    } else presentation::device(i, power != nullptr, std::cout);
+    } else {
+        presentation::device(i, power != nullptr, std::cout);
+        if (bridge) print_firmware(*bridge);
+    }
     if (!json_mode && power) print_power(*power);
 }
 std::string stats_json(const och_stats& s, unsigned channels_count) {
@@ -802,6 +809,116 @@ int run_clock(const options& opt) {
     if (rate) report_rate_adjustment(sample_rate, actual.rx_hz[5], opt.has("json"));
     return 0;
 }
+// --- CH32 bridge firmware ------------------------------------------------------
+std::string firmware_version(uint32_t v) {
+    return v ? std::to_string(v >> 16) + "." + std::to_string((v >> 8) & 255) + "." + std::to_string(v & 255) : "none";
+}
+const char* firmware_mode(uint32_t mode) {
+    return mode == OCH_FW_MODE_APP ? "application" : mode == OCH_FW_MODE_BOOTLOADER ? "bootloader" : "legacy";
+}
+std::string firmware_json(const och_firmware_info& f) {
+    std::ostringstream out;
+    out << "{\"serial\":" << json(f.serial) << ",\"mode\":" << json(firmware_mode(f.mode));
+    if (f.mode != OCH_FW_MODE_LEGACY)
+        out << ",\"running_version\":" << json(firmware_version(f.running_version))
+            << ",\"bootloader_version\":" << json(firmware_version(f.bootloader_version))
+            << ",\"app_version\":" << json(firmware_version(f.app_version))
+            << ",\"app_programmed\":" << ((f.app_status & OCH_FW_APP_PROGRAMMED) ? "true" : "false")
+            << ",\"app_image_verified\":" << ((f.app_status & OCH_FW_APP_IMAGE_OK) ? "true" : "false")
+            << ",\"build_id\":" << json(f.build_id);
+    out << '}';
+    return out.str();
+}
+void print_firmware(const och_firmware_info& f) {
+    using presentation::tone;
+    presentation::section("Bridge firmware (CH32)", std::cout);
+    presentation::field("Mode", firmware_mode(f.mode), std::cout,
+                        f.mode == OCH_FW_MODE_APP ? tone::good : tone::warn);
+    if (f.mode == OCH_FW_MODE_LEGACY) {
+        std::cout << '\n';
+        presentation::note("Firmware before 1.0.0 has no version or USB bootloader; flash Merge.bin once with WCH-Link.", std::cout);
+        return;
+    }
+    if (f.mode == OCH_FW_MODE_APP)
+        presentation::field("Version", firmware_version(f.running_version) + "  (" + f.build_id + ")", std::cout, tone::accent);
+    presentation::field("Bootloader", firmware_version(f.bootloader_version), std::cout);
+    if (f.mode == OCH_FW_MODE_BOOTLOADER) {
+        presentation::field("Installed application", firmware_version(f.app_version), std::cout);
+        presentation::field("Application", (f.app_status & OCH_FW_APP_IMAGE_OK) ? "verified" :
+                            (f.app_status & OCH_FW_APP_PROGRAMMED) ? "present, not verified" : "missing", std::cout,
+                            (f.app_status & OCH_FW_APP_PROGRAMMED) ? tone::plain : tone::warn);
+        std::cout << '\n';
+        presentation::note("Leave with och firmware boot, or install with och firmware update FILE.", std::cout);
+    }
+}
+void firmware_progress(void* user, uint32_t stage, uint32_t done, uint32_t total) {
+    static const char* names[] = {"", "Entering bootloader", "Erasing", "Writing", "Verifying", "Restarting"};
+    auto& last = *static_cast<uint32_t*>(user);
+    if (stage == OCH_FW_STAGE_WRITE) {
+        std::cout << "\r  " << names[stage] << "  " << (total ? done * 100ULL / total : 100) << "%  ("
+                  << done << " / " << total << " bytes)" << std::flush;
+        if (done == total) std::cout << '\n';
+    } else if (stage != last && done == 0) {
+        std::cout << "  " << names[stage] << "...\n" << std::flush;
+    }
+    last = stage;
+}
+int run_firmware(const options& opt) {
+    const bool json_mode = opt.has("json");
+    const auto& p = opt.positional;
+    const std::string action = p.empty() ? "info" : p[0];
+    const std::string serial_text = opt.get("serial");
+    const char* serial = serial_text.empty() ? nullptr : serial_text.c_str();
+    allowed(opt, {}, true);
+    if ((action == "info" || action == "boot" || action == "enter") && p.size() > 1)
+        throw std::invalid_argument("och firmware " + action + " takes no file");
+    if ((action == "update" || action == "check") && p.size() != 2)
+        throw std::invalid_argument("use och firmware " + action + " FILE.ocfw");
+    if (action == "check" || action == "update") {
+        och_firmware_image img{}; img.struct_size = sizeof img;
+        och::check(och_firmware_read_image(p[1].c_str(), &img));
+        if (action == "check") {
+            if (json_mode) {
+                std::cout << "{\"version\":" << json(firmware_version(img.version)) << ",\"image_size\":" << img.image_size
+                          << ",\"image_crc32\":" << img.image_crc32 << ",\"build_unix\":" << img.build_unix
+                          << ",\"build_id\":" << json(img.build_id) << "}\n";
+            } else {
+                presentation::section("Bridge firmware image", std::cout);
+                presentation::field("Version", firmware_version(img.version), std::cout, presentation::tone::accent);
+                presentation::field("Build", img.build_id, std::cout);
+                presentation::field("Size", std::to_string(img.image_size) + " bytes", std::cout);
+                presentation::field("CRC32", presentation::detail::hex(img.image_crc32, 8), std::cout);
+            }
+            return 0;
+        }
+        if (!json_mode) {
+            presentation::section("Bridge firmware update", std::cout);
+            presentation::field("Image", p[1] + "  (" + firmware_version(img.version) + ", " + img.build_id + ")", std::cout);
+            std::cout << '\n';
+            presentation::note("Do not unplug the device. If interrupted, it stays in the bootloader; run update again.", std::cout);
+            std::cout << '\n';
+        }
+        uint32_t last = 0;
+        och::check(och_firmware_update(serial, p[1].c_str(), json_mode ? nullptr : firmware_progress, &last));
+    } else if (action == "boot") {
+        och::check(och_firmware_start_app(serial));
+    } else if (action == "enter") {
+        och::check(och_firmware_enter_bootloader(serial));
+    } else if (action != "info") {
+        throw std::invalid_argument("use och firmware [info|check FILE|update FILE|boot|enter]");
+    }
+    och_firmware_info f{}; f.struct_size = sizeof f;
+    och::check(och_firmware_query(serial, &f));
+    if (json_mode) std::cout << firmware_json(f) << '\n';
+    else {
+        print_firmware(f);
+        if (action == "update") {
+            std::cout << '\n';
+            presentation::status(presentation::level::ok, "Bridge firmware " + firmware_version(f.running_version) + " installed.", std::cout);
+        }
+    }
+    return 0;
+}
 int execute(const options& opt) {
     bool json_mode = opt.has("json");
     if (opt.command == "help" || opt.has("help")) {
@@ -853,10 +970,13 @@ int execute(const options& opt) {
     if (opt.command == "info") {
         allowed(opt, {}); och::device d(opt.get("serial"));
         auto info = d.info(); auto power = d.power_status();
-        print_info(info, json_mode, &power);
+        och_firmware_info bridge{}; bridge.struct_size = sizeof bridge;
+        och::check(och_get_firmware_info(d.native_handle(), &bridge));
+        print_info(info, json_mode, &power, &bridge);
         if (json_mode) std::cout << '\n';
         return 0;
     }
+    if (opt.command == "firmware") return run_firmware(opt);
     if (opt.command == "rssi") {
         // och rssi on|off switches reporting (off after power-up); otherwise read.
         const bool toggle = opt.positional.size() == 1 && (opt.positional[0] == "on" || opt.positional[0] == "off");

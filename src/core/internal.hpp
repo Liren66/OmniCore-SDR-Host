@@ -30,6 +30,14 @@ public:
 };
 std::string serial_of(const och::transport::DeviceInfo&);
 void fill_info(och_device_info&,const och::transport::DeviceInfo&);
+// CH32 bridge firmware (firmware.cpp). firmware_probe is false for bridge
+// firmware without the OCFW requests (legacy).
+bool firmware_probe(och::transport::Usb&,och_firmware_info&,const std::string& serial);
+och_firmware_image firmware_read_image(const char* path);
+och_firmware_info firmware_query(const char* serial);
+void firmware_enter_bootloader(const char* serial);
+void firmware_start_app(const char* serial);
+void firmware_update(const char* serial,const char* path,och_firmware_progress,void* user);
 }
 
 struct och_device {
@@ -37,6 +45,7 @@ struct och_device {
     och::transport::Handle owner;
     bool owns_mutex=false;
     och_device_info info{};och_config config{};bool configured=false,transport_dirty=false;
+    och_firmware_info firmware{}; // CH32 bridge, read at open
     std::mutex state_mutex;
     // state_mutex serializes control transactions; IO gates protect buffers
     // while a transaction reuses the existing public stream handles.

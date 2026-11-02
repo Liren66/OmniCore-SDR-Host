@@ -200,3 +200,7 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 ## 0.3.5 板级 RGB 与风扇温控
 
 新增 RGB 开关/状态、风扇温控开关/状态和 Zynq 核心温度查询。使用新 FPGA BOARD_CTRL_AXI 及新版 SDK，能力标志为 `board_rgb=1 fan_control=1 core_temp=1`。当前 SDK 默认 RGB 开启、亮度 15%，风扇温控关闭；OCH 0.3.6 同时兼容旧版 25% 固件，亮度以设备回报为准；不改变已有 C ABI 结构或停止 IQ 流。详见 [板级控制及接口](board-control.md)。
+
+## 桥接固件（0.5.0）
+
+`och_firmware_query`、`och_firmware_read_image`、`och_firmware_update`、`och_firmware_enter_bootloader`、`och_firmware_start_app` 只使用 EP0 厂商请求，不打开 SDK 控制通道，可在 Bootloader 模式下使用；设备被其他句柄占用时返回 `OCH_BUSY`。`och_get_firmware_info` 返回已打开设备的桥接固件信息。设备处于 Bootloader 时 `och_open` 返回 `OCH_UNSUPPORTED`。用法和恢复流程见 [桥接固件升级](firmware-update.md)。

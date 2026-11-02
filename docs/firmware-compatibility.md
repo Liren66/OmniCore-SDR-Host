@@ -2,6 +2,8 @@
 
 主机安装器只安装 Windows 程序、主机 C/C++ 开发接口和目标数据口的 libusbK 驱动，不含板级 SDK 源码副本、ELF、BOOT.bin 或 FPGA bitstream，不自动烧写 CH32、SDK、FPGA 或启动 Flash。把软件装到新电脑后仍须连接具有匹配固件的 OmniCoreSDR。
 
+0.5.0 起，CH32 桥接固件 1.0.0 及以上可由用户手动执行 `och firmware update FILE.ocfw` 通过 USB 升级，详见 [桥接固件升级](firmware-update.md)。`och firmware info` 显示桥接固件版本；1.0.0 之前的桥接固件显示 legacy。
+
 本版实际检查/使用以下能力：
 
 | 组件 | 必要能力 | 检查方式 |

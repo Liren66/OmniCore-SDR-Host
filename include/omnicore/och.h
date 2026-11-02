@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 #define OCH_ABI_VERSION 1u
-#define OCH_VERSION "0.4.8"
+#define OCH_VERSION "0.5.0"
 #define OCH_PPS_LOCK_TOLERANCE_PPM 1
 typedef struct och_device och_device;
 typedef struct och_stream och_stream;
@@ -307,6 +307,44 @@ typedef struct och_rx_rssi {
 } och_rx_rssi;
 OCH_API int och_get_rx_rssi(och_device*, och_rx_rssi*);
 OCH_API int och_set_rx_rssi_enabled(och_device*, uint32_t enabled);
+
+/* CH32 bridge firmware (0.5.0). Uses USB EP0 vendor requests only, so it
+ * works without the ZYNQ SDK and while the bridge runs its bootloader.
+ * Versions are major<<16 | minor<<8 | patch. LEGACY: bridge firmware without
+ * the bootloader (before 1.0.0); flash Merge.bin once with WCH-Link. The
+ * serial argument selects a device as in och_open (NULL: the only one); the
+ * device must not be open by another handle or process (BUSY). */
+enum { OCH_FW_MODE_LEGACY=0, OCH_FW_MODE_APP=1, OCH_FW_MODE_BOOTLOADER=2 };
+enum { OCH_FW_APP_PROGRAMMED=1u, OCH_FW_APP_HEADER_OK=2u, OCH_FW_APP_IMAGE_OK=4u };
+typedef struct och_firmware_info {
+    uint32_t struct_size, mode;
+    uint32_t running_version;    /* bridge application or bootloader answering */
+    uint32_t bootloader_version; /* 0 = no bootloader */
+    uint32_t app_version;        /* from the installed image header, 0 = none */
+    uint32_t app_status;         /* OCH_FW_APP_* */
+    uint32_t app_max_size;
+    char serial[128], build_id[24];
+    uint32_t reserved[8];
+} och_firmware_info;
+/* .ocfw update image (header + application), validated by och_firmware_read_image. */
+typedef struct och_firmware_image {
+    uint32_t struct_size, version, image_size, image_crc32, build_unix;
+    char build_id[24];
+    uint32_t reserved[4];
+} och_firmware_image;
+enum { OCH_FW_STAGE_BOOTLOADER=1, OCH_FW_STAGE_ERASE=2, OCH_FW_STAGE_WRITE=3,
+       OCH_FW_STAGE_VERIFY=4, OCH_FW_STAGE_RESTART=5 };
+/* done/total are bytes for OCH_FW_STAGE_WRITE, otherwise 0/0 or 1/1. */
+typedef void (*och_firmware_progress)(void* user, uint32_t stage, uint32_t done, uint32_t total);
+OCH_API int och_firmware_query(const char* serial, och_firmware_info*);
+OCH_API int och_get_firmware_info(och_device*, och_firmware_info*); /* cached at och_open */
+OCH_API int och_firmware_read_image(const char* path, och_firmware_image*);
+/* Enters the bootloader if needed, erases, writes and verifies the image,
+ * then restarts into it and confirms the new version (about 10-20 s). An
+ * interrupted update leaves the device in the bootloader; run it again. */
+OCH_API int och_firmware_update(const char* serial, const char* path, och_firmware_progress, void* user);
+OCH_API int och_firmware_enter_bootloader(const char* serial);
+OCH_API int och_firmware_start_app(const char* serial); /* leave the bootloader */
 
 OCH_API const char* och_version(void);
 OCH_API const char* och_last_error(void); /* thread-local; valid until next failing call */

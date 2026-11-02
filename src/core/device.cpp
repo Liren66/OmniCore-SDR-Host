@@ -49,6 +49,10 @@ void och_device::open(const DeviceInfo& d) {
     require(owner.h!=nullptr,OCH_IO,"device mutex unavailable");
     require(!existed,OCH_BUSY,"device already owned by another OmniCore Host process");
     usb.open(d.path);require(usb.has(0x82)&&usb.has(0x02),OCH_PROTOCOL,"control endpoints 02/82 missing");
+    // The bridge bootloader keeps the USB identity but has no SDK behind it.
+    firmware_probe(usb,firmware,info.serial);
+    require(firmware.mode!=OCH_FW_MODE_BOOTLOADER,OCH_UNSUPPORTED,
+            "OmniCoreSDR is in bridge bootloader mode; run och firmware update FILE or och firmware boot");
     const auto packet_size=usb.pipes.at(0x81).MaximumPacketSize;
     info.usb_speed_mbps=packet_size==1024?5000:packet_size==512?480:12;
     require(packet_size==1024 || packet_size==512,OCH_UNSUPPORTED,

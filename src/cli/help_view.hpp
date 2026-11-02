@@ -22,6 +22,12 @@ inline const std::vector<help_group>& help_groups() {
             {"rssi on|off", "Switch RX RSSI reporting (off after power-up)"},
             {"rssi [--count N] [--interval 0.5]", "RX1/RX2 RSSI, relative dB; --count 0 = until Ctrl+C"},
             {"version", "Host software version and C ABI"}}},
+        {"Bridge firmware (CH32)", {
+            {"firmware [info]", "Bridge version, bootloader, mode"},
+            {"firmware check FILE.ocfw", "Validate an update image offline"},
+            {"firmware update FILE.ocfw", "Install over USB (enters the bootloader)"},
+            {"firmware boot", "Leave the bootloader, start the application"},
+            {"firmware enter", "Restart into the bootloader (recovery)"}}},
         {"Control", {
             {"commands", "List the canonical control catalog"},
             {"get <name> [values]", "Query, e.g. och get rx.lo-frequency"},

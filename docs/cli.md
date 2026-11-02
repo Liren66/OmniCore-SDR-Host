@@ -108,6 +108,9 @@ JSON 保持旧字段，新增内容如下：
 | och selftest | 停止通路并执行设备 RX/TX 数字自检 |
 | och help | 查看命令及参数 |
 | och version --json | 查询软件及 ABI 版本 |
+| och firmware | 查询 CH32 桥接固件模式与版本（不访问 SDK） |
+| och firmware update FILE.ocfw | 通过 USB 升级桥接固件，见 [桥接固件升级](firmware-update.md) |
+| och firmware boot / enter | 离开 / 进入桥接 Bootloader |
 
 规范名称使用小写点分组，例如 rx.lo-frequency、tx1.attenuation。get/set/action 会按 [完整目录](commands.md) 校验参数并转换到 SDK 单位，频率为 Hz、增益/衰减为 dB、DDS scale 为归一化比例。单值回读也转换成规范单位；结构化状态内容保留固件字段。JSON 的 reply 是规范结果，raw_reply 保留原回应，sdk_command 是实际命令。PPS 使用 `pps.input-enabled` 和 `pps.status`，40 MHz 调谐模式和 CH32 环路状态用 `clock.vcxo-status`；旧固件缺少 `pps_monitor=1`/`vcxo=1` 时明确报不支持，详见 [PPS](pps.md)。do 是 action 的兼容别名。
 
