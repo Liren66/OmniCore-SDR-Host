@@ -697,6 +697,8 @@ inline void event(const och_event& e, double elapsed_seconds, std::ostream& out,
         break;
     default: text = message; break;
     }
+    if (e.count > 1 && !summarized)  // SDK summary record: count events, block/time of the last
+        text += "  (x" + detail::grouped(e.count) + ", SDK summary)";
     if (summarized) text = "+" + detail::grouped(summarized) + " more (summarized)";
     const auto& st = detail::look(out);
     std::string stamp = "+" + detail::fixed(elapsed_seconds, 3) + "s";

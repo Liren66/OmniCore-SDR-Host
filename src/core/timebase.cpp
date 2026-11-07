@@ -1,7 +1,9 @@
 // Hardware time base, timed RX commands and FPGA timing events
 // (FPGA CH32H417_IP 1.3 + SDK time commands; framed transport only).
 #include "internal.hpp"
+#include <algorithm>
 #include <charconv>
+#include <cstdint>
 using namespace och::core;
 
 namespace {
@@ -49,6 +51,10 @@ och_time_status och_device::get_time() {
 
 // EVT tseq=<n> type=<name> src=fpga_time code=<c> block=<seq> time=<ticks> lost_before=<0|1>
 // EVT tseq=<n> type=time_invalidated src=sdk old_rate=<hz> new_rate=<hz>
+// Firmware after v2026.11.07 coalesces tx_underflow / rx_overflow_gap bursts:
+// the first event as above, then at most one line per 250 ms with
+// "count=<n> first_block=<b> first_time=<ticks>" appended (n events, block and
+// time of the last one). Lines without count stand for one event.
 bool och::core::timed_event(och_device& d, const std::string& s) {
     if (s.find(" src=fpga_time") == std::string::npos && s.find("type=time_invalidated") == std::string::npos)
         return false;
@@ -63,12 +69,14 @@ bool och::core::timed_event(och_device& d, const std::string& s) {
     else if (name == "rx_late_command" || name == "rx_command_ignored") type = OCH_EVENT_RX_LATE;
     else if (name == "time_invalidated") type = OCH_EVENT_TIME_INVALIDATED;
     uint64_t t = 0;
-    uint32_t code = 0, block = 0;
+    uint32_t code = 0, block = 0, count = 1;
     try { t = u64(field(s, "time")); } catch (...) {}
     try { code = uint32_t(u64(field(s, "code"))); } catch (...) {}
     try { block = uint32_t(u64(field(s, "block"))); } catch (...) {}
-    if (type == OCH_EVENT_TX_UNDERFLOW) ++d.underflows;
-    d.emit(type, s, d.rx ? d.rx->epoch : 0, t, code, block);
+    if (s.find(" count=") != std::string::npos)
+        try { count = uint32_t(std::max<uint64_t>(1, std::min<uint64_t>(u64(field(s, "count")), UINT32_MAX))); } catch (...) {}
+    if (type == OCH_EVENT_TX_UNDERFLOW) d.underflows += count;
+    d.emit(type, s, d.rx ? d.rx->epoch : 0, t, code, block, count);
     return true;
 }
 

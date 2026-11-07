@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 #define OCH_ABI_VERSION 1u
-#define OCH_VERSION "0.6.0"
+#define OCH_VERSION "0.6.1"
 #define OCH_PPS_LOCK_TOLERANCE_PPM 1
 typedef struct och_device och_device;
 typedef struct och_stream och_stream;
@@ -116,6 +116,10 @@ typedef struct och_event {
     char message[512];
     uint64_t hw_time; /* 0.6.0 extension: sample time for timed event types */
     uint32_t code, block;
+    /* 0.6.1 extension: device events this record stands for. 1 normally; N
+     * for an SDK summary line ("count=N") that coalesces a burst of
+     * tx_underflow / rx_overflow_gap events. block/hw_time are the last one. */
+    uint32_t count, reserved_event;
 } och_event;
 /* AD9361 hardware FIR. Both physical channels in the selected direction share
  * these coefficients. get returns the last configuration verified by SDK SPI

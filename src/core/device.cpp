@@ -71,9 +71,9 @@ void och_device::open(const DeviceInfo& d) {
     och_default_config(&config);
     reset_transport();
 }
-void och_device::emit(uint32_t type,const std::string& message,uint64_t ep,uint64_t hw_time,uint32_t code,uint32_t block) {
+void och_device::emit(uint32_t type,const std::string& message,uint64_t ep,uint64_t hw_time,uint32_t code,uint32_t block,uint32_t count) {
     och_event e{};e.struct_size=sizeof e;e.type=type;e.host_monotonic_ns=now_ns();e.epoch=ep;
-    e.hw_time=hw_time;e.code=code;e.block=block;
+    e.hw_time=hw_time;e.code=code;e.block=block;e.count=count?count:1;
     copy_text(e.message,sizeof e.message,message);
     std::lock_guard<std::mutex> lock(events_mutex);
     e.sequence=++event_seq;

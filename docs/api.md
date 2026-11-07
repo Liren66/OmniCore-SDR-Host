@@ -180,7 +180,7 @@ start 前 send 只预填不发射。停止后不会因为后来提交数据自�
 
 ## 事件与线程
 
-每设备有有界事件队列，och_poll_event 获取设备 EVT、主机溢出、传输故障、TX 欠供、重配置结果，以及 0.6.0 的定时事件（`RX_GAP`、`RX_LATE`、`TX_BURST_ACK`、`TX_LATE`、`TX_UNDERFLOW`、`TX_ERROR`、`TIME_INVALIDATED`；`hw_time`、`code`、`block` 给出样点时间、FPGA 事件码与块序号）。应用应定期取出，event_drops 增加表示队列未及时处理或事件过密。
+每设备有有界事件队列，och_poll_event 获取设备 EVT、主机溢出、传输故障、TX 欠供、重配置结果，以及 0.6.0 的定时事件（`RX_GAP`、`RX_LATE`、`TX_BURST_ACK`、`TX_LATE`、`TX_UNDERFLOW`、`TX_ERROR`、`TIME_INVALIDATED`；`hw_time`、`code`、`block` 给出样点时间、FPGA 事件码与块序号；0.6.1 起 `count` 为该记录代表的设备事件数，固件合并过载期间的欠流/GAP 时大于 1，见 [硬件时间戳](timestamps.md)）。应用应定期取出，event_drops 增加表示队列未及时处理或事件过密。
 
 RX 与 TX 可并行；同一 RX 仅一个 consumer，同一 TX 仅一个 producer。stop 和协调重配置可与正在进行的收发并行，用于结束或暂时中断等待；destroy/close 不能与该句柄上的任何操作并发。确认 IO 线程退出后再销毁对象。配置与生命周期操作由应用串行管理。
 
@@ -191,7 +191,7 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 - usb_bytes 是该流已完成 USB 请求的字节数；RX 包括 16 B 块头和补零，TX 不包括仅接受进入主机队列但尚未完成 USB 的部分。
 - samples 在 RX 表示已交给应用的每通道样本数，在 TX 表示已接受进入主机队列的每通道样本数。两者都不是 RF 测量，尤其 TX 不能用它断言全部样本已经发射。
 - host_dropped_samples、headers（已解析的成帧块数）、resyncs（块头校验失败后的重新同步次数，正常为 0）、transfer_errors、tx_starvation_events 属于该流；队列字节和峰值按当前 wire 字节计，12bit 为每复样本 3B，8bit 为 2B。
-- device_overflows、device_underflows、event_drops 属于该设备对象的观察期；RX/TX stats 会看到相同设备计数，不要把两份相加。device_overflows 按收到的 GAP 块计数，精确丢样量见 RX 元数据的 device_dropped_samples；device_underflows 按 TX 欠流事件计数。
+- device_overflows、device_underflows、event_drops 属于该设备对象的观察期；RX/TX stats 会看到相同设备计数，不要把两份相加。device_overflows 按收到的 GAP 块计数，精确丢样量见 RX 元数据的 device_dropped_samples；device_underflows 按 TX 欠流事件计数（合并记录按 `count` 累加）。
 - 最大采样率 61.44 MSPS 是单通道的射频能力，不表示 USB 可同时承载四通道都满速。四通道 61.44 MSPS 总 wire 需求 737.28 MB/s；应按共享 USB 带宽选定双向速率，常用四通道测试使用 30.72 MSPS。
 
 ## RX RSSI（0.4.7）
@@ -217,4 +217,4 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 | `och_rx_command(rx, flags, ticks, n)` | 运行中下发 RX 命令：定时、`OCH_RX_NOW` 或 `OCH_RX_STOP` |
 | `och_send_burst(tx, samples, n, &md, &accepted, timeout)` | `och_tx_metadata` 带 HAS_TIME / SOB / EOB 与样点时间 |
 
-新增字段均追加在结构末尾或占用原 reserved 位置，按 `struct_size` 兼容旧调用方，C ABI 仍为 1。时序图与示例见 [硬件时间戳](timestamps.md)。
+新增字段均追加在结构末尾或占用原 reserved 位置，按 `struct_size` 兼容旧调用方，C ABI 仍为 1。0.6.1 在 `och_event` 末尾追加 `count`、`reserved_event`，0.6.0 及更早布局的 `struct_size` 仍被接受（读不到 `count`）。时序图与示例见 [硬件时间戳](timestamps.md)。

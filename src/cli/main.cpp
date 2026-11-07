@@ -655,7 +655,7 @@ int run_stream(const options& opt) {
     auto previous_progress = begin;
     uint64_t previous_rx_bytes = progress.enabled() && rx ? rx->stats().usb_bytes : 0;
     uint64_t previous_tx_bytes = progress.enabled() && tx ? tx->stats().usb_bytes : 0;
-    uint64_t event_count = 0, events_shown = 0;
+    uint64_t event_count = 0, events_shown = 0, device_events = 0;  // device_events adds up SDK count=
     // Text mode prints the first few events of each type, then one roll-up
     // line per type and second, so a fault storm stays readable.
     constexpr uint64_t per_type_lines = 3;
@@ -681,19 +681,22 @@ int run_stream(const options& opt) {
         och_event event{};
         for (size_t n = 0; n < budget && device.poll_event(event); ++n) {
             ++event_count;
+            const uint64_t represented = event.count ? event.count : 1;
+            device_events += represented;
             const double observed_seconds = std::chrono::duration<double>(clock_type::now() - begin).count();
             startup.observe(event, observed_seconds);
             if (opt.has("json")) std::cerr << "{\"type\":\"event\",\"sequence\":" << event.sequence
                 << ",\"event_type\":" << event.type << ",\"epoch\":" << event.epoch
                 << ",\"host_monotonic_ns\":" << event.host_monotonic_ns
                 << ",\"observed_seconds\":" << std::setprecision(17) << observed_seconds
+                << ",\"count\":" << represented
                 << ",\"message\":" << json(event.message) << "}\n";
             else if (shown_by_type[event.type] < per_type_lines) {
                 ++shown_by_type[event.type]; ++events_shown;
                 progress.clear();
                 presentation::event(event, observed_seconds, std::cerr);
             } else {
-                ++held_by_type[event.type];
+                held_by_type[event.type] += represented;
                 last_held[event.type] = event;
             }
         }
@@ -760,7 +763,7 @@ int run_stream(const options& opt) {
         if (!output || !metadata) throw std::runtime_error("RX output flush failed"); }
     if (opt.has("json")) {
         std::cout << "{\"command\":" << json(opt.command) << ",\"config\":" << config_json(config)
-            << ",\"format\":" << json(format_name(format)) << ",\"events\":" << event_count
+            << ",\"format\":" << json(format_name(format)) << ",\"events\":" << event_count << ",\"device_events\":" << device_events
             << ",\"interrupted\":" << (interrupted ? "true" : "false")
             << ",\"stopped_early\":" << (stopped_early ? "true" : "false");
         std::cout << ",\"stability\":{\"startup_window_seconds\":" << stream_assessment::startup_seconds
@@ -776,6 +779,7 @@ int run_stream(const options& opt) {
         presentation::section("Stream complete", std::cout);
         presentation::field("Stop reason", interrupted ? "User interruption (Ctrl+C)" : stopped_early ? "Repeated RX overflows after startup" : work.eof ? "TX source reached end of file" : "Requested duration reached", std::cout);
         presentation::field("Events", presentation::detail::grouped(event_count) +
+            (device_events > event_count ? " records, " + presentation::detail::grouped(device_events) + " device events" : std::string()) +
             (events_shown < event_count ? "  (" + presentation::detail::grouped(events_shown) + " listed, rest summarized)" : ""),
             std::cout, event_count ? presentation::tone::plain : presentation::tone::muted);
         if (startup_accepted) presentation::field("Startup RX gaps", std::to_string(startup_accepted) + "  (first second, tolerated)", std::cout);

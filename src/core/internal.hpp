@@ -68,7 +68,7 @@ struct och_device {
     void open(const och::transport::DeviceInfo&);
     std::string command(const std::string&,uint32_t timeout=5000);
     void control_loop();void line(const std::string&);
-    void emit(uint32_t type,const std::string&,uint64_t epoch=0,uint64_t hw_time=0,uint32_t code=0,uint32_t block=0);
+    void emit(uint32_t type,const std::string&,uint64_t epoch=0,uint64_t hw_time=0,uint32_t code=0,uint32_t block=0,uint32_t count=1);
     void reset_transport();void configure(const och_config&);
     void apply_config(const och_config&);
     // LO, manual gain and attenuation changes that keep IQ streams running.

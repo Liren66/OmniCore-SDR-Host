@@ -28,7 +28,7 @@ struct startup_observer {
     uint64_t gaps = 0;
     void observe(const och_event& e, double seconds) {
         if (!std::isfinite(seconds) || seconds < 0 || seconds > startup_seconds) return;
-        if (e.type == OCH_EVENT_RX_GAP) ++gaps;
+        if (e.type == OCH_EVENT_RX_GAP) gaps += e.count ? e.count : 1;  // SDK summaries carry count
     }
     uint64_t accepted(const och_stats& rx) const { return std::min(gaps, rx.device_overflows); }
 };

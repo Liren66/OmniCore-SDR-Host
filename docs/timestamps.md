@@ -53,6 +53,7 @@ och_send_burst(tx, samples, n, &md, &accepted, 1000);  // 在样点时间 T 开�
 - 每个突发结束产生 `OCH_EVENT_TX_BURST_ACK` 事件。
 - 突发中途数据断流产生 `OCH_EVENT_TX_UNDERFLOW` 事件。
 - `och_event.hw_time` 是事件发生时的样点时间。
+- 过载时（例如 RX+TX 超过 UHSIF 约 533 MB/s）欠流和 RX GAP 可能每块都发生。v2026.11.07 之后的固件对 `tx_underflow`、`rx_overflow_gap` 做合并：每串的第一条单独上报，之后每 250 ms 最多一条汇总，停止某个方向时立即补报剩余部分。汇总记录的 `och_event.count`（0.6.1 起）为它代表的事件数，`hw_time`/`block` 是其中最后一条；普通事件 `count` 为 1。`device_underflows` 按 `count` 累加。
 - 不带元数据的 `och_send` 仍可使用：发出的是不定时的连续流，第一块自动标记 SOB。
 
 ## 兼容性

@@ -10,9 +10,10 @@ template<class F> int protect(F f) noexcept {
     catch(...){last_error="unexpected internal error";return OCH_IO;}
 }
 template<class T> void out_struct(T* p){require(p && p->struct_size==sizeof(T),OCH_INVALID,"output struct_size mismatch");}
-// Structures extended in 0.6.0 accept the earlier, shorter layout too.
-constexpr size_t meta_v1=offsetof(och_metadata,time_ticks), event_v1=offsetof(och_event,hw_time);
-template<class T> void out_struct_v(T* p,size_t v1){require(p && (p->struct_size==sizeof(T)||p->struct_size==v1),OCH_INVALID,"output struct_size mismatch");}
+// Structures extended in 0.6.0 / 0.6.1 accept the earlier, shorter layouts too.
+constexpr size_t meta_v1=offsetof(och_metadata,time_ticks), event_v1=offsetof(och_event,hw_time),
+                 event_v2=offsetof(och_event,count);
+template<class T> void out_struct_v(T* p,size_t v1,size_t v2=0){require(p && (p->struct_size==sizeof(T)||p->struct_size==v1||(v2&&p->struct_size==v2)),OCH_INVALID,"output struct_size mismatch");}
 void put_meta(och_metadata* out,const och_metadata& m){const auto n=out->struct_size;memcpy(out,&m,n);out->struct_size=n;}
 void device(och_device* p){require(p!=nullptr,OCH_INVALID,"null device");}
 void stream(och_stream* s,unsigned direction){require(s && s->args.direction==direction,OCH_INVALID,"wrong or null stream direction");}
@@ -108,7 +109,7 @@ int och_command(och_device* d,const char* cmd,char* reply,size_t capacity,uint32
     require(result.size()<capacity,OCH_BUFFER_SMALL,"command reply buffer too small (reply truncated)");return OCH_OK;
 });}
 int och_poll_event(och_device* d,och_event* e,uint32_t timeout){return protect([&]{
-    device(d);out_struct_v(e,event_v1);std::unique_lock<std::mutex> lock(d->events_mutex);
+    device(d);out_struct_v(e,event_v1,event_v2);std::unique_lock<std::mutex> lock(d->events_mutex);
     if(!d->events_cv.wait_for(lock,std::chrono::milliseconds(timeout),[&]{return !d->events.empty();}))return OCH_TIMEOUT;
     const auto n=e->struct_size;memcpy(e,&d->events.front(),n);e->struct_size=n;d->events.pop_front();return OCH_OK;
 });}

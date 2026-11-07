@@ -106,6 +106,8 @@ JSON 保持旧字段，新增内容如下：
 | `info` stdout，USB2 且固件匹配 | `usb2_reference` | `scope: "single_host_observation"`、测试日期、`profiles` 数组；各行包含 `mode`、`iq_bits`、`rx_mask`、`tx_mask`、`sample_rate_hz`、`test_seconds` |
 | 流 stderr，超过已测参考 | `type: "warning"`、`code: "usb2_reference_exceeded"` | 同时提供 `reference_rate_hz`、`test_seconds`、`scope` |
 | 流 stderr 事件 | `host_monotonic_ns`、`observed_seconds` | 主机事件时间戳与 CLI 取出事件时距运行开始的秒数；后者是观察时间，不是硬件事件发生时间 |
+| 流 stderr 事件（0.6.1） | `count` | 该记录代表的设备事件数；固件合并的欠流/GAP 汇总大于 1 |
+| 流 stdout（0.6.1） | `device_events` | 各事件记录 `count` 之和；`events` 仍为记录条数 |
 | 流 stdout | `stability` | `startup_window_seconds`、`policy`、`accepted_startup_overflows`、各方向剩余故障计数，以及本次观察的 `pass`；原 `rx` / `tx` 统计完整保留 |
 
 ## 发现与控制
