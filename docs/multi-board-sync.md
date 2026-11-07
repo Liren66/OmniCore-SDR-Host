@@ -1,6 +1,6 @@
 # 多板同步
 
-OCH 0.7.0 起，`och sync` 和 `och_multi_sync()` 可以把多块 OmniCore SDR 同步到同一个频率参考和同一个样点时间。需要 Zynq 固件 SDK_CMD_1.2（FPGA 带 OC_SYNC_AXI，能力字段 `sync=1`）。硬件、FPGA 与 SDK 命令的细节见 OmniCore-SDR-Firmware 的 `docs/multi-board-sync.md`。
+OCH 0.7.0 起，`och sync` 和 `och_multi_sync()` 可以把多块 OmniCore SDR 同步到同一个频率参考和同一个样点时间。需要 Zynq 固件 [v2026.11.07.2](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.2) 及以上（SDK_CMD_1.2，FPGA 带 OC_SYNC_AXI，能力字段 `sync=1`）。硬件、FPGA 与 SDK 命令的细节见 OmniCore-SDR-Firmware 的 `docs/multi-board-sync.md`。
 
 ## 两种接法
 
