@@ -12,6 +12,8 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 > **0.6.x 需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上；推荐 [v2026.11.07.1](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.1)，过载时欠流 / GAP 事件合并上报，0.6.1 按 `count` 计数。** USB 传输改为成帧格式（每个 16 KiB 块带 16 字节头和 64 位样点时间），并新增硬件时间戳、PPS 对时、定时 RX 与定时 TX。旧固件请继续使用 OCH 0.5.x，两者不能混用，见 [固件兼容性](docs/firmware-compatibility.md)。
 
 > [!NOTE]
+> **0.7.1：`och info` / `och power` 每次都能读到 USB-C 电流，需要 CH32 桥接固件 1.0.1（固件 [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)，`och firmware update OmniCore-Bridge-1.0.1.ocfw`）。** 桥接固件 1.0.0 下只有上电后第一次可读。
+>
 > **0.7.0 新增多板同步（`och sync`），需要 Zynq 固件 [v2026.11.07.2](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.2)（SDK_CMD_1.2）。** 其余功能在 v2026.11.07 及以上的固件上照常可用，见 [多板同步](docs/multi-board-sync.md)。
 
 ## 目录
