@@ -986,6 +986,157 @@ void firmware_progress(void* user, uint32_t stage, uint32_t done, uint32_t total
     }
     last = stage;
 }
+// och sync [status|off] --devices MASTER,SLAVE,... : multi-board synchronisation.
+std::vector<std::string> sync_serials(const options& opt) {
+    std::vector<std::string> out;
+    if (opt.has("devices")) {
+        std::stringstream ss(opt.get("devices")); std::string s;
+        while (std::getline(ss, s, ',')) if (!s.empty()) out.push_back(s);
+        if (out.empty()) throw std::invalid_argument("--devices needs serial numbers separated by commas");
+    } else if (opt.has("serial")) out.push_back(opt.get("serial"));
+    else {
+        const auto found = och::find();
+        if (found.size() > 1)
+            throw std::invalid_argument("several devices connected; list them with --devices MASTER,SLAVE,... (master first)");
+        out.push_back({});
+    }
+    return out;
+}
+std::string sync_cycles(uint32_t cycles) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << cycles << " (" << std::fixed << std::setprecision(6) << cycles / 40e6 << " s)";
+    return o.str();
+}
+int run_sync(const options& opt) {
+    const bool json_mode = opt.has("json");
+    const auto& p = opt.positional;
+    const std::string action = p.empty() ? "run" : p[0];
+    if (p.size() > 1 || (action != "run" && action != "status" && action != "off"))
+        throw std::invalid_argument("use och sync, och sync status or och sync off");
+    if (action == "run")
+        allowed(opt, {"devices", "mode", "no-mcs", "loopback", "master-ext-ref", "monitor", "start-time", "sample-rate"}, true);
+    else allowed(opt, {"devices"}, true);
+    const auto serials = sync_serials(opt);
+    std::vector<std::unique_ptr<och::device>> devs;
+    for (const auto& s : serials) devs.push_back(std::make_unique<och::device>(s));
+    std::vector<std::string> names;
+    for (auto& d : devs) names.push_back(d->info().serial);
+
+    if (action == "off") {
+        for (auto& d : devs) {
+            och_sync_config c{}; och_default_sync_config(&c);
+            och::check(och_set_sync(d->native_handle(), &c));
+        }
+        if (json_mode) std::cout << "{\"sync_outputs\":\"off\"}\n";
+        else presentation::status(presentation::level::ok, "REF_OUT and TRIG off on " + std::to_string(devs.size()) + " board(s).", std::cout);
+        return 0;
+    }
+    if (action == "status") {
+        std::vector<std::vector<std::string>> rows;
+        std::vector<presentation::tone> tones;
+        std::ostringstream js; js.imbue(std::locale::classic()); js << '[';
+        for (size_t i = 0; i < devs.size(); ++i) {
+            och_sync_status s{}; s.struct_size = sizeof s;
+            och::check(och_get_sync_status(devs[i]->native_handle(), &s));
+            och_time_status t{}; t.struct_size = sizeof t;
+            const bool time_ok = och_get_time(devs[i]->native_handle(), &t) == OCH_OK;
+            if (i) js << ',';
+            js << "{\"serial\":" << json(names[i]) << ",\"capable\":" << s.capable << ",\"ref40_present\":" << s.ref40_present
+               << ",\"ref40_hz\":" << s.ref40_hz << ",\"ref_out\":" << s.ref_out << ",\"trig_out\":" << s.trig_out
+               << ",\"trig_period\":" << s.trig_period << ",\"time_pps_sync\":" << s.time_pps_sync
+               << ",\"sync_count\":" << s.sync_count << ",\"sync_interval\":" << s.sync_interval
+               << ",\"pps_count\":" << s.pps_count << ",\"pps_interval\":" << s.pps_interval
+               << ",\"trig_count\":" << s.trig_count << ",\"mcs_done\":" << s.mcs_done
+               << ",\"time_valid\":" << (time_ok ? t.valid : 0u) << ",\"time_last_pps\":" << (time_ok ? t.last_pps : 0u) << '}';
+            const std::string role = i ? "slave" : "master";
+            if (!s.capable) {
+                rows.push_back({role, names[i], "no sync FPGA", "", "", "", ""});
+                tones.push_back(presentation::tone::warn);
+                continue;
+            }
+            rows.push_back({role, names[i], std::to_string(s.ref40_hz) + " Hz",
+                            std::string(s.ref_out ? "on" : "off") + "/" + (s.trig_out ? "on" : "off"),
+                            std::to_string(s.sync_count) + " @ " + std::to_string(s.sync_interval),
+                            std::to_string(s.pps_count) + " @ " + std::to_string(s.pps_interval),
+                            time_ok && t.valid ? std::to_string(t.last_pps) + (s.time_pps_sync ? " (sync)" : "") : "invalid"});
+            tones.push_back(s.ref40_present ? presentation::tone::plain : presentation::tone::bad);
+        }
+        js << ']';
+        if (json_mode) { std::cout << js.str() << '\n'; return 0; }
+        presentation::title("sync status", std::to_string(devs.size()) + " board(s)", std::cout);
+        presentation::section("Synchronisation", std::cout);
+        presentation::table({"Role", "Serial", "40 MHz ref", "REF/TRIG", "SYNC edges @ cycles", "PPS edges @ cycles",
+                             "Time at last edge"}, rows, std::cout, tones);
+        presentation::note("Intervals count each board's own 40 MHz: equal to the master's TRIG / PPS period means locked.", std::cout);
+        return 0;
+    }
+
+    och_multi_sync_args a{}; och_default_multi_sync_args(&a);
+    const std::string mode = opt.get("mode", "chain");
+    if (mode == "chain") a.mode = OCH_SYNC_CHAIN;
+    else if (mode == "common") a.mode = OCH_SYNC_COMMON;
+    else throw std::invalid_argument("--mode must be chain or common");
+    a.mcs = opt.has("no-mcs") ? 0 : 1;
+    a.loopback = opt.has("loopback") ? 1 : 0;
+    if (a.loopback && a.mcs) throw std::invalid_argument("--loopback cannot pulse the AD9361 SYNC_IN; add --no-mcs");
+    a.master_external_ref = opt.has("master-ext-ref") ? 1 : 0;
+    if (opt.has("monitor")) {
+        const double seconds = number(opt.get("monitor"));
+        if (!(seconds == 0 || (seconds >= 25e-6 && seconds <= 100))) throw std::invalid_argument("--monitor must be 0 or 25e-6..100 seconds");
+        a.monitor_period = static_cast<uint32_t>(std::llround(seconds * 40e6));
+    }
+    a.start_time = integer(opt.get("start-time", "0"), uint64_t(1) << 62);
+    if (opt.has("sample-rate")) {
+        const auto rate = static_cast<uint32_t>(integer(opt.get("sample-rate"), 61440000));
+        for (auto& d : devs) {
+            och_config c{}; och_default_config(&c); c.sample_rate = rate;
+            och::check(och_configure(d->native_handle(), &c));
+        }
+    }
+    if (!json_mode) {
+        presentation::title("sync", (a.mode == OCH_SYNC_CHAIN ? "daisy chain, " : "common 10 MHz + PPS, ") +
+                            std::to_string(devs.size()) + " board(s)", std::cout);
+        presentation::status(presentation::level::run, a.mode == OCH_SYNC_CHAIN
+            ? "Checking the REF_OUT chain and TRIG -> SYNC on every board" + std::string(a.mcs ? ", AD9361 MCS" : "") + ", loading time ..."
+            : "Checking 10 MHz / PPS lock on every board" + std::string(a.mcs ? ", AD9361 MCS at PPS" : "") + ", loading time at PPS ...",
+            std::cout);
+    }
+    std::vector<och_device*> handles;
+    for (auto& d : devs) handles.push_back(d->native_handle());
+    std::vector<och_multi_sync_result> res(devs.size());
+    for (auto& r : res) r.struct_size = sizeof r;
+    const auto began = clock_type::now();
+    och::check(och_multi_sync(handles.data(), handles.size(), &a, res.data()));
+    const double took = std::chrono::duration<double>(clock_type::now() - began).count();
+    if (json_mode) {
+        std::cout << "{\"mode\":" << json(mode) << ",\"seconds\":" << took << ",\"boards\":[";
+        for (size_t i = 0; i < res.size(); ++i)
+            std::cout << (i ? "," : "") << "{\"serial\":" << json(names[i]) << ",\"locked\":" << res[i].locked
+                      << ",\"edges\":" << res[i].edges << ",\"interval\":" << res[i].interval
+                      << ",\"interval_error\":" << res[i].interval_error << ",\"mcs_done\":" << res[i].mcs_done
+                      << ",\"time_valid\":" << res[i].time_valid << ",\"tick_rate\":" << res[i].tick_rate
+                      << ",\"time_at_sync\":" << res[i].time_at_sync << '}';
+        std::cout << "]}\n";
+        return 0;
+    }
+    std::vector<std::vector<std::string>> rows;
+    for (size_t i = 0; i < res.size(); ++i)
+        rows.push_back({i ? "slave" : "master", names[i], res[i].locked ? "locked" : "-",
+                        sync_cycles(res[i].interval) + (res[i].interval_error ? " err " + std::to_string(res[i].interval_error) : ""),
+                        res[i].mcs_done ? "done" : "skipped",
+                        std::to_string(res[i].time_at_sync) + " @ " + std::to_string(res[i].tick_rate) + " S/s"});
+    presentation::section("Result", std::cout);
+    presentation::table({"Role", "Serial", "Reference", "Edge interval", "AD9361 MCS", "Time loaded"}, rows, std::cout);
+    std::ostringstream msg; msg.imbue(std::locale::classic());
+    msg << std::fixed << std::setprecision(1) << "All " << res.size() << " board(s) loaded one time base at the same edge (" << took << " s).";
+    presentation::status(presentation::level::ok, msg.str(), std::cout);
+    if (a.loopback)
+        presentation::note("Loopback test: the master's TRIG reached its own SYNC counter inside the FPGA; no cable, no AD9361 SYNC_IN pulse.", std::cout);
+    if (a.monitor_period)
+        presentation::note("Periodic TRIG left running; och sync status shows every board's interval and last edge time.", std::cout);
+    return 0;
+}
+
 int run_firmware(const options& opt) {
     const bool json_mode = opt.has("json");
     const auto& p = opt.positional;
@@ -1102,6 +1253,7 @@ int execute(const options& opt) {
         return 0;
     }
     if (opt.command == "firmware") return run_firmware(opt);
+    if (opt.command == "sync") return run_sync(opt);
     if (opt.command == "rssi") {
         // och rssi on|off switches reporting (off after power-up); otherwise read.
         const bool toggle = opt.positional.size() == 1 && (opt.positional[0] == "on" || opt.positional[0] == "off");

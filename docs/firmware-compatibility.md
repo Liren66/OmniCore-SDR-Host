@@ -8,7 +8,8 @@ OCH 0.6.0 只支持成帧 USB 传输（每个 16 KiB 块带 16 B 头和样点时
 
 | OCH | Zynq 固件（BOOT.bin） | FPGA `CH32H417_IP` | SDK 标识 | CH32 桥接 |
 |---|---|---|---|---|
-| **0.6.1** | v2026.11.07 及以上，推荐 v2026.11.07.1 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_EVTCOUNT`（v2026.11.07.1） | 1.0.0（不变） |
+| **0.7.0** | v2026.11.07 及以上；`och sync` 需要 SDK_CMD_1.2（FPGA 带 OC_SYNC_AXI 1.0） | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | 1.0.0（不变） |
+| 0.6.1 | v2026.11.07 及以上，推荐 v2026.11.07.1 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_EVTCOUNT`（v2026.11.07.1） | 1.0.0（不变） |
 | 0.6.0 | v2026.11.07 及以上 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_FRAMED` | 1.0.0（不变） |
 | 0.5.x | v2026.11.03 及以前 | 1.1 | `SDK_CMD_1.0_*` | 1.0.0 / legacy |
 
@@ -29,6 +30,7 @@ OCH 0.6.0 只支持成帧 USB 传输（每个 16 KiB 块带 16 B 头和样点时
 | ZYNQ SDK 时钟扩展 | 无降速回退的共享 Fs 和完整链事务 | 使用安全时钟设置时要求 system_info? 包含 clock_config=1 |
 | ZYNQ SDK RX 校正扩展 | RF/BBDC 直流及 RX 正交跟踪开关、状态回读 | 使用 RX correction 时要求 system_info? 包含 rx_correction=1 |
 | ZYNQ SDK ADF4002 扩展 | 外部 10 MHz 驯服、GPIO 检查和 D5 自检 | 状态/自检要求 adf4002=1；选源还要求 ref_source=1 |
+| ZYNQ SDK 多板同步扩展 | REF_OUT、TRIG、SYNC/PPS 沿计数、AD9361 MCS 步骤、time_source=sync | 使用同步功能时要求 system_info? 包含 sync=1 |
 | ZYNQ SDK 外部 LO 扩展 | 独立 RX/TX 源、验证和名义频率状态 | 使用 LO source 时要求 external_lo=1 |
 | 可选 2TX2RX 8bit 扩展 | SDK 格式命令与 FPGA signed8 路径 | 仅选择 8bit 时要求 iq_format=1 iq8_2t2r=1；默认 12bit 保持旧 SDK 兼容 |
 | CH32 | 已有诊断及流清理协议 v4 | USB 厂商请求 0xD0 的诊断版本 |

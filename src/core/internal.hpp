@@ -40,6 +40,12 @@ void firmware_start_app(const char* serial);
 void firmware_update(const char* serial,const char* path,och_firmware_progress,void* user);
 // EVT lines from the SDK time module; true when consumed (timebase.cpp).
 bool timed_event(och_device&,const std::string& line);
+// Multi-board sync (sync.cpp). Callers hold the device's state_mutex except
+// for multi_sync, which takes each device's lock per transaction.
+och_sync_status read_sync_status(och_device&);
+void apply_sync_config(och_device&,const och_sync_config&);
+void sync_trigger(och_device&,uint32_t mode);
+void multi_sync(och_device* const* devices,size_t count,const och_multi_sync_args&,och_multi_sync_result* results);
 }
 
 struct och_device {

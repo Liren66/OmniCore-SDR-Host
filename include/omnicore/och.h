@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 #define OCH_ABI_VERSION 1u
-#define OCH_VERSION "0.6.2"
+#define OCH_VERSION "0.7.0"
 #define OCH_PPS_LOCK_TOLERANCE_PPM 1
 typedef struct och_device och_device;
 typedef struct och_stream och_stream;
@@ -39,7 +39,9 @@ enum { OCH_EVENT_DEVICE=1, OCH_EVENT_RX_SYNC=2, OCH_EVENT_HOST_OVERFLOW=3,
        /* Hardware-timed events (FPGA event FIFO); och_event.hw_time is valid. */
        OCH_EVENT_TX_BURST_ACK=7, OCH_EVENT_TX_LATE=8, OCH_EVENT_TX_UNDERFLOW=9,
        OCH_EVENT_TX_ERROR=10, OCH_EVENT_RX_GAP=11, OCH_EVENT_RX_LATE=12,
-       OCH_EVENT_TIME_INVALIDATED=13 };
+       OCH_EVENT_TIME_INVALIDATED=13,
+       /* 0.7.0: AD9361_SYNC edges (firmware SDK_CMD_1.2, OC_SYNC_AXI); count = new edges. */
+       OCH_EVENT_SYNC_IN=14 };
 /* TX burst metadata flags (och_send_burst). */
 enum { OCH_TX_HAS_TIME=1u, OCH_TX_START_OF_BURST=2u, OCH_TX_END_OF_BURST=8u };
 /* RX stream start / och_rx_command flags. */
@@ -47,7 +49,8 @@ enum { OCH_RX_TIMED=1u,    /* stream args: RX waits for a command; start_time us
        OCH_RX_NOW=2u,      /* start immediately (ignore time) */
        OCH_RX_STOP=4u };   /* och_rx_command: stop, finishing with END_OF_BURST */
 /* PPS / time source for och_set_time_source. */
-enum { OCH_TIME_SOURCE_NONE=0, OCH_TIME_SOURCE_EXTERNAL=1, OCH_TIME_SOURCE_INTERNAL=2 };
+enum { OCH_TIME_SOURCE_NONE=0, OCH_TIME_SOURCE_EXTERNAL=1, OCH_TIME_SOURCE_INTERNAL=2,
+       OCH_TIME_SOURCE_SYNC=3 /* 0.7.0: AD9361_SYNC (shared TRIG), needs sync capability */ };
 typedef struct och_device_info {
     uint32_t struct_size, abi_version;
     char serial[128], name[128], driver[32], firmware[128];
@@ -438,6 +441,80 @@ OCH_API int och_recv(och_stream*, void* samples, size_t capacity_samples,
 OCH_API int och_get_time(och_device*, och_time_status*);
 OCH_API int och_set_time(och_device*, uint64_t ticks, uint32_t at_next_pps);
 OCH_API int och_set_time_source(och_device*, uint32_t source);
+/* ---------------------------------------------------------------------------
+ * 0.7.0 multi-board synchronisation (firmware SDK_CMD_1.2 with OC_SYNC_AXI;
+ * capability "sync"). Cycles are periods of the board's own 40 MHz reference.
+ * REF_OUT (J13) = 10 MHz from the 40 MHz VCTCXO; TRIG (J9) = sync pulse;
+ * AD9361_SYNC (J1) = SYNC_IN of the AD9361 and an FPGA input.
+ * ------------------------------------------------------------------------- */
+typedef struct och_sync_status {
+    uint32_t struct_size, capable;
+    uint32_t ref40_present, ref40_hz;   /* measured CLK_FB_FPGA, 16 Hz resolution */
+    uint32_t ref_out, trig_out, trig_falling, trig_width, trig_period, armed, loopback;
+    uint32_t time_pps_sync;             /* time base PPS input is AD9361_SYNC */
+    uint32_t sync_count, sync_interval; /* AD9361_SYNC rising edges / cycles between the last two */
+    uint32_t pps_count, pps_interval;   /* PPS_EXT rising edges / cycles between the last two */
+    uint32_t trig_count;                /* TRIG pulses emitted by this board */
+    int32_t mcs_step;                   /* step in progress, -1 none */
+    uint32_t mcs_done, version;
+    uint32_t reserved[6];
+} och_sync_status;
+/* Per-board outputs. trig_width 0 keeps the current width; trig_period 0 stops
+ * the periodic TRIG, otherwise >= 1000 and > trig_width. */
+typedef struct och_sync_config {
+    uint32_t struct_size;
+    uint32_t ref_out, trig_out, trig_falling, trig_width, trig_period, loopback;
+    uint32_t reserved[5];
+} och_sync_config;
+enum { OCH_SYNC_TRIGGER_NOW=0, OCH_SYNC_TRIGGER_AT_PPS=1, OCH_SYNC_TRIGGER_DISARM=2 };
+OCH_API void och_default_sync_config(och_sync_config*);
+OCH_API int och_get_sync_status(och_device*, och_sync_status*);
+OCH_API int och_set_sync(och_device*, const och_sync_config*);
+OCH_API int och_sync_trigger(och_device*, uint32_t mode);
+OCH_API int och_sync_clear(och_device*);
+/* One AD9361 multi-chip-sync step 0..5 (streams stopped). Steps 2 and 4 need
+ * one TRIG on AD9361_SYNC (master och_sync_trigger) before the next step. */
+OCH_API int och_mcs_step(och_device*, uint32_t step);
+
+/* Synchronise a group of boards. devices[0] is the master.
+ *  OCH_SYNC_CHAIN : no external reference needed. Master runs on its own
+ *    40 MHz (or its J3 10 MHz with master_external_ref), every board forwards
+ *    REF_OUT (J13) to the next board's 10M_EXT (J3); the master's TRIG (J9)
+ *    is split 1:N to every board's AD9361_SYNC (J1), the master's own included.
+ *  OCH_SYNC_COMMON : every board gets the same 10 MHz on J3 and the same PPS
+ *    on PPS_EXT (e.g. a multi-output rubidium / GPSDO). Time loads at a PPS
+ *    edge; MCS pulses are each board's own TRIG at that PPS, which needs a
+ *    short J9 -> J1 cable on every board.
+ * Configure every board with the same och_config first and stop streams.
+ * loopback (single-board test only): the master's SYNC counter and time base
+ * use its internal TRIG, so no cable is needed; MCS pulses cannot reach the
+ * AD9361 that way. On success every board's time is start_time at the same
+ * edge; results (count entries, may be NULL) report each board. */
+enum { OCH_SYNC_CHAIN=0, OCH_SYNC_COMMON=1 };
+typedef struct och_multi_sync_args {
+    uint32_t struct_size, mode;
+    uint32_t master_external_ref;  /* CHAIN: master also locks to its J3 10 MHz */
+    uint32_t mcs;                  /* run AD9361 MCS (needs the SYNC wiring) */
+    uint32_t loopback;             /* CHAIN with one board: internal TRIG -> SYNC */
+    uint32_t lock_timeout_ms;      /* 0 = 15000 */
+    uint32_t monitor_period;       /* CHAIN: periodic TRIG after sync, cycles; 0 = off */
+    uint32_t reserved0;
+    uint64_t start_time;           /* time loaded at the sync edge */
+    uint32_t reserved[6];
+} och_multi_sync_args;
+typedef struct och_multi_sync_result {
+    uint32_t struct_size;
+    uint32_t locked;               /* interval matched the generator period */
+    uint32_t edges;                /* SYNC (CHAIN) or PPS (COMMON) edges seen while checking */
+    uint32_t interval;             /* last measured interval, 40 MHz cycles */
+    int32_t interval_error;        /* interval - expected */
+    uint32_t mcs_done, time_valid, tick_rate;
+    uint64_t time_at_sync;         /* time_last_pps after the load: equals start_time */
+    uint32_t reserved[6];
+} och_multi_sync_result;
+OCH_API void och_default_multi_sync_args(och_multi_sync_args*);
+OCH_API int och_multi_sync(och_device* const* devices, size_t count, const och_multi_sync_args*,
+                           och_multi_sync_result* results);
 /* Timed RX command on a started framed RX stream created with OCH_RX_TIMED:
  * flags OCH_RX_NOW / OCH_RX_STOP; num_samples 0 = continuous. */
 OCH_API int och_rx_command(och_stream*, uint32_t flags, uint64_t time_ticks, uint32_t num_samples);

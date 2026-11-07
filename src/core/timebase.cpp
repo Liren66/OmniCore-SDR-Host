@@ -25,7 +25,8 @@ uint64_t u64(const std::string& s) {
     return v;
 }
 uint32_t source_of(const std::string& s) {
-    return s == "external" ? OCH_TIME_SOURCE_EXTERNAL : s == "internal" ? OCH_TIME_SOURCE_INTERNAL : OCH_TIME_SOURCE_NONE;
+    return s == "external" ? OCH_TIME_SOURCE_EXTERNAL : s == "internal" ? OCH_TIME_SOURCE_INTERNAL :
+           s == "sync" ? OCH_TIME_SOURCE_SYNC : OCH_TIME_SOURCE_NONE;
 }
 }
 
@@ -56,6 +57,13 @@ och_time_status och_device::get_time() {
 // "count=<n> first_block=<b> first_time=<ticks>" appended (n events, block and
 // time of the last one). Lines without count stand for one event.
 bool och::core::timed_event(och_device& d, const std::string& s) {
+    // EVT tseq=<n> type=sync_in src=sync count=<total> new=<n> interval=<cycles>
+    if (s.find(" src=sync") != std::string::npos && s.find("type=sync_in") != std::string::npos) {
+        uint32_t fresh = 1;
+        try { fresh = uint32_t(std::max<uint64_t>(1, std::min<uint64_t>(u64(field(s, "new")), UINT32_MAX))); } catch (...) {}
+        d.emit(OCH_EVENT_SYNC_IN, s, d.rx ? d.rx->epoch : 0, 0, 0, 0, fresh);
+        return true;
+    }
     if (s.find(" src=fpga_time") == std::string::npos && s.find("type=time_invalidated") == std::string::npos)
         return false;
     uint32_t type = OCH_EVENT_DEVICE;

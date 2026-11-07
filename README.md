@@ -4,12 +4,15 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 版本 | 平台 | 接口 | 许可证 |
 |---|---|---|---|
-| **0.6.2**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+| **0.7.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
 
 ![OmniCore Host 架构](docs/images/architecture.svg)
 
 > [!IMPORTANT]
 > **0.6.x 需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上；推荐 [v2026.11.07.1](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.1)，过载时欠流 / GAP 事件合并上报，0.6.1 按 `count` 计数。** USB 传输改为成帧格式（每个 16 KiB 块带 16 字节头和 64 位样点时间），并新增硬件时间戳、PPS 对时、定时 RX 与定时 TX。旧固件请继续使用 OCH 0.5.x，两者不能混用，见 [固件兼容性](docs/firmware-compatibility.md)。
+
+> [!NOTE]
+> **0.7.0 新增多板同步（`och sync`），需要支持同步的 Zynq 固件 SDK_CMD_1.2。** 其余功能在 v2026.11.07 及以上的固件上照常可用，见 [多板同步](docs/multi-board-sync.md)。
 
 ## 目录
 
@@ -27,6 +30,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 类别 | 内容 |
 |---|---|
+| 多板同步 | `och sync`：无外部参考时菊花链共享 10 MHz（REF_OUT → 10M_EXT）并由主板 TRIG 同步；或所有板共用 10 MHz + PPS（原子钟、GPSDO）。含锁定检查、AD9361 多片同步和公共时间装载，需固件 SDK_CMD_1.2，见 [多板同步](docs/multi-board-sync.md) |
 | 硬件时间戳 | 64 位样点时间（1 tick = 1 样点）、外部 / 内部 PPS 对时、定时 RX、定时 TX 突发、带样点时间的事件，见 [硬件时间戳](docs/timestamps.md) |
 | 设备与射频 | 设备发现、状态查询；RX/TX LO、增益、衰减、带宽、通道配置 |
 | IQ 数据流 | 单/双通道 RX、TX 与全双工；文件采集与回放、测试正弦、吞吐统计 |
@@ -45,7 +49,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 ### 1. 安装
 
-**Windows**：运行 `OmniCoreHost-0.6.2-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
+**Windows**：运行 `OmniCoreHost-0.7.0-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
 
 ```powershell
 och-driver check      # 只检查，不修改系统
@@ -57,8 +61,8 @@ och-driver install    # 为 VID 1A86 / PID 5537 安装 libusbK（需 UAC）
 ```bash
 sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
 bash tools/build-linux.sh
-sudo cmake --install build/linux --prefix /opt/omnicore/0.6.2
-sudo ln -sfn /opt/omnicore/0.6.2/bin/och /usr/local/bin/och
+sudo cmake --install build/linux --prefix /opt/omnicore/0.7.0
+sudo ln -sfn /opt/omnicore/0.7.0/bin/och /usr/local/bin/och
 sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
@@ -121,6 +125,7 @@ och firmware update OmniCore-Bridge-1.0.0.ocfw     # 约 5 秒，中断后可重
 | 控制 | `commands` · `get NAME` · `set NAME VALUE` · `action NAME` · `config [RF 选项]` |
 | FIR / 时钟 | `fir status` · `fir rx\|tx load FILE` · `fir rx\|tx\|both on\|off` · `clock status` · `clock sample-rate HZ` |
 | 数据流 | `rx --file PATH` · `tx --tone HZ` · `tx --file PATH [--loop]` · `bench --rx [--tx]` |
+| 多板同步 | `sync --devices M,S1,...` · `sync --mode common` · `sync status` · `sync off` |
 | 桥接固件 | `firmware [info]` · `firmware check FILE` · `firmware update FILE` · `firmware boot` · `firmware enter` |
 
 全局选项：`--serial` 选择设备，`--json` 输出机器可读结果，`--no-color` 关闭颜色。数值支持 `k`/`M`/`G` 后缀，规范命令统一使用 Hz 和 dB。
@@ -402,7 +407,7 @@ OmniCoreHost/
 | [Windows 安装](docs/INSTALL_WINDOWS.txt) | [设备协议](docs/protocol.md) | [PPS 监控](docs/pps.md) |
 | [Linux 安装](docs/INSTALL_LINUX.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
 | [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
-| [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | |
+| [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | [多板同步](docs/multi-board-sync.md) |
 
 ## 许可证
 

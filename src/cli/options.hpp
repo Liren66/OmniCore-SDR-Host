@@ -87,10 +87,10 @@ struct options {
     }
 };
 inline options parse(int argc, char** argv) {
-    const std::set<std::string> flag_names = {"json", "help", "rx", "tx", "loop", "overwrite", "coefficients-only", "no-color", "fail-fast"};
+    const std::set<std::string> flag_names = {"json", "help", "rx", "tx", "loop", "overwrite", "coefficients-only", "no-color", "fail-fast", "no-mcs", "loopback", "master-ext-ref"};
     const std::set<std::string> value_names = {"serial", "sample-rate", "channels", "rx-channels", "tx-channels",
         "seconds", "file", "format", "tone", "amplitude", "lo-frequency", "rx-lo-frequency", "tx-lo-frequency",
-        "bandwidth", "rx-bw", "tx-bw", "gain", "agc", "attenuation", "buffer-mib", "queue", "block", "rx-chain", "tx-chain", "iq-bits", "count", "interval"};
+        "bandwidth", "rx-bw", "tx-bw", "gain", "agc", "attenuation", "buffer-mib", "queue", "block", "rx-chain", "tx-chain", "iq-bits", "count", "interval", "devices", "mode", "monitor", "start-time"};
     const std::map<std::string, std::string> aliases = {
         {"rate", "sample-rate"}, {"frequency", "lo-frequency"},
         {"rx-freq", "rx-lo-frequency"}, {"tx-freq", "tx-lo-frequency"}};

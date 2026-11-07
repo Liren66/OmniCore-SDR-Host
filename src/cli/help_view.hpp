@@ -42,6 +42,12 @@ inline const std::vector<help_group>& help_groups() {
             {"clock status", "Read the actual RX/TX clock chains"},
             {"clock sample-rate 30.72M", "Apply a shared sample-rate clock plan"},
             {"clock set --rx-chain CSV --tx-chain CSV", "Apply explicit six-stage clock plans"}}},
+        {"Multi-board sync", {
+            {"sync --devices M,S1,S2", "Daisy chain: REF_OUT J13 -> next J3, master TRIG J9 -> every J1"},
+            {"sync --mode common --devices ...", "Shared 10 MHz on every J3 + shared PPS_EXT (e.g. rubidium)"},
+            {"sync --no-mcs | --monitor 1", "Skip AD9361 MCS | keep a 1 s TRIG for och sync status"},
+            {"sync --loopback --no-mcs", "One-board test without cables (internal TRIG -> SYNC)"},
+            {"sync status | sync off", "Lock intervals, edge counts, time | REF_OUT and TRIG off"}}},
         {"Streaming", {
             {"rx --file PATH", "Capture IQ (+ PATH.metadata.jsonl)"},
             {"tx --tone 1M", "Transmit a generated complex tone"},

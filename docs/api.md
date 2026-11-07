@@ -218,3 +218,7 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 | `och_send_burst(tx, samples, n, &md, &accepted, timeout)` | `och_tx_metadata` 带 HAS_TIME / SOB / EOB 与样点时间 |
 
 新增字段均追加在结构末尾或占用原 reserved 位置，按 `struct_size` 兼容旧调用方，C ABI 仍为 1。0.6.1 在 `och_event` 末尾追加 `count`、`reserved_event`，0.6.0 及更早布局的 `struct_size` 仍被接受（读不到 `count`）。时序图与示例见 [硬件时间戳](timestamps.md)。
+
+## 多板同步（0.7.0）
+
+需要固件能力 `sync=1`（SDK_CMD_1.2，FPGA 带 OC_SYNC_AXI）。单板接口：`och_get_sync_status`、`och_set_sync`、`och_sync_trigger`、`och_sync_clear`、`och_mcs_step`；`och_set_time_source` 增加 `OCH_TIME_SOURCE_SYNC`；事件 `OCH_EVENT_SYNC_IN`。多板编排：`och_multi_sync(devices, n, &args, results)`，`devices[0]` 为主板，`args.mode` 为 `OCH_SYNC_CHAIN`（菊花链，无需外部参考）或 `OCH_SYNC_COMMON`（公共 10 MHz + PPS）。新结构体都带 `struct_size`，用 `och_default_sync_config` / `och_default_multi_sync_args` 初始化。流程、接线与限制见 [多板同步](multi-board-sync.md)。

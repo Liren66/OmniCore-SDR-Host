@@ -209,10 +209,29 @@ int och_set_time(och_device* d,uint64_t ticks,uint32_t at_next_pps){return prote
     std::lock_guard<std::mutex> lock(d->state_mutex);d->require_capability("hw_time");
     d->command((at_next_pps?"time_next_pps=":"time_now=")+std::to_string(ticks));return OCH_OK;});}
 int och_set_time_source(och_device* d,uint32_t source){return protect([&]{
-    device(d);require(source<=OCH_TIME_SOURCE_INTERNAL,OCH_INVALID,"time source must be 0..2");
+    device(d);require(source<=OCH_TIME_SOURCE_SYNC,OCH_INVALID,"time source must be 0..3");
     std::lock_guard<std::mutex> lock(d->state_mutex);d->require_capability("hw_time");
-    static const char* names[]={"none","external","internal"};
+    if(source==OCH_TIME_SOURCE_SYNC)d->require_capability("sync");
+    static const char* names[]={"none","external","internal","sync"};
     d->command(std::string("time_source=")+names[source]);return OCH_OK;});}
+int och_get_sync_status(och_device* d,och_sync_status* s){return protect([&]{
+    device(d);out_struct(s);std::lock_guard<std::mutex> lock(d->state_mutex);*s=read_sync_status(*d);return OCH_OK;});}
+int och_set_sync(och_device* d,const och_sync_config* c){return protect([&]{
+    device(d);require(c && c->struct_size==sizeof(*c),OCH_INVALID,"och_sync_config struct_size mismatch");
+    std::lock_guard<std::mutex> lock(d->state_mutex);apply_sync_config(*d,*c);return OCH_OK;});}
+int och_sync_trigger(och_device* d,uint32_t mode){return protect([&]{
+    device(d);std::lock_guard<std::mutex> lock(d->state_mutex);sync_trigger(*d,mode);return OCH_OK;});}
+int och_sync_clear(och_device* d){return protect([&]{
+    device(d);std::lock_guard<std::mutex> lock(d->state_mutex);d->require_capability("sync");d->command("sync_clear!");return OCH_OK;});}
+int och_mcs_step(och_device* d,uint32_t step){return protect([&]{
+    device(d);require(step<=5,OCH_INVALID,"MCS step must be 0..5");
+    std::lock_guard<std::mutex> lock(d->state_mutex);d->require_capability("sync");
+    require(!d->rx_on && !d->tx_on,OCH_BUSY,"stop RX/TX streams before MCS");
+    d->command("mcs_step="+std::to_string(step));return OCH_OK;});}
+int och_multi_sync(och_device* const* devs,size_t n,const och_multi_sync_args* a,och_multi_sync_result* r){return protect([&]{
+    require(a && a->struct_size==sizeof(*a),OCH_INVALID,"och_multi_sync_args struct_size mismatch");
+    if(r)for(size_t i=0;i<n;++i)require(r[i].struct_size==sizeof(*r),OCH_INVALID,"och_multi_sync_result struct_size mismatch");
+    multi_sync(devs,n,*a,r);return OCH_OK;});}
 int och_rx_command(och_stream* s,uint32_t flags,uint64_t time,uint32_t num_samples){return protect([&]{
     stream(s,OCH_RX);
     require((s->args.start_flags&OCH_RX_TIMED)!=0,OCH_INVALID,"och_rx_command requires an RX stream created with OCH_RX_TIMED");
