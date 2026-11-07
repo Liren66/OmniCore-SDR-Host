@@ -81,6 +81,7 @@ och selftest       # 数字接口自检（RX PRBS / TX 回环）
 ```
 
 <p align="center"><img src="docs/images/cli-info.png" width="640" alt="och info：OmniCore SDR 标题、设备身份、三类固件版本、RF 能力、时间基准与电源摘要"></p>
+<p align="center"><sub>实机截图：OCH 0.7.1，USB 3.0 SuperSpeed，Zynq <code>SDK_CMD_1.2_20261107_SYNC</code>，CH32 桥接 1.0.1，USB-C 3000 mA</sub></p>
 
 ### 3. 收发 IQ
 
@@ -173,7 +174,7 @@ och set fan.enabled on
 </tr>
 </table>
 
-以上为实机截图：Windows Terminal，OCH 0.6.2，固件 v2026.11.07.1，2T2R 12bit 44 MSPS。
+以上为实机截图：Windows Terminal，OCH 0.6.2，固件 v2026.11.07.1，2T2R 12bit 44 MSPS（吞吐与 0.7.1 相同）。
 
 退出码：`0` 完成 · `1` 设备/传输错误 · `2` 参数错误 · `3` `bench --fail-fast` 提前结束 · `130` Ctrl+C 中断。性能是否达标请检查 JSON 的 `stability.pass`，而非仅看退出码。
 
