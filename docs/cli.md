@@ -27,7 +27,7 @@
    / / / / __ `__ \/ __ \/ / /   / __ \/ ___/ _ \   \__ \/ / / / /_/ /
   / /_/ / / / / / / / / / / /___/ /_/ / /  /  __/  ___/ / /_/ / _, _/
   \____/_/ /_/ /_/_/ /_/_/\____/\____/_/   \___/  /____/_____/_/ |_|
-  OmniCore Host 0.7.0  |  OmniCoreSDR control and IQ streaming  |  ABI 1
+  OmniCore Host 0.7.1  |  OmniCoreSDR control and IQ streaming  |  ABI 1
 
 ━━ DEVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -121,8 +121,8 @@ JSON 保持旧字段，新增内容如下：
 | 命令 | 含义 |
 |---|---|
 | och find | 枚举设备，不开始发射 |
-| och info | 查询身份、能力及启动日志中的 USB-C 电源信息 |
-| och power status --json | 读取已有 HD3SS3220 启动日志并报告电源状态 |
+| och info | 查询身份、能力及 USB-C 电源信息 |
+| och power status --json | 读取 HD3SS3220 并报告 USB-C 电源状态 |
 | och config | 查询设备 system_status 状态 |
 | och config --sample-rate 30.72M --lo-frequency 1G | 由默认配置加指定参数应用 RF，不启动 TX |
 | och commands --json | 离线列出全部规范命令、单位、范围及 SDK 对照 |
@@ -168,7 +168,9 @@ find 只枚举 Windows 中匹配的设备，不打开 USB 管道探测链路速�
 
 och power 与 och power status 等价；均支持 --serial 和 --json。och info 的原有 JSON 字段保持不变，并增加 power 对象。och find 仍只枚举设备，不读取电源日志。
 
-信息来自现有 EP83 的 HD3SS3220 **启动日志**，source 为 startup_log，live 为 false。它是启动时观察结果，不是当前连接的实时轮询，也不是实际耗电电流或电源电压测量。只有日志完整且解码为有效 UFP 连接时，supports_3a 才会是 true 或 false；没有日志、状态无效或不是 UFP 时为 JSON null，文本显示 unknown，不能把未知当作不支持 3 A。
+**桥接固件 1.0.1 起**：每次查询都通过 EP3 OUT 发送 `typec?`，桥接固件现场读取 HD3SS3220，source 为 typec_query，live 为 true，文本显示 `USB-C`，重复运行结果一致，约 0.1 s。
+
+**桥接固件 1.0.0**：信息来自现有 EP83 的 HD3SS3220 **启动日志**，source 为 startup_log，live 为 false，文本显示 `USB-C at startup`。它是启动时观察结果，不是当前连接的实时轮询，也不是实际耗电电流或电源电压测量。只有日志完整且解码为有效 UFP 连接时，supports_3a 才会是 true 或 false；没有日志、状态无效或不是 UFP 时为 JSON null，文本显示 unknown，不能把未知当作不支持 3 A。
 
 查询默认最多等待 500 ms 获取现有日志。启动日志可能已经被其他程序读走，缺失时不会为重新生成日志而复位设备或要求更新固件。查询结果不写入磁盘缓存，不能沿用旧电脑/旧连接的结果来冒充当前设备状态。
 

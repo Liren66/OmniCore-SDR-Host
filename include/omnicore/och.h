@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 #define OCH_ABI_VERSION 1u
-#define OCH_VERSION "0.7.0"
+#define OCH_VERSION "0.7.1"
 #define OCH_PPS_LOCK_TOLERANCE_PPM 1
 typedef struct och_device och_device;
 typedef struct och_stream och_stream;
@@ -233,22 +233,27 @@ typedef struct och_vcxo_status {
     double k_ppb_per_lsb, error_ppb, phase_ns;
     uint32_t reserved[8];
 } och_vcxo_status;
-/* Best-effort HD3SS3220 startup snapshot from the existing CH32 EP83 log.
- * NOT a live current measurement, USB-PD contract or LED GPIO readback.
- * No timestamps/boot IDs exist in this firmware. Missing/conflicting logs
- * remain unknown. Values are meaningful only when snapshot_valid is 1. */
+/* HD3SS3220 Type-C status (CC detection: the advertised source current,
+ * not a measured current or a USB-PD contract).
+ *  - Bridge 1.0.1+ (EP3 OUT present): every call with timeout_ms > 0 sends
+ *    "typec?" on EP 0x03 and reads the live reply from EP83; live = 1.
+ *  - Bridge 1.0.0: the one HD3SS3220 line of the EP83 startup log; the first
+ *    reader consumes it, later handles see snapshot_valid = 0; live = 0.
+ * Missing/conflicting replies remain unknown. Values are meaningful only
+ * when snapshot_valid is 1. */
 typedef struct och_power_status {
     uint32_t struct_size, log_endpoint_present, snapshot_valid, conflicting_snapshots;
     uint32_t attached_state, current_detected;
     int32_t source_current_ma; /* -1 unknown, including USB-default advertisement */
     int32_t supports_3a; /* -1 unknown/not attached as sink, 0 no, 1 yes */
     uint32_t raw_08, raw_09, raw_0a;
-    uint32_t reserved[5];
+    uint32_t live;        /* 0.7.1: 1 = read on demand just now (bridge 1.0.1+) */
+    uint32_t reserved[4];
 } och_power_status;
-/* timeout_ms: 0 returns this handle's cache; 1..2000 permits bounded EP83
- * reads when no stream objects exist. During streaming, only cache is read.
- * No log/no EP83/timeout is OCH_OK with snapshot_valid=0, never false 3 A.
- * Successful reads consume debug bytes; cache lasts only for this handle. */
+/* timeout_ms: 0 returns this handle's cache; 1..2000 permits a bounded
+ * query / EP83 read when no stream objects exist. During streaming, only the
+ * cache is read. No reply/no EP83/timeout is OCH_OK with snapshot_valid=0,
+ * never a false 3 A. Reads consume pending EP83 debug bytes. */
 OCH_API int och_get_power_status(och_device*, och_power_status*, uint32_t timeout_ms);
 OCH_API int och_get_fir(och_device*, och_direction, och_fir_config*);
 /* Typed configuration changes pause existing streams and restore only the

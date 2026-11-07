@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)][string]$StageDir,
-    [string]$Version='0.7.0',
+    [string]$Version='0.7.1',
     [string]$OutputDir='',
     [string]$InnoCompiler=''
 )

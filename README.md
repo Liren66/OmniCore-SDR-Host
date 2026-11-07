@@ -4,7 +4,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 版本 | 平台 | 接口 | 许可证 |
 |---|---|---|---|
-| **0.7.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+| **0.7.1**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
 
 ![OmniCore Host 架构](docs/images/architecture.svg)
 
@@ -49,7 +49,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 ### 1. 安装
 
-**Windows**：运行 `OmniCoreHost-0.7.0-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
+**Windows**：运行 `OmniCoreHost-0.7.1-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
 
 ```powershell
 och-driver check      # 只检查，不修改系统
@@ -61,8 +61,8 @@ och-driver install    # 为 VID 1A86 / PID 5537 安装 libusbK（需 UAC）
 ```bash
 sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
 bash tools/build-linux.sh
-sudo cmake --install build/linux --prefix /opt/omnicore/0.7.0
-sudo ln -sfn /opt/omnicore/0.7.0/bin/och /usr/local/bin/och
+sudo cmake --install build/linux --prefix /opt/omnicore/0.7.1
+sudo ln -sfn /opt/omnicore/0.7.1/bin/och /usr/local/bin/och
 sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```

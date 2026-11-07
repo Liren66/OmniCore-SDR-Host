@@ -98,7 +98,7 @@ dev.set_rx_iq_correction(true);
 
 ## USB-C 启动电源快照
 
-0.2.1 新增 och_get_power_status(device, &status, timeout_ms)，C++ 为 device.power_status(timeout_ms=500)。och_power_status 先清零并填写 struct_size；函数读取现有 CH32 EP83 调试日志中的 HD3SS3220 启动寄存器快照，不发起新的固件查询、不改变板上软件。
+0.2.1 新增 och_get_power_status(device, &status, timeout_ms)，C++ 为 device.power_status(timeout_ms=500)。och_power_status 先清零并填写 struct_size；0.7.1 起，桥接固件 1.0.1 及以上（有 EP 0x03 OUT）时，函数先读空 EP83，再发送 `typec?` 查询，解析随后的 `HD3SS3220:` 回复，live=1；桥接固件 1.0.0 时读取 EP83 调试日志中的 HD3SS3220 启动寄存器快照，live=0。
 
 timeout_ms=0 只返回当前 device 句柄内的缓存；1..2000 允许在没有流对象时有界读取 EP83。有流对象时只读缓存，不与高速流争用日志端点。设备关闭后缓存销毁，不写磁盘。成功读取会消耗该 USB 调试端点的数据；另一个程序此前读取过日志时可能没有可用快照。
 

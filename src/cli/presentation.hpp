@@ -474,14 +474,16 @@ inline void devices(const std::vector<och_device_info>& list, std::ostream& out)
     note("Details and USB link speed: och info" + std::string(list.size() > 1 ? " --serial SERIAL" : ""), out);
 }
 inline void power(const och_power_status& p, std::ostream& out) {
-    section("USB-C power (startup snapshot)", out);
+    section(p.live ? "USB-C power" : "USB-C power (startup snapshot)", out);
     const bool valid = p.snapshot_valid == 1 && p.conflicting_snapshots == 0;
     const bool sink = valid && p.attached_state == 2;
-    field("Source", "HD3SS3220 startup log (not live)", out, tone::muted);
+    const char* when = p.live ? "" : " at startup";
+    field("Source", p.live ? "HD3SS3220, read now (bridge EP3 query)" :
+          "HD3SS3220 startup log (bridge 1.0.0, not live)", out, tone::muted);
     field("Log endpoint EP83", detail::binary(p.log_endpoint_present), out, detail::binary_tone(p.log_endpoint_present));
     field("Snapshot valid", valid ? "Yes" : "No", out, valid ? tone::good : tone::warn);
     if (p.conflicting_snapshots) field("Conflicting snapshots", "Yes", out, tone::warn);
-    field("Supports 3 A at startup", sink && p.supports_3a == 1 ? "Yes" : sink && p.supports_3a == 0 ? "No" : "Unknown", out,
+    field(std::string("Supports 3 A") + when, sink && p.supports_3a == 1 ? "Yes" : sink && p.supports_3a == 0 ? "No" : "Unknown", out,
           sink && p.supports_3a == 1 ? tone::good : sink && p.supports_3a == 0 ? tone::warn : tone::muted);
     if (valid) {
         const char* role = p.attached_state == 0 ? "unattached" : p.attached_state == 1 ? "DFP/source" :
@@ -498,7 +500,8 @@ inline void power(const och_power_status& p, std::ostream& out) {
         else status(level::info, "No complete startup snapshot available.", out);
         note("An earlier och info/power call or another reader may already have consumed the EP83 log.", out);
     }
-    note("Startup observation only; not a live current, voltage or LED readback.", out);
+    note(p.live ? "Type-C CC advertisement read just now; not a measured current, voltage or USB-PD contract."
+                : "Startup observation only (bridge 1.0.0); update the bridge to 1.0.1 for a live read on every query.", out);
 }
 inline void config(const och_config& c, std::ostream& out) {
     section("RF configuration", out);

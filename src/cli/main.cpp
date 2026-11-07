@@ -197,7 +197,8 @@ std::string power_json(const och_power_status& p) {
     const bool sink = valid && p.attached_state == 2;
     const char* supports = sink && p.supports_3a == 1 ? "true" : sink && p.supports_3a == 0 ? "false" : "null";
     std::ostringstream out;
-    out << "{\"source\":\"startup_log\",\"live\":false,\"log_endpoint_present\":"
+    out << "{\"source\":" << (p.live ? "\"typec_query\"" : "\"startup_log\"")
+        << ",\"live\":" << (p.live ? "true" : "false") << ",\"log_endpoint_present\":"
         << (p.log_endpoint_present ? "true" : "false")
         << ",\"snapshot_valid\":" << (valid ? "true" : "false")
         << ",\"conflicting_snapshots\":" << (p.conflicting_snapshots ? "true" : "false")
@@ -283,7 +284,7 @@ void print_device_summary(const och_device_info& i, const och_firmware_info* f, 
         presentation::group("Power", o);
         const bool valid = p->snapshot_valid == 1 && p->conflicting_snapshots == 0;
         const bool sink = valid && p->attached_state == 2;
-        presentation::field("USB-C at startup", !valid ? std::string("Unknown (see och power)") :
+        presentation::field(p->live ? "USB-C" : "USB-C at startup", !valid ? std::string("Unknown (see och power)") :
             !sink ? std::string("Not attached as sink") :
             (p->source_current_ma >= 0 ? std::to_string(p->source_current_ma) + " mA available" : std::string("USB default current")),
             o, !valid ? tone::muted : p->supports_3a == 1 ? tone::good : tone::warn);
