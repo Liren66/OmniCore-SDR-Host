@@ -1,4 +1,4 @@
-OmniCore Host 0.6.0 Windows x64 installer build
+OmniCore Host 0.6.1 Windows x64 installer build
 
 Build requirements
   Windows x64; CMake 3.20+, Ninja, MSYS2 MinGW-w64 GCC; Microsoft x64 lib.exe
@@ -17,11 +17,11 @@ Application stage
 
 Build the installer
   powershell -NoProfile -File packaging/build-package.ps1 -StageDir build/stage
-  Optional: -Version 0.6.0 -OutputDir dist -InnoCompiler C:/path/to/ISCC.exe
+  Optional: -Version 0.6.1 -OutputDir dist -InnoCompiler C:/path/to/ISCC.exe
 
   Output:
-    dist/OmniCoreHost-0.6.0-win64-setup.exe
-    dist/OmniCoreHost-0.6.0-win64-setup.exe.sha256
+    dist/OmniCoreHost-0.6.1-win64-setup.exe
+    dist/OmniCoreHost-0.6.1-win64-setup.exe.sha256
 
   The script adds the driver assistant, offline libwdi driver payload, libusbK.dll,
   licenses and corresponding source archives. It generates a native Microsoft x64

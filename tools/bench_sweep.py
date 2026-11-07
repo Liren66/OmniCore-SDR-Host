@@ -19,7 +19,9 @@ CONFIGS = [
     ("2T2R 12bit", ["--rx", "--tx", "--rx-channels", "1,2", "--tx-channels", "1,2"]),
     ("2T2R 8bit",  ["--rx", "--tx", "--rx-channels", "1,2", "--tx-channels", "1,2", "--iq-bits", "8"]),
 ]
-RATES = [61440000, 56000000, 50000000, 46000000, 42000000, 38000000, 34000000, 30720000, 25000000]
+# 0.5 MS/s steps near the UHSIF limits (2T1R/1T2R ~58.5, 2T2R 12-bit ~44 MS/s).
+RATES = [61440000, 59000000, 58500000, 58000000, 56000000, 50000000, 46000000, 45000000,
+         44500000, 44000000, 43000000, 42000000, 38000000, 34000000, 30720000, 25000000]
 COUNTERS = ("host_dropped_samples", "transfer_errors", "device_overflows", "device_underflows",
             "event_drops", "tx_starvation_events")
 

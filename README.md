@@ -4,12 +4,12 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 版本 | 平台 | 接口 | 许可证 |
 |---|---|---|---|
-| **0.6.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+| **0.6.1**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
 
 ![OmniCore Host 架构](docs/images/architecture.svg)
 
 > [!IMPORTANT]
-> **0.6.0 需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上。** USB 传输改为成帧格式（每个 16 KiB 块带 16 字节头和 64 位样点时间），并新增硬件时间戳、PPS 对时、定时 RX 与定时 TX。旧固件请继续使用 OCH 0.5.x，两者不能混用，见 [固件兼容性](docs/firmware-compatibility.md)。
+> **0.6.x 需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上；推荐 [v2026.11.07.1](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.1)，过载时欠流 / GAP 事件合并上报，0.6.1 按 `count` 计数。** USB 传输改为成帧格式（每个 16 KiB 块带 16 字节头和 64 位样点时间），并新增硬件时间戳、PPS 对时、定时 RX 与定时 TX。旧固件请继续使用 OCH 0.5.x，两者不能混用，见 [固件兼容性](docs/firmware-compatibility.md)。
 
 ## 目录
 
@@ -45,7 +45,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 ### 1. 安装
 
-**Windows**：运行 `OmniCoreHost-0.6.0-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
+**Windows**：运行 `OmniCoreHost-0.6.1-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
 
 ```powershell
 och-driver check      # 只检查，不修改系统
@@ -57,8 +57,8 @@ och-driver install    # 为 VID 1A86 / PID 5537 安装 libusbK（需 UAC）
 ```bash
 sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
 bash tools/build-linux.sh
-sudo cmake --install build/linux --prefix /opt/omnicore/0.6.0
-sudo ln -sfn /opt/omnicore/0.6.0/bin/och /usr/local/bin/och
+sudo cmake --install build/linux --prefix /opt/omnicore/0.6.1
+sudo ln -sfn /opt/omnicore/0.6.1/bin/och /usr/local/bin/och
 sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
@@ -75,7 +75,7 @@ och selftest       # 数字接口自检（RX PRBS / TX 回环）
 ```
 
 ~~~text
-  OmniCore Host 0.6.0  info  OMNICORE5A3C91D2
+  OmniCore Host 0.6.1  info  OMNICORE5A3C91D2
 
 ━━ DEVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -122,7 +122,7 @@ och bench --rx --tx --channels 1,2 --sample-rate 30.72M --seconds 10
 
 ### 设备固件要求
 
-安装包只含主机软件，不自动烧写板级固件。0.6.0 需要 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) v2026.11.07 及以上的 `BOOT.bin`（FPGA `CH32H417_IP` 1.3、`SDK_CMD_1.1`）；打开设备时检查 `transport=framed16k`，不满足则拒绝连接。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/firmware-update.md)。设备还需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/firmware-compatibility.md)。
+安装包只含主机软件，不自动烧写板级固件。0.6.x 需要 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) v2026.11.07 及以上的 `BOOT.bin`（FPGA `CH32H417_IP` 1.3、`SDK_CMD_1.1`）；打开设备时检查 `transport=framed16k`，不满足则拒绝连接。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/firmware-update.md)。设备还需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/firmware-compatibility.md)。
 
 ## 命令行
 
@@ -247,23 +247,23 @@ och bench --rx --tx --iq-bits 8 --channels 1,2 --sample-rate 61.44M \
 
 ## 测试结果
 
-### 0.6.0 成帧传输 · Windows · USB3
+### 0.6.x 成帧传输 · Windows · USB3
 
-固件 v2026.11.07（`SDK_CMD_1.1_20261107_FRAMED`，`CH32H417_IP` 1.3），Windows 11，USB 3.0，2026-11-07。`och bench` 5 秒零错误的最高采样率（搜索档位 61.44 / 56 / 50 / 46 / 42 MSPS）；USB MB/s 含每块 16 B 头。
+固件 v2026.11.07.1（`CH32H417_IP` 1.3，位流与 v2026.11.07 相同），OCH 0.6.1，Windows 11，USB 3.0，2026-11-07。`och bench` 零错误的最高采样率：先按 0.5 MS/s 细扫（每档 10 秒 × 2–3 次），再在最高档做 300 秒长测。USB MB/s 含每块 16 B 头，理论值不含块头。
 
-| 配置 | 采样率 / 通道 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
-|---|---:|---:|---:|---:|---:|
-| 1 RX | 61.44 MSPS | 184.1 / — | 184.3 | 99.9% / — | 0 |
-| 2 RX | 61.44 MSPS | 368.5 / — | 368.6 | 100.0% / — | 0 |
-| 1 RX + 1 TX | 61.44 MSPS | 183.9 / 183.8 | 184.3 | 99.8% / 99.7% | 0 |
-| 1 RX + 2 TX | 56 MSPS | 167.6 / 335.1 | 168.0 / 336.0 | 99.8% / 99.7% | 0 |
-| 2 RX + 1 TX | 56 MSPS | 335.2 / 167.6 | 336.0 / 168.0 | 99.8% / 99.8% | 0 |
-| 2 RX + 2 TX · 12bit | 42 MSPS | 251.4 / 251.4 | 252.0 | 99.8% / 99.8% | 0 |
-| 2 RX + 2 TX · 8bit | 61.44 MSPS | 245.2 / 245.1 | 245.8 | 99.8% / 99.7% | 0 |
+| 配置 | 采样率 / 通道 | 测试 | RX / TX MB/s | 理论 MB/s | 错误 |
+|---|---:|---|---:|---:|---:|
+| 1 RX | 61.44 MSPS | 5 秒 | 184.1 / — | 184.3 | 0 |
+| 2 RX | 61.44 MSPS | 60 秒 | 368.5 / — | 368.6 | 0 |
+| 1 RX + 1 TX | 61.44 MSPS | 5 秒 | 183.9 / 183.8 | 184.3 | 0 |
+| 1 RX + 2 TX | **58 MSPS** | 300 秒 | 174.2 / 348.3 | 174.0 / 348.0 | 0 |
+| 2 RX + 1 TX | **58.5 MSPS** | 300 秒 × 2 | 351.3 / 175.7 | 351.0 / 175.5 | 0 |
+| 2 RX + 2 TX · 12bit | **44 MSPS** | 300 秒 × 2 | 264.2 / 264.2 | 264.0 | 0 |
+| 2 RX + 2 TX · 8bit | 61.44 MSPS | 60 秒 | 245.2 / 245.1 | 245.8 | 0 |
 
-各档位与旧的起始头模式相同，块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响；上限来自 FPGA 与 CH32 之间的 UHSIF 总线（约 533 MB/s，RX 与 TX 共享）。另做长时间测试：2 RX 61.44 MSPS、8bit 全双工 61.44 MSPS 各 60 秒零错误，2 RX + 1 TX 56 MSPS 连续 5 次 10 秒零错误。`tools/bench_sweep.py` 可复现这张表。
+上限来自 FPGA 与 CH32 之间的 UHSIF 总线：RX 与 TX 共享约 532 MB/s，总流量 522–528 MB/s 时稳定。高一档的结果：2T2R 12bit 44.5 MSPS、1T2R 59 MSPS 出现 RX 溢出 / TX 欠流；2T1R 58.5 MSPS 10 秒通过，但 300 秒内有 1 次 RX 溢出和 3 次 TX 欠流。0.6.0 发布时的档位搜索（61.44 / 56 / 50 / 46 / 42）跳过了这些中间速率，因此当时记为 56 与 42 MSPS。块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响。`tools/bench_sweep.py` 已改为细扫档位，可复现这张表。
 
-下面各节为 0.4.x（起始头模式、固件 `SDK_CMD_1.0_20261024_IQ8`）的历史测量，Linux 与 USB2 尚未在 0.6.0 成帧传输下复测。
+下面各节为 0.4.x（起始头模式、固件 `SDK_CMD_1.0_20261024_IQ8`）的历史测量，Linux 与 USB2 尚未在 0.6.x 成帧传输下复测。
 
 吞吐使用 `och bench` 测量，取整个流生命周期的平均值（含启停开销），MB/s 为十进制。理论 wire 速率 = 采样率 × 通道数 × 每样本字节（12bit 为 3，8bit 为 2）。“错误”指主机丢样、USB 传输错误、设备溢出 / 欠流、事件丢失与 TX 断供的合计。
 
