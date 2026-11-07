@@ -236,11 +236,12 @@ void print_device_summary(const och_device_info& i, const och_firmware_info* f, 
     using presentation::tone;
     namespace d = presentation::detail;
     auto& o = std::cout;
-    presentation::title("info", d::nonempty(d::ascii(d::text(i.serial))), o);
+    presentation::banner(o);
     presentation::section("Device", o);
 
     presentation::group("Identity", o);
     presentation::field("Name", d::nonempty(d::text(i.name)), o, tone::accent);
+    presentation::field("Serial", d::nonempty(d::text(i.serial)), o);
     presentation::field("Driver", d::nonempty(d::text(i.driver)), o);
     const auto mbps = i.usb_speed_mbps;
     presentation::field("USB link", !mbps ? std::string("Unknown") :

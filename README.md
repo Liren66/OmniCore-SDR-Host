@@ -75,17 +75,23 @@ och selftest       # 数字接口自检（RX PRBS / TX 回环）
 ```
 
 ~~~text
-  OmniCore Host 0.6.1  info  OMNICORE5A3C91D2
+     ____                  _ ______                 _____ ____  ____
+    / __ \____ ___  ____  (_) ____/___  ________    / ___// __ \/ __ \
+   / / / / __ `__ \/ __ \/ / /   / __ \/ ___/ _ \   \__ \/ / / / /_/ /
+  / /_/ / / / / / / / / / / /___/ /_/ / /  /  __/  ___/ / /_/ / _, _/
+  \____/_/ /_/ /_/_/ /_/_/\____/\____/_/   \___/  /____/_____/_/ |_|
+  OmniCore Host 0.6.1  |  OmniCoreSDR control and IQ streaming  |  ABI 1
 
 ━━ DEVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   Identity ───────────────────────────────────────────────────────────────────
     Name                      OmniCoreSDR
+    Serial                    OMNICORE5A3C91D2
     Driver                    libusbK
     USB link                  5.0 Gbit/s  SuperSpeed
 
   Firmware ───────────────────────────────────────────────────────────────────
-    Zynq SDK                  SDK_CMD_1.1_20261107_FRAMED
+    Zynq SDK                  SDK_CMD_1.1_20261107_EVTCOUNT
     FPGA IP                   CH32H417_IP 1.3  (framed 16 KiB, hardware time)
     CH32 bridge               1.0.0  (bootloader 1.0.0)
 
