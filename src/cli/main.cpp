@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -511,10 +512,14 @@ int run_stream(const options& opt) {
         presentation::field("Sample format", format_name(format) + "  (USB wire " + (config.usb_iq_bits==8?"sc8)":"packed12)"), std::cout);
         if (opt.has("file")) presentation::field(do_rx ? "Capture file" : "Input file", opt.get("file"), std::cout);
         presentation::group("Transport", std::cout);
-        presentation::field("USB link", std::to_string(device.info().usb_speed_mbps) + " Mbit/s", std::cout);
+        const auto link = device.info().usb_speed_mbps;
+        presentation::field("USB link", link >= 1000 ? display_number(link / 1000.0, 1) + " Gbit/s" : std::to_string(link) + " Mbit/s", std::cout);
         const double wire_MBps = static_cast<double>(config.sample_rate) * wire_sample_bytes(config) *
             ((do_rx ? channel_count(config.rx_mask) : 0) + (do_tx ? channel_count(config.tx_mask) : 0)) / 1e6;
-        presentation::field("RX + TX wire demand", display_number(wire_MBps, 2) + " MB/s", std::cout);
+        presentation::field("RX + TX wire demand", display_number(wire_MBps, 2) + " MB/s", std::cout,
+                            wire_MBps > 533 ? presentation::tone::warn : presentation::tone::plain);
+        if (wire_MBps > 533)
+            presentation::status(presentation::level::warn, "Above the ~533 MB/s FPGA bridge bus; expect RX gaps and TX underruns.", std::cout);
         presentation::usb2_stream_reference(device.info(), config, std::cout);
         presentation::field("Host buffer", display_number(args.host_buffer_bytes / 1048576.0, 0) + " MiB per direction", std::cout);
         presentation::field("USB requests", std::to_string(args.usb_queue_depth) + " x " + std::to_string(args.transfer_bytes) + " bytes", std::cout);
@@ -650,31 +655,57 @@ int run_stream(const options& opt) {
     auto previous_progress = begin;
     uint64_t previous_rx_bytes = progress.enabled() && rx ? rx->stats().usb_bytes : 0;
     uint64_t previous_tx_bytes = progress.enabled() && tx ? tx->stats().usb_bytes : 0;
-    uint64_t event_count = 0;
+    uint64_t event_count = 0, events_shown = 0;
+    // Text mode prints the first few events of each type, then one roll-up
+    // line per type and second, so a fault storm stays readable.
+    constexpr uint64_t per_type_lines = 3;
+    std::map<uint32_t, uint64_t> shown_by_type, held_by_type;
+    std::map<uint32_t, och_event> last_held;
+    auto last_rollup = begin;
+    auto rollup = [&](bool force) {
+        const auto now = clock_type::now();
+        if (!force && now - last_rollup < std::chrono::seconds(1)) return;
+        last_rollup = now;
+        const double t = std::chrono::duration<double>(now - begin).count();
+        for (auto& [type, held] : held_by_type) {
+            if (!held) continue;
+            progress.clear();
+            presentation::event(last_held[type], t, std::cerr, held);
+            held = 0;
+        }
+    };
     stream_assessment::startup_observer startup;
     stream_assessment::repeated_overflow_observer repeated_overflow;
     bool stopped_early = false;
-    auto event_drain = [&] {
+    auto event_drain = [&](size_t budget) {  // bounded so a fault storm cannot stall the run loop
         och_event event{};
-        while (device.poll_event(event)) {
+        for (size_t n = 0; n < budget && device.poll_event(event); ++n) {
             ++event_count;
             const double observed_seconds = std::chrono::duration<double>(clock_type::now() - begin).count();
             startup.observe(event, observed_seconds);
-            repeated_overflow.observe(event, observed_seconds);
             if (opt.has("json")) std::cerr << "{\"type\":\"event\",\"sequence\":" << event.sequence
                 << ",\"event_type\":" << event.type << ",\"epoch\":" << event.epoch
                 << ",\"host_monotonic_ns\":" << event.host_monotonic_ns
                 << ",\"observed_seconds\":" << std::setprecision(17) << observed_seconds
                 << ",\"message\":" << json(event.message) << "}\n";
-            else {
+            else if (shown_by_type[event.type] < per_type_lines) {
+                ++shown_by_type[event.type]; ++events_shown;
                 progress.clear();
-                presentation::event(event, std::chrono::duration<double>(clock_type::now() - begin).count(), std::cerr);
+                presentation::event(event, observed_seconds, std::cerr);
+            } else {
+                ++held_by_type[event.type];
+                last_held[event.type] = event;
             }
         }
+        if (!opt.has("json")) rollup(false);
     };
     while (!interrupted && !work.failed) {
-        event_drain();
-        if (opt.has("fail-fast") && repeated_overflow.repeated) { stopped_early = true; break; }
+        event_drain(256);
+        if (rx && opt.has("fail-fast")) {
+            repeated_overflow.observe(rx->stats().device_overflows,
+                                      std::chrono::duration<double>(clock_type::now() - begin).count());
+            if (repeated_overflow.repeated) { stopped_early = true; break; }
+        }
         auto now = clock_type::now();
         if (progress.enabled() && now - previous_progress >= std::chrono::seconds(1)) {
             double elapsed = std::chrono::duration<double>(now - begin).count();
@@ -712,7 +743,8 @@ int run_stream(const options& opt) {
     work.rx_stop = true;
     int stop_rx = rx ? och_stop(rx->native_handle(), 3000) : OCH_OK;
     work.stop = true;
-    work.join(); event_drain();
+    work.join(); event_drain(SIZE_MAX);
+    if (!opt.has("json")) rollup(true);
     if (work.error) std::rethrow_exception(work.error);
     och::check(stop_tx); och::check(stop_rx);
     och_stats rs{}, ts{};
@@ -743,17 +775,19 @@ int run_stream(const options& opt) {
         std::cout << std::flush;
         presentation::section("Stream complete", std::cout);
         presentation::field("Stop reason", interrupted ? "User interruption (Ctrl+C)" : stopped_early ? "Repeated RX overflows after startup" : work.eof ? "TX source reached end of file" : "Requested duration reached", std::cout);
-        presentation::field("Events received", event_count, std::cout, event_count ? presentation::tone::plain : presentation::tone::muted);
-        presentation::field("Startup RX recoveries", startup_accepted, std::cout);
-        presentation::note("Stability permits RX overflows recovered within the first second; all raw counters stay visible.", std::cout);
+        presentation::field("Events", presentation::detail::grouped(event_count) +
+            (events_shown < event_count ? "  (" + presentation::detail::grouped(events_shown) + " listed, rest summarized)" : ""),
+            std::cout, event_count ? presentation::tone::plain : presentation::tone::muted);
+        if (startup_accepted) presentation::field("Startup RX gaps", std::to_string(startup_accepted) + "  (first second, tolerated)", std::cout);
         const unsigned wire = wire_sample_bytes(config);
         auto row = [&](const char* name, const och_stats& st, uint32_t mask) {
             const double secs = st.elapsed_ns / 1e9;
             const unsigned ch = channel_count(mask);
             return presentation::throughput_row{name, ch, config.sample_rate, secs, secs > 0 ? st.usb_bytes / secs / 1e6 : 0,
                 static_cast<double>(config.sample_rate) * ch * wire / 1e6,
-                st.transfer_errors + st.host_dropped_samples + st.device_overflows + st.device_underflows +
-                st.event_drops + st.tx_starvation_events + st.resyncs + st.tx_padding_samples};
+                st.transfer_errors + st.event_drops + (name[0] == 'R'
+                    ? st.host_dropped_samples + st.device_overflows + st.resyncs
+                    : st.device_underflows + st.tx_starvation_events + st.tx_padding_samples)};
         };
         std::vector<presentation::throughput_row> rows;
         if (rx) rows.push_back(row("RX", rs, config.rx_mask));
@@ -772,7 +806,7 @@ int run_stream(const options& opt) {
             presentation::end_group(std::cout);
         }
         if (rx) presentation::stats(OCH_RX, rs, channel_count(config.rx_mask), config.sample_rate, std::cout, wire, startup_accepted);
-        if (tx) presentation::stats(OCH_TX, ts, channel_count(config.tx_mask), config.sample_rate, std::cout, wire, startup_accepted);
+        if (tx) presentation::stats(OCH_TX, ts, channel_count(config.tx_mask), config.sample_rate, std::cout, wire, 0);
     }
     return interrupted ? 130 : stopped_early ? 3 : 0;
 }

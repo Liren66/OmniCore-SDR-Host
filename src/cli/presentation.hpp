@@ -569,7 +569,6 @@ inline void stats(och_direction direction, const och_stats& s, unsigned channels
     field("Rate", std::to_string(channels_count) + " ch x " + detail::fixed(configured_rate / 1e6, 3) + " MSPS", out);
     field("Elapsed", detail::fixed(seconds, 3) + " s" + (s.running ? "  (running)" : ""), out);
     field(tx ? "Samples accepted/ch" : "Samples delivered/ch", detail::grouped(s.samples), out);
-    if (startup_accepted) field("Startup gaps accepted", startup_accepted, out);
 
     group("Throughput", out);
     field("USB average", seconds > 0 ? detail::fixed(measured) + " MB/s" : "Unknown (no elapsed time)", out, tone::accent);
@@ -664,7 +663,8 @@ inline std::string msps(const std::string& hz) {
 }
 }
 // One line per event: elapsed time, severity, origin, plain-language text.
-inline void event(const och_event& e, double elapsed_seconds, std::ostream& out) {
+// summarized > 0 renders a roll-up line for that many further events of e.type.
+inline void event(const och_event& e, double elapsed_seconds, std::ostream& out, uint64_t summarized = 0) {
     const std::string message = detail::text(e.message);
     const auto lowered = detail::lower(message);
     const std::string at = "  t=" + detail::grouped(e.hw_time);
@@ -672,7 +672,7 @@ inline void event(const och_event& e, double elapsed_seconds, std::ostream& out)
     level l = level::info;
     std::string text;
     switch (e.type) {
-    case OCH_EVENT_RX_GAP: tag = "RX GAP"; l = level::warn; text = "FIFO overflow, next block GAP" + at; break;
+    case OCH_EVENT_RX_GAP: tag = "RX GAP"; l = level::warn; text = "Overflow, next block GAP" + at; break;
     case OCH_EVENT_RX_LATE: tag = "RX LATE"; l = level::warn;
         text = lowered.find("ignored") != std::string::npos ? "Command ignored in this state"
                                                           : "Command late, started at once"; break;
@@ -697,6 +697,7 @@ inline void event(const och_event& e, double elapsed_seconds, std::ostream& out)
         break;
     default: text = message; break;
     }
+    if (summarized) text = "+" + detail::grouped(summarized) + " more (summarized)";
     const auto& st = detail::look(out);
     std::string stamp = "+" + detail::fixed(elapsed_seconds, 3) + "s";
     if (stamp.size() < 9) stamp = std::string(9 - stamp.size(), ' ') + stamp;

@@ -8,14 +8,18 @@ namespace och_cli::stream_assessment {
 // Qualification policy: recovered RX overflows observed within the first second.
 // All counters remain intact; this affects only the CLI's stability verdict.
 inline constexpr double startup_seconds = 1.0;
-// Stop only on repeated overflow onsets after the startup window. With the
-// framed transport each FPGA RX overflow is one rx_overflow_gap event
-// (OCH_EVENT_RX_GAP); the next block resumes on its own, there is no restart.
+// Stop only on repeated overflow onsets after the startup window. It watches
+// the RX device_overflows counter (GAP blocks seen in the data path), not the
+// RX_GAP events: in a TX underrun storm the FPGA event FIFO overflows and
+// drops events, while the GAP flags in the data blocks are never lost.
 struct repeated_overflow_observer {
     double previous = -1;
+    uint64_t last = 0;
     bool repeated = false;
-    void observe(const och_event& e, double seconds) {
-        if (!std::isfinite(seconds) || seconds <= startup_seconds || e.type != OCH_EVENT_RX_GAP) return;
+    void observe(uint64_t device_overflows, double seconds) {
+        if (device_overflows <= last) return;
+        last = device_overflows;
+        if (!std::isfinite(seconds) || seconds <= startup_seconds) return;
         if (previous >= 0 && seconds >= previous && seconds - previous <= 2.0) repeated = true;
         previous = seconds;
     }

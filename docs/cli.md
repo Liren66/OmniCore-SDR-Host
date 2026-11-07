@@ -80,7 +80,9 @@
 | Throughput | USB 平均吞吐、占理论 wire 速率的比例、数据量、主机队列峰值 |
 | Faults | RX：设备溢出（GAP）、主机丢样、块头错误；TX：设备欠流、主机断供、补零样本；两者都有 USB 传输错误和事件队列丢弃 |
 
-事件来源标签：`RX GAP`、`RX LATE`、`TX ACK`、`TX LATE`、`TX UNDERRUN`、`TX BLOCK`、`TIME`、`HOST`、`USB`、`TX FEED`、`RECONFIG`、`DEVICE`。序号、epoch 和主机时间戳不再显示在终端里，需要时用 `--json` 读取。
+事件来源标签：`RX GAP`、`RX LATE`、`TX ACK`、`TX LATE`、`TX UNDERRUN`、`TX BLOCK`、`TIME`、`HOST`、`USB`、`TX FEED`、`RECONFIG`、`DEVICE`。序号、epoch 和主机时间戳不显示在终端里，需要时用 `--json` 读取。
+
+过载时设备可能每秒上报数千条事件。终端里每类事件只逐条列出前 3 条，之后每秒为每类汇总一行（如 `TX UNDERRUN  +3,072 more (summarized)`），结束时 `Events` 字段给出总数与逐条列出的条数；`--json` 仍逐条输出全部事件。RX + TX wire 需求超过 FPGA 与 CH32 之间 UHSIF 总线的约 533 MB/s 时，流开始前会给出 `WARN`。
 
 默认文本布局可能随版本改进，自动化程序应使用 `--json` 或公开 C/C++ API。`--json` 的结果字段和结构与旧版本兼容。读取 JSON 时仍需分别处理标准输出、标准错误和进程退出码；有事件不必然表示命令失败。
 
@@ -94,7 +96,7 @@
 
 观察时间至少 1 秒、无剩余错误计数但吞吐低于理论值 98% 时也显示 `WARN`；平均值包含启停开销，短测试尤其需要结合时长解释。退出码仍表示命令是否完成，不能替代这些验收条件。启动窗口从流启动调用返回后计时，事件时间是 CLI 取出事件的主机观察时间。
 
-`bench --fail-fast` 用于扫描失败档位：第 1 秒之后，两次 `RX GAP` 相隔不超过 2 秒即提前正常停流、保存统计并返回退出码 `3`。启动窗口内的溢出不触发提前停止。stdout JSON 的 `stopped_early=true`、`stability.pass=false` 标明未完成请求时长；无连续溢出的候选仍运行完整时长。USB2 扫描脚本默认启用此选项。
+`bench --fail-fast` 用于扫描失败档位：第 1 秒之后，RX 设备溢出计数（数据通路里的 GAP 块）两次增加且相隔不超过 2 秒，即提前正常停流、保存统计并返回退出码 `3`。它看数据块的 GAP 标志而不是 `RX GAP` 事件：TX 欠流事件密集时 FPGA 事件 FIFO 会溢出丢事件，数据块里的标志不会丢。启动窗口内的溢出不触发提前停止。stdout JSON 的 `stopped_early=true`、`stability.pass=false` 标明未完成请求时长；无连续溢出的候选仍运行完整时长。USB2 扫描脚本默认启用此选项。
 
 JSON 保持旧字段，新增内容如下：
 
