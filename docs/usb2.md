@@ -18,6 +18,24 @@
 
 每项均连续运行 300 秒；单通道使用 CH1，双通道使用 CH1 + CH2，采样率为每通道。测试主机为 ThinkPad E14 Gen 7 / Core Ultra 7 255H / Windows 11（build 26200），USB 驱动为 libusbK，固件为 `SDK_CMD_1.0_20261024_IQ8`。
 
+## 0.7.1 成帧传输复测（2026-11-08）
+
+OmniCore Host 0.7.1，Zynq 固件 `SDK_CMD_1.2_20261107_SYNC`（成帧传输，板子运行 OmniCore SDR Linux 1.3.1），CH32 桥接 1.0.1（v2026.11.08），普通 USB 2.0 A 口，480 Mbit/s。上表各档位每项连续运行 30 秒：
+
+| 配置 | USB IQ | 采样率 MSPS/通道 | RX / TX MB/s | 故障 |
+|---|---:|---:|---:|---:|
+| 1 RX | 12bit | 14 | 42.0 / — | 0 |
+| 2 RX | 12bit | 7 | 42.0 / — | 0 |
+| 1 TX | 12bit | 14 | — / 42.0 | 0 |
+| 2 TX | 12bit | 6.5 | — / 39.0 | 0 |
+| 1 RX + 1 TX | 12bit | 7 | 21.0 / 21.0 | 0 |
+| 2 RX + 2 TX | 12bit | 3.5 | 21.0 / 21.0 | 0 |
+| 2 RX + 2 TX | 8bit | 5 | 20.0 / 20.0 | 0 |
+
+- 16 字节块头只占 0.1% 带宽，成帧传输后 USB2 档位不变。本次每项 30 秒，未重做 300 秒长测。
+- RX PRBS、TX 回环自检通过；`och firmware info` 正常。
+- USB-C 状态经 EP3 OUT 查询（桥接 1.0.1 的 USB2 端点）：`och info` 连续 10 次均可读，约 0.1 s。普通 USB2 A 口不声明 1.5 A / 3 A，显示 `USB default current`（寄存器 08=0x00）；同一块板接 USB3 Type-C 口时为 3000 mA（08=0x30）。
+
 ## 测试条件
 
 - `bench` 使用原生 packed12 或 signed8，默认每方向 64 MiB 缓冲、32 × 196608 B USB 请求；不包含磁盘写入或应用格式转换。
