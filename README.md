@@ -4,7 +4,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 版本 | 平台 | 接口 | 许可证 |
 |---|---|---|---|
-| **0.6.1**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+| **0.6.2**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
 
 ![OmniCore Host 架构](docs/images/architecture.svg)
 
@@ -45,7 +45,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 ### 1. 安装
 
-**Windows**：运行 `OmniCoreHost-0.6.1-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
+**Windows**：运行 `OmniCoreHost-0.6.2-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
 
 ```powershell
 och-driver check      # 只检查，不修改系统
@@ -57,8 +57,8 @@ och-driver install    # 为 VID 1A86 / PID 5537 安装 libusbK（需 UAC）
 ```bash
 sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
 bash tools/build-linux.sh
-sudo cmake --install build/linux --prefix /opt/omnicore/0.6.1
-sudo ln -sfn /opt/omnicore/0.6.1/bin/och /usr/local/bin/och
+sudo cmake --install build/linux --prefix /opt/omnicore/0.6.2
+sudo ln -sfn /opt/omnicore/0.6.2/bin/och /usr/local/bin/och
 sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
@@ -74,38 +74,7 @@ och info           # 身份、固件版本、USB 链路、RF 能力、时间基�
 och selftest       # 数字接口自检（RX PRBS / TX 回环）
 ```
 
-~~~text
-     ____                  _ ______                 _____ ____  ____
-    / __ \____ ___  ____  (_) ____/___  ________    / ___// __ \/ __ \
-   / / / / __ `__ \/ __ \/ / /   / __ \/ ___/ _ \   \__ \/ / / / /_/ /
-  / /_/ / / / / / / / / / / /___/ /_/ / /  /  __/  ___/ / /_/ / _, _/
-  \____/_/ /_/ /_/_/ /_/_/\____/\____/_/   \___/  /____/_____/_/ |_|
-  OmniCore Host 0.6.1  |  OmniCoreSDR control and IQ streaming  |  ABI 1
-
-━━ DEVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  Identity ───────────────────────────────────────────────────────────────────
-    Name                      OmniCoreSDR
-    Serial                    OMNICORE5A3C91D2
-    Driver                    libusbK
-    USB link                  5.0 Gbit/s  SuperSpeed
-
-  Firmware ───────────────────────────────────────────────────────────────────
-    Zynq SDK                  SDK_CMD_1.1_20261107_EVTCOUNT
-    FPGA IP                   CH32H417_IP 1.3  (framed 16 KiB, hardware time)
-    CH32 bridge               1.0.0  (bootloader 1.0.0)
-
-  RF ─────────────────────────────────────────────────────────────────────────
-    Channels                  2 RX / 2 TX
-    Max sample rate           61.440 MSPS per channel
-
-  Time base ──────────────────────────────────────────────────────────────────
-    State                     Not set
-    PPS source                None
-
-  Power ──────────────────────────────────────────────────────────────────────
-    USB-C at startup          3000 mA available
-~~~
+<p align="center"><img src="docs/images/cli-info.png" width="640" alt="och info：OmniCore SDR 标题、设备身份、三类固件版本、RF 能力、时间基准与电源摘要"></p>
 
 ### 3. 收发 IQ
 
@@ -184,34 +153,20 @@ och set fan.enabled on
 
 ### 终端输出
 
-交互终端中按“标题 → 分组 → 字段”分层显示，带颜色、状态标签和实时进度条；重定向到文件时自动切换为纯 ASCII（≤ 78 列），`--json` 则只输出 JSON。事件每条一行，带硬件时间的事件附样点时间；结束时按方向给出吞吐与故障计数（数值为示意）：
+交互终端中按“标题 → 分组 → 字段”分层显示，带颜色、状态标签和实时进度条；重定向到文件时自动切换为纯 ASCII（≤ 78 列），`--json` 则只输出 JSON。事件每条一行，带硬件时间的事件附样点时间；结束时按方向给出吞吐与故障计数：
 
-~~~text
-    +1.092s  [WARN]  RX GAP      FIFO overflow, next block GAP  t=33,521,664
-    +2.001s  [ OK ]  TX ACK      Burst complete  t=61,440,000
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/cli-bench-running.png" alt="och bench 2T2R 12bit 44 MSPS 运行中：会话、RF 配置与实时进度"></td>
+<td width="50%" valign="top"><img src="docs/images/cli-bench-summary.png" alt="och bench 结束：吞吐汇总表与 RX / TX 分组统计，零故障"></td>
+</tr>
+<tr>
+<td align="center"><sub>运行中：会话信息、RF 配置和实时进度</sub></td>
+<td align="center"><sub>结束时：吞吐汇总表与分组统计</sub></td>
+</tr>
+</table>
 
-━━ RX STREAM SUMMARY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  [ OK ]  No faults.
-
-  Overview ───────────────────────────────────────────────────────────────────
-    Rate                      2 ch x 30.720 MSPS
-    Elapsed                   12.196 s
-    Samples delivered/ch      373,779,114
-
-  Throughput ─────────────────────────────────────────────────────────────────
-    USB average               183.937 MB/s
-    Of expected               99.8 %  of 184.3 MB/s
-    Data volume               2.09 GiB
-    Host queue peak           944.0 KiB
-
-  Faults ─────────────────────────────────────────────────────────────────────
-    Device overflows (GAP)    0
-    Host dropped samples      0
-    Header errors             0
-    USB transfer errors       0
-    Event queue drops         0
-~~~
+以上为实机截图：Windows Terminal，OCH 0.6.2，固件 v2026.11.07.1，2T2R 12bit 44 MSPS。
 
 退出码：`0` 完成 · `1` 设备/传输错误 · `2` 参数错误 · `3` `bench --fail-fast` 提前结束 · `130` Ctrl+C 中断。性能是否达标请检查 JSON 的 `stability.pass`，而非仅看退出码。
 
