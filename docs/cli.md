@@ -19,16 +19,47 @@
 
 结论性信息使用状态标记：`OK`（成功 / 无故障）、`INFO`、`WARN`（设备事件或需关注的计数）、`FAIL`（主机丢样、传输错误或命令失败）。故障计数为零时以灰色显示，非零时高亮。说明性备注统一放在每个功能区末尾，以 `·` 开头并以灰色显示。设备返回的状态（如 `get system.status`）按状态组分组，字段较短的组以两列显示，便于浏览。
 
-<table>
-<tr>
-<td width="50%" valign="top"><img src="images/cli-bench-running.png" alt="bench 运行中"></td>
-<td width="50%" valign="top"><img src="images/cli-bench-summary.png" alt="bench 结束时的汇总"></td>
-</tr>
-<tr>
-<td align="center"><sub>运行中：会话、事件与进度条</sub></td>
-<td align="center"><sub>结束时：吞吐汇总表与分组统计</sub></td>
-</tr>
-</table>
+`och info` 一屏给出设备身份、三类固件版本、RF 能力、时间基准和电源摘要（下例数值为示意）：
+
+~~~text
+  OmniCore Host 0.6.0  info  OMNICORE5A3C91D2
+
+━━ DEVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Identity ───────────────────────────────────────────────────────────────────
+    Name                      OmniCoreSDR
+    Driver                    libusbK
+    USB link                  5.0 Gbit/s  SuperSpeed
+
+  Firmware ───────────────────────────────────────────────────────────────────
+    Zynq SDK                  SDK_CMD_1.1_20261107_FRAMED
+    FPGA IP                   CH32H417_IP 1.3  (framed 16 KiB, hardware time)
+    CH32 bridge               1.0.0  (bootloader 1.0.0)
+
+  RF ─────────────────────────────────────────────────────────────────────────
+    Channels                  2 RX / 2 TX
+    Max sample rate           61.440 MSPS per channel
+
+  Time base ──────────────────────────────────────────────────────────────────
+    State                     Valid
+    PPS source                Internal, AD9361 40 MHz
+    PPS count                 1,284
+    Now                       39,462,912,000  (1284.6 s at 30.720 MSPS)
+
+  Power ──────────────────────────────────────────────────────────────────────
+    USB-C at startup          3000 mA available
+
+  · Link speed is negotiated; RX and TX share one USB link and sample clock.
+~~~
+
+流命令运行中每个事件占一行：相对时间、严重程度、来源和一句说明；带硬件时间的事件附 `t=` 样点时间：
+
+~~~text
+    +1.092s  [WARN]  RX GAP      FIFO overflow, next block GAP  t=33,521,664
+    +2.001s  [ OK ]  TX ACK      Burst complete  t=61,440,000
+    +2.310s  [WARN]  TX LATE     Late start, burst dropped  t=30,720,000
+    +3.500s  [WARN]  TIME        Rate 30.720 -> 15.360 MSPS, time invalid
+~~~
 
 <p align="center"><img src="images/cli-status.png" width="640" alt="get system.status 的分组两列视图"></p>
 
@@ -45,26 +76,25 @@
 
 | 分组 | 内容 |
 |---|---|
-| Overview | 流状态、通道数、配置采样率、运行时长 |
-| Throughput | USB 平均吞吐、理论 wire 速率、实测 / 理论比例、每通道样本速率、数据量 |
-| Samples and buffers | 样本数、起始头 / 重同步次数、主机队列当前 / 峰值、未完成 USB 请求、TX 补零样本 |
-| Faults | 主机丢样、USB 传输错误、设备 RX 溢出、TX 欠流、TX 断供、事件队列丢弃 |
+| Overview | 通道数 × 采样率、运行时长、交付（RX）/ 接受（TX）样本数、启动窗口内接受的 GAP 数 |
+| Throughput | USB 平均吞吐、占理论 wire 速率的比例、数据量、主机队列峰值 |
+| Faults | RX：设备溢出（GAP）、主机丢样、块头错误；TX：设备欠流、主机断供、补零样本；两者都有 USB 传输错误和事件队列丢弃 |
 
-事件按时间排列，每条显示相对时间、严重程度和来源（`DEVICE`、`RX SYNC`、`HOST`、`USB`、`TX FEED`、`RECONFIG`），下一行灰色显示序号、类型、epoch 和主机时间戳。
+事件来源标签：`RX GAP`、`RX LATE`、`TX ACK`、`TX LATE`、`TX UNDERRUN`、`TX BLOCK`、`TIME`、`HOST`、`USB`、`TX FEED`、`RECONFIG`、`DEVICE`。序号、epoch 和主机时间戳不再显示在终端里，需要时用 `--json` 读取。
 
 默认文本布局可能随版本改进，自动化程序应使用 `--json` 或公开 C/C++ API。`--json` 的结果字段和结构与旧版本兼容。读取 JSON 时仍需分别处理标准输出、标准错误和进程退出码；有事件不必然表示命令失败。
 
 ### USB2 采样率与判定（0.4.3）
 
-`info` 在 USB2 与 USB3 下使用相同的设备信息分组：身份、USB 链路、RF 能力和电源信息。USB2 显示 `480 Mbit/s`，`RF sample-rate ceiling` 仍表示射频能力。实测采样率、测试主机与时长放在 [USB2 报告](usb2.md) 和 README 中；`info --json` 保留 `usb2_reference` 供脚本读取。
+`info` 在 USB2 与 USB3 下使用相同的分组。USB2 显示 `480 Mbit/s High-Speed (USB 2.0)`，`Max sample rate` 仍表示射频能力。实测采样率、测试主机与时长放在 [USB2 报告](usb2.md) 和 README 中；`info --json` 保留 `usb2_reference` 供脚本读取。
 
 流开始时新增 `USB link`、`RX + TX wire demand` 和匹配配置的参考值。超过参考采样率会提示 `WARN`，但不自动改参或限制 SDK 的射频范围。单通道参考只测过 CH1；CH2-only、非对称全双工及其他固件组合显示未测。已测点也不能保证另一台主机的结果。
 
-稳定性判定允许**前 1 秒内观察到并完成恢复的 RX 溢出及对应重同步**，不限制这个窗口内的恢复次数。必须同时有溢出通知、恢复完成通知和新 epoch 起始头，才计入 `Startup RX recoveries`。所有原始统计不清零；1 秒后的溢出 / 重同步，以及任何阶段的欠流、主机丢样、传输错误、事件丢失、TX 断供或补零仍导致警告 / 失败。这个“启动后稳定”结论不表示启动数据无损。
+稳定性判定允许**前 1 秒内的 RX 溢出**：成帧传输下每次溢出产生一个 `RX GAP` 事件，下一块自动恢复，不需要重启 RX。窗口内的 GAP 数（不超过设备溢出计数）计入 `Startup gaps accepted`。所有原始统计不清零；1 秒后的 GAP，以及任何阶段的块头错误、欠流、主机丢样、传输错误、事件丢失、TX 断供或补零仍导致警告 / 失败。这个“启动后稳定”结论不表示启动数据无损，丢失的样点数可由 metadata 中的 `device_dropped_samples` 精确得到。
 
 观察时间至少 1 秒、无剩余错误计数但吞吐低于理论值 98% 时也显示 `WARN`；平均值包含启停开销，短测试尤其需要结合时长解释。退出码仍表示命令是否完成，不能替代这些验收条件。启动窗口从流启动调用返回后计时，事件时间是 CLI 取出事件的主机观察时间。
 
-`bench --fail-fast` 用于扫描失败档位：第 1 秒之后，两次 RX 溢出通知相隔不超过 2 秒即提前正常停流、保存统计并返回退出码 `3`。恢复通知不重复计数，启动窗口内的溢出不触发提前停止。stdout JSON 的 `stopped_early=true`、`stability.pass=false` 标明未完成请求时长；无连续溢出的候选仍运行完整时长。USB2 扫描脚本默认启用此选项。
+`bench --fail-fast` 用于扫描失败档位：第 1 秒之后，两次 `RX GAP` 相隔不超过 2 秒即提前正常停流、保存统计并返回退出码 `3`。启动窗口内的溢出不触发提前停止。stdout JSON 的 `stopped_early=true`、`stability.pass=false` 标明未完成请求时长；无连续溢出的候选仍运行完整时长。USB2 扫描脚本默认启用此选项。
 
 JSON 保持旧字段，新增内容如下：
 
@@ -155,7 +185,7 @@ raw_08/raw_09/raw_0a 保留寄存器值，attached_state/current_detected 保留
 | --seconds 10 | 持续时间；0 表示直到 Ctrl+C |
 | --buffer-mib 64 | 每方向主机队列大小，MiB，最大 512 |
 | --queue 32 | 每方向并行 USB 请求数 |
-| --block 196608 | USB 请求字节数，需为 49152 的倍数 |
+| --block 196608 | USB 请求字节数，需为 16384（一个成帧块）的倍数 |
 
 十进制数支持 k/K、M、G，例如 30.72M、1e9。拼写错误、非法后缀、非有限数、重复选项、错误通道等明确拒绝，不截取合法数字前缀。
 
@@ -169,10 +199,10 @@ raw_08/raw_09/raw_0a 保留寄存器值，attached_state/current_detected 保留
 och rx --sample-rate 30.72M --channels 1,2 --seconds 5 --file iq.sc16 --format sc16 --rx-lo-frequency 1G
 ~~~
 
-只有 payload 写入文件，完整 16 KiB 头被剥离。另写 iq.sc16.metadata.jsonl，按行记录：
+只有 payload 写入文件，每个 16 KiB 块的 16 B 头被剥离。另写 iq.sc16.metadata.jsonl，按行记录：
 
-- capture：格式、配置、无硬件时间戳声明。
-- boundary：file_byte/file_sample 文件位置、epoch/sample_index、flags、主机已知丢样和设备未知丢样数。
+- capture：格式、配置、`hardware_timestamps`（设备是否提供硬件时间）。
+- boundary：file_byte/file_sample 文件位置、epoch/sample_index、flags、主机丢样、设备丢样（由块头时间差得到的精确值）、`time_ticks`（本段首样点的硬件时间）与 `tick_rate`。
 - end：最终统计；异常终止可能没有这一行，已有边界仍可读取。
 
 文件无额外容器头。sc16/fc32 为小端序，双通道顺序 I1,Q1,I2,Q2，单通道是所选物理通道的 I,Q。已有文件需 --overwrite 才能覆盖。
@@ -185,11 +215,11 @@ och tx --sample-rate 30.72M --channels 1,2 --file iq.sc16 --format sc16
 och tx --sample-rate 30.72M --channels 1,2 --file iq.sc16 --format sc16 --loop --seconds 30
 ~~~
 
-普通文件默认发送到 EOF，--loop 重复文件。文件必须是完整交织 IQ 帧，不能把 metadata.jsonl 或保留 16 KiB 头的原始 USB dump 当作 IQ 发射。多个不连续 epoch 的采集文件仍按文件内容顺序播放，不自动重建原采集时间间隔。
+普通文件默认发送到 EOF，--loop 重复文件。文件必须是完整交织 IQ 帧，不能把 metadata.jsonl 或保留块头的原始 USB dump 当作 IQ 发射。多个不连续 epoch 的采集文件仍按文件内容顺序播放，不自动重建原采集时间间隔。
 
 TX 最低预填四个完整 USB 块；持续源在启动前先运行生产者，准备 min(32 MiB, 主机队列一半) wire 数据作为调度余量，再显式开始输出。有限文件提前读到 EOF 时可用已预填数据启动。无循环的文件不足四块会拒绝；用 --loop 才重复填充。
 
-定时持续源到时立即关闭硬件并取消剩余排队数据，不为结束而等待队列耗尽。文件 EOF 才显式 flush，必要的传输块零填充以 tx_padding_samples 报告。接受进入主机队列的样本数不等于已从 RF 播放的样本数；两种停止方式都不提供精确的 RF 结束时间。
+`och tx` 发送的是不带时间的连续流；按样点时刻发射突发请使用 C API 的 `och_send_burst`，见 [硬件时间戳](timestamps.md)。定时持续源到时立即关闭硬件并取消剩余排队数据，不为结束而等待队列耗尽。文件 EOF 才显式 flush，必要的传输块零填充以 tx_padding_samples 报告。接受进入主机队列的样本数不等于已从 RF 播放的样本数；两种停止方式都不提供精确的 RF 结束时间。
 
 **有限文件 EOF 有独立的尾部边界限制。** flush 完成后，设备仍在消耗 FIFO，SDK 关闭硬件前可能出现一次或多次 TX 欠流/主机欠供通知；本版不会过滤或隐藏这些事件。它们不应直接等同于持续数据中段丢样，也不能反过来据此断言全部文件样本已精确从 DAC 播放。应联合 EOF、USB 完成字节数、padding、transfer_errors 和事件日志判断。持续流 benchmark 与有限文件 EOF 的验收结果分别报告，不用其中一种代替另一种。
 
@@ -214,7 +244,7 @@ och bench --rx --tx --sample-rate 61.44M --rx-channels 1 --tx-channels 2 --secon
 | 3 | `bench --fail-fast` 因连续 RX 溢出提前结束，已清理并保留统计 |
 | 130 | 被 Ctrl+C 中断，已清理 |
 
-默认情况下 EVT/间断不自动使流停止；`bench --fail-fast` 例外如上。业务是否通过应根据间断、欠流、重同步和队列损失统计判断，不能只看退出码。
+默认情况下 EVT/间断不自动使流停止；`bench --fail-fast` 例外如上。业务是否通过应根据间断、欠流、块头错误和队列损失统计判断，不能只看退出码。
 
 ## RX RSSI
 

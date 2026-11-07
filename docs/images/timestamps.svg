@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" role="img" aria-labelledby="t d"><title id="t">硬件时间：PPS 对时、定时 RX 与定时 TX</title><desc id="d">64 位样点时间在 PPS 沿装载，RX 在指定样点开始，TX 突发在指定样点发射</desc><defs><marker id="a-ink" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#52514e"/></marker><marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#2a78d6"/></marker><marker id="a-orange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#eb6834"/></marker><marker id="a-aqua" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#1baf7a"/></marker><marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#6250d6"/></marker><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#fdeee7"/><line x1="0" y1="0" x2="0" y2="7" stroke="#f4b49a" stroke-width="2.5"/></pattern><pattern id="pad" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#f3f2ee"/><line x1="0" y1="0" x2="0" y2="7" stroke="#d6d4cd" stroke-width="2.5"/></pattern></defs>
+<rect x="0.5" y="0.5" width="999" height="599" rx="14" fill="#fcfcfb" stroke="#e4e3df"/>
+<text x="28" y="42" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="20" font-weight="700" fill="#0b0b0b" text-anchor="start">硬件时间：PPS 对时、定时 RX 与定时 TX</text>
+<text x="28" y="66" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">FPGA 内 64 位样点计数器（1 tick = 1 个样点）；RX 块头带首样点时间，RX / TX 可在指定样点开始</text>
+<text x="28" y="118" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">PPS</text>
+<text x="28" y="135" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">J6 外部或内部分频</text>
+<path d="M160,128 H972" fill="none" stroke="#8a8984" stroke-width="1"/>
+<path d="M219,128 V106 H229 V128" fill="none" stroke="#6250d6" stroke-width="2"/>
+<text x="234" y="104" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#6250d6" text-anchor="start">PPS k</text>
+<path d="M519,128 V106 H529 V128" fill="none" stroke="#6250d6" stroke-width="2"/>
+<text x="534" y="104" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#6250d6" text-anchor="start">PPS k+1</text>
+<path d="M819,128 V106 H829 V128" fill="none" stroke="#6250d6" stroke-width="2"/>
+<text x="834" y="104" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#6250d6" text-anchor="start">PPS k+2</text>
+<text x="28" y="178" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">时间计数器</text>
+<text x="28" y="195" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">time_now · 64 位</text>
+<rect x="160" y="160" width="358" height="36" rx="6" fill="#f3f2ee" stroke="#d9d7d0" stroke-width="1"/>
+<text x="339" y="183" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#8a8984" text-anchor="middle">时间无效或旧值（未对时）</text>
+<rect x="522" y="160" width="450" height="36" rx="6" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
+<text x="528" y="183" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="12" font-weight="600" fill="#2a78d6" text-anchor="start">0</text>
+<text x="676" y="183" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="12" font-weight="600" fill="#2a78d6" text-anchor="start">0.5·Fs</text>
+<text x="826" y="183" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="12" font-weight="600" fill="#2a78d6" text-anchor="start">Fs</text>
+<text x="944" y="183" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="12" font-weight="600" fill="#2a78d6" text-anchor="start">…</text>
+<rect x="214" y="206" width="298" height="26" rx="5" fill="#ffffff" stroke="#cfcdc6" stroke-width="1"/>
+<text x="363" y="223" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#0b0b0b" text-anchor="middle">och_set_time(dev, 0, 1)：下一个 PPS 沿置 0</text>
+<path d="M512,219 H536 V201" fill="none" stroke="#52514e" stroke-width="1.4" marker-end="url(#a-ink)"/>
+<text x="28" y="268" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">定时 RX</text>
+<text x="28" y="285" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">OCH_RX_TIMED</text>
+<path d="M450,268 H972" fill="none" stroke="#8a8984" stroke-width="1" stroke-dasharray="2 4"/>
+<rect x="670" y="250" width="110" height="36" rx="6" fill="#e8f1fc" stroke="#2a78d6" stroke-width="1.4"/>
+<text x="725" y="266" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="700" fill="#2a78d6" text-anchor="middle">N 个样点</text>
+<text x="725" y="280" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10" font-weight="400" fill="#52514e" text-anchor="middle">SOB … EOB</text>
+<text x="664" y="246" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="end">首样点 time = T₁</text>
+<text x="160" y="262" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11.5" font-weight="400" fill="#52514e" text-anchor="start">start_flags = OCH_RX_TIMED</text>
+<text x="160" y="279" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11.5" font-weight="400" fill="#52514e" text-anchor="start">start_time = T₁, num_samples = N</text>
+<text x="28" y="338" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">定时 TX</text>
+<text x="28" y="355" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">och_send_burst</text>
+<path d="M450,338 H972" fill="none" stroke="#8a8984" stroke-width="1" stroke-dasharray="2 4"/>
+<rect x="866" y="320" width="80" height="36" rx="6" fill="#fdeee7" stroke="#eb6834" stroke-width="1.4"/>
+<text x="906" y="336" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="700" fill="#eb6834" text-anchor="middle">突发</text>
+<text x="906" y="350" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10" font-weight="400" fill="#52514e" text-anchor="middle">SOB … EOB</text>
+<text x="946" y="314" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#eb6834" text-anchor="end">在 T₂ 的那个样点开始</text>
+<rect x="596" y="320" width="60" height="36" rx="6" fill="#ffffff" stroke="#eb6834" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="626" y="342" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#eb6834" text-anchor="middle">T 已过</text>
+<text x="160" y="332" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11.5" font-weight="400" fill="#52514e" text-anchor="start">flags = HAS_TIME | SOB | EOB</text>
+<text x="160" y="349" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#52514e" text-anchor="start">time = T₂；迟到的突发整段不发射</text>
+<text x="28" y="408" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">主机事件</text>
+<text x="28" y="425" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">och_poll_event · hw_time</text>
+<path d="M160,408 H972" fill="none" stroke="#8a8984" stroke-width="1"/>
+<circle cx="700" cy="408" r="4.5" fill="#eb6834"/>
+<text x="708" y="400" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="600" fill="#eb6834" text-anchor="start">TX_LATE</text>
+<circle cx="780" cy="408" r="4.5" fill="#2a78d6"/>
+<text x="788" y="400" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="600" fill="#2a78d6" text-anchor="start">RX EOB</text>
+<circle cx="946" cy="408" r="4.5" fill="#1baf7a"/>
+<text x="938" y="400" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="600" fill="#1baf7a" text-anchor="end">TX_BURST_ACK</text>
+<path d="M640,358 Q650,392 694,405" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="3 3"/>
+<path d="M780,288 V402" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-dasharray="3 3"/>
+<path d="M946,358 V402" fill="none" stroke="#1baf7a" stroke-width="1.4" stroke-dasharray="3 3"/>
+<path d="M160,452 H976" fill="none" stroke="#0b0b0b" stroke-width="1.2" marker-end="url(#a-ink)"/>
+<path d="M220,446 V458" fill="none" stroke="#0b0b0b" stroke-width="1.2"/>
+<text x="220" y="474" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="middle">−1 s</text>
+<path d="M520,446 V458" fill="none" stroke="#0b0b0b" stroke-width="1.2"/>
+<text x="520" y="474" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="middle">0</text>
+<path d="M670,446 V458" fill="none" stroke="#0b0b0b" stroke-width="1.2"/>
+<text x="670" y="474" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">T₁</text>
+<path d="M820,446 V458" fill="none" stroke="#0b0b0b" stroke-width="1.2"/>
+<text x="820" y="474" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="middle">1 s</text>
+<path d="M866,446 V458" fill="none" stroke="#0b0b0b" stroke-width="1.2"/>
+<text x="866" y="474" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">T₂</text>
+<text x="976" y="442" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="end">样点时间</text>
+<rect x="28" y="494" width="944" height="84" rx="8" fill="#ffffff" stroke="#e4e3df" stroke-width="1"/>
+<text x="44" y="518" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">时间源：och_set_time_source() 选 EXTERNAL（J6 PPS）或 INTERNAL（AD9361 40 MHz 分频）；改采样率后时间作废，产生 TIME_INVALIDATED。</text>
+<text x="44" y="540" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">RX 元数据：time_ticks 为本批第一个样点的时间；溢出时 device_dropped_samples 由时间戳差给出精确丢样数。</text>
+<text x="44" y="562" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">多机同步：各板共享 J3 10 MHz 与 J6 PPS，在同一 PPS 沿执行 och_set_time(dev, 0, 1)，之后用相同时间戳下发命令。</text>
+</svg>

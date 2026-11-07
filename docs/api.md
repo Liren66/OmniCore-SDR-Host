@@ -158,14 +158,15 @@ TX 的 sc16 会丢弃低 4 位；fc32 按 12 位量化，半步远离零取整�
 
 一次 recv/acquire 不混合多个 epoch 或已知间断：
 
-- epoch：每确认完整 16 KiB 头增加，不是硬件帧序号。
-- sample_index：当前 epoch 内每通道位置，不是硬件时间戳。
-- flags：START、DISCONTINUITY、主机溢出、设备溢出、时间未知、RECONFIGURED。
+- epoch：流开始、设备 GAP、迟到命令、重配置或任何时间不连续时加 1，不是硬件块序号。
+- sample_index：当前 epoch 内每通道位置。
+- time_ticks / tick_rate：本批第一个样点的硬件时间（flags 含 HAS_TIME 时有效）与对应采样率，1 tick = 1 个样点。
+- flags：START、DISCONTINUITY、HOST_OVERFLOW、DEVICE_OVERFLOW、RECONFIGURED、HAS_TIME、END_OF_BURST、LATE。TIME_UNKNOWN 不再产生。
 - host_dropped_samples：已知的主机本地丢样。
-- device_dropped_samples=-1：设备没有提供精确损失。
-- host_monotonic_ns：主机观察时刻，不是 ADC 采样时刻。
+- device_dropped_samples：设备溢出丢掉的样点数，由块头时间差得到的精确值。
+- host_monotonic_ns：主机观察时刻，不是 ADC 采样时刻；采样时刻用 time_ticks。
 
-数据头与 EVT 从不同 USB 通道到达；EVT 的到达时刻不能替代数据边界。消费者应依据 IQ 元数据重置同步、滤波历史或帧解析。
+数据块与 EVT 从不同 USB 端点到达；EVT 的到达时刻不能替代数据边界。消费者应依据 IQ 元数据重置同步、滤波历史或帧解析。
 
 och_rx_acquire 返回当前 wire 格式的租借，容量单位为字节，与 args.format 无关。12bit 每复样本 3 字节，8bit 每复样本 2 字节；双通道分别为每时间帧 6/4 字节。每流最多一个租借，释放前不得再次 acquire、recv、destroy；运行中重配在存在租借时返回 BUSY。release 后指针立即失效。保持处理时间有界，避免长时间占用核心队列。
 
@@ -173,13 +174,13 @@ och_rx_acquire 返回当前 wire 格式的租借，容量单位为字节，与 a
 
 send 可能只接受部分样本；一旦接受了样本就返回 OCH_OK，调用方始终按 accepted 消费对应前缀，再重试剩余部分，不能重发整块。TIMEOUT 表示期限内未接受样本或因协调重配置暂时中断，不等于永久断开。
 
-start 前 send 只预填不发射。停止后不会因为后来提交数据自动开启。flush 对齐补零并等待主机队列与 OUT 完成；补零数量见 tx_padding_samples。它不提供 DAC 播放完成的硬件时刻，本版不支持 timed TX、PPS 对齐的采样时间、硬件 timestamps 或跨设备相干同步。独立的 PPS 接口为 `och_set_pps_enabled`、`och_get_pps_status` 和 `och_get_vcxo_status`（内部参考时 PPS 经 CH32 PA4 驯服 40 MHz），详见 [PPS API](pps.md)。
+start 前 send 只预填不发射。停止后不会因为后来提交数据自动开启。flush 对齐补零并等待主机队列与 OUT 完成；补零数量见 tx_padding_samples。连续流的 send/flush 不带时间；需要在指定样点发射或得到播放完成时刻时，使用 `och_send_burst`（HAS_TIME/SOB/EOB），突发完成产生带样点时间的 `OCH_EVENT_TX_BURST_ACK`。硬件时间、PPS 对时与定时 RX 见 [硬件时间戳](timestamps.md)；跨设备 LO 相位相干同步不提供。独立的 PPS 接口为 `och_set_pps_enabled`、`och_get_pps_status` 和 `och_get_vcxo_status`（内部参考时 PPS 经 CH32 PA4 驯服 40 MHz），详见 [PPS API](pps.md)。
 
-有限文件 EOF 的 flush 完成与 stop 关闭硬件之间没有设备端 end-of-burst 握手。此时 FIFO 排空可能触发 tx_underflow，应用队列已结束也可能触发 TX_STARVED；事件及计数原样保留。调用方应把“已结束供应后的尾部欠供”和“预期连续供应期间的欠供”分开记录，不能仅据错误计数判定持续流中段丢样，也不能把全部 USB 完成解释为精确定长 DAC 播放成功。若业务需要精确 burst 结束点，必须增加设备端协议/硬件能力，当前 API 不提供该保证。
+有限文件 EOF 的 flush 完成与 stop 关闭硬件之间没有设备端 end-of-burst 握手。此时 FIFO 排空可能触发 tx_underflow，应用队列已结束也可能触发 TX_STARVED；事件及计数原样保留。调用方应把“已结束供应后的尾部欠供”和“预期连续供应期间的欠供”分开记录，不能仅据错误计数判定持续流中段丢样，也不能把全部 USB 完成解释为精确定长 DAC 播放成功。若业务需要精确 burst 结束点，请改用 `och_send_burst`，以 `OCH_EVENT_TX_BURST_ACK` 的 `hw_time` 为准。
 
 ## 事件与线程
 
-每设备有有界事件队列，och_poll_event 获取设备 EVT、RX 同步、主机溢出、传输故障、TX 欠供和重配置结果等。应用应定期取出，event_drops 增加表示队列未及时处理或事件过密。
+每设备有有界事件队列，och_poll_event 获取设备 EVT、主机溢出、传输故障、TX 欠供、重配置结果，以及 0.6.0 的定时事件（`RX_GAP`、`RX_LATE`、`TX_BURST_ACK`、`TX_LATE`、`TX_UNDERFLOW`、`TX_ERROR`、`TIME_INVALIDATED`；`hw_time`、`code`、`block` 给出样点时间、FPGA 事件码与块序号）。应用应定期取出，event_drops 增加表示队列未及时处理或事件过密。
 
 RX 与 TX 可并行；同一 RX 仅一个 consumer，同一 TX 仅一个 producer。stop 和协调重配置可与正在进行的收发并行，用于结束或暂时中断等待；destroy/close 不能与该句柄上的任何操作并发。确认 IO 线程退出后再销毁对象。配置与生命周期操作由应用串行管理。
 
@@ -187,10 +188,10 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 
 ## 统计口径
 
-- usb_bytes 是该流已完成 USB 请求的字节数；RX 包括传输头，TX 不包括仅接受进入主机队列但尚未完成 USB 的部分。
+- usb_bytes 是该流已完成 USB 请求的字节数；RX 包括 16 B 块头和补零，TX 不包括仅接受进入主机队列但尚未完成 USB 的部分。
 - samples 在 RX 表示已交给应用的每通道样本数，在 TX 表示已接受进入主机队列的每通道样本数。两者都不是 RF 测量，尤其 TX 不能用它断言全部样本已经发射。
-- host_dropped_samples、headers、resyncs、transfer_errors、tx_starvation_events 属于该流；队列字节和峰值按当前 wire 字节计，12bit 为每复样本 3B，8bit 为 2B。
-- device_overflows、device_underflows、event_drops 属于该设备对象的观察期；RX/TX stats 会看到相同设备计数，不要把两份相加。设备错误字段按收到的相关 EVT 通知计数，可能受固件通知合并影响，不能当作精确物理 FIFO 错误次数或丢样量。
+- host_dropped_samples、headers（已解析的成帧块数）、resyncs（块头校验失败后的重新同步次数，正常为 0）、transfer_errors、tx_starvation_events 属于该流；队列字节和峰值按当前 wire 字节计，12bit 为每复样本 3B，8bit 为 2B。
+- device_overflows、device_underflows、event_drops 属于该设备对象的观察期；RX/TX stats 会看到相同设备计数，不要把两份相加。device_overflows 按收到的 GAP 块计数，精确丢样量见 RX 元数据的 device_dropped_samples；device_underflows 按 TX 欠流事件计数。
 - 最大采样率 61.44 MSPS 是单通道的射频能力，不表示 USB 可同时承载四通道都满速。四通道 61.44 MSPS 总 wire 需求 737.28 MB/s；应按共享 USB 带宽选定双向速率，常用四通道测试使用 30.72 MSPS。
 
 ## RX RSSI（0.4.7）
@@ -204,3 +205,16 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 ## 桥接固件（0.5.0）
 
 `och_firmware_query`、`och_firmware_read_image`、`och_firmware_update`、`och_firmware_enter_bootloader`、`och_firmware_start_app` 只使用 EP0 厂商请求，不打开 SDK 控制通道，可在 Bootloader 模式下使用；设备被其他句柄占用时返回 `OCH_BUSY`。`och_get_firmware_info` 返回已打开设备的桥接固件信息。设备处于 Bootloader 时 `och_open` 返回 `OCH_UNSUPPORTED`。用法和恢复流程见 [桥接固件升级](firmware-update.md)。
+
+## 硬件时间（0.6.0）
+
+| 函数 | 作用 |
+|---|---|
+| `och_set_time_source(dev, src)` | PPS 源：`OCH_TIME_SOURCE_NONE` / `EXTERNAL`（J6）/ `INTERNAL`（AD9361 40 MHz 分频） |
+| `och_set_time(dev, ticks, at_next_pps)` | 立即或在下一个 PPS 沿装载 64 位样点时间 |
+| `och_get_time(dev, &status)` | `valid`、`armed`、`now`、`last_pps`、`pps_count`、`tick_rate`、`fpga_version` |
+| `och_stream_args.start_flags` | `OCH_RX_TIMED` 在 `start_time_lo/hi` 开始，`num_samples` 为 0 时连续 |
+| `och_rx_command(rx, flags, ticks, n)` | 运行中下发 RX 命令：定时、`OCH_RX_NOW` 或 `OCH_RX_STOP` |
+| `och_send_burst(tx, samples, n, &md, &accepted, timeout)` | `och_tx_metadata` 带 HAS_TIME / SOB / EOB 与样点时间 |
+
+新增字段均追加在结构末尾或占用原 reserved 位置，按 `struct_size` 兼容旧调用方，C ABI 仍为 1。时序图与示例见 [硬件时间戳](timestamps.md)。

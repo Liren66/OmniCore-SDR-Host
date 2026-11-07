@@ -4,9 +4,12 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 版本 | 平台 | 接口 | 许可证 |
 |---|---|---|---|
-| **0.5.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+| **0.6.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
 
 ![OmniCore Host 架构](docs/images/architecture.svg)
+
+> [!IMPORTANT]
+> **0.6.0 需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上。** USB 传输改为成帧格式（每个 16 KiB 块带 16 字节头和 64 位样点时间），并新增硬件时间戳、PPS 对时、定时 RX 与定时 TX。旧固件请继续使用 OCH 0.5.x，两者不能混用，见 [固件兼容性](docs/firmware-compatibility.md)。
 
 ## 目录
 
@@ -15,7 +18,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 3. [命令行](#命令行)
 4. [Linux 配置](#linux-配置)
 5. [测试结果](#测试结果)
-6. [C/C++ 开发](#cc-开发)
+6. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
 7. [从源码构建与打包](#从源码构建与打包)
 8. [工程目录](#工程目录)
 9. [文档索引](#文档索引)
@@ -24,9 +27,10 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 类别 | 内容 |
 |---|---|
+| 硬件时间戳 | 64 位样点时间（1 tick = 1 样点）、外部 / 内部 PPS 对时、定时 RX、定时 TX 突发、带样点时间的事件，见 [硬件时间戳](docs/timestamps.md) |
 | 设备与射频 | 设备发现、状态查询；RX/TX LO、增益、衰减、带宽、通道配置 |
 | IQ 数据流 | 单/双通道 RX、TX 与全双工；文件采集与回放、测试正弦、吞吐统计 |
-| 数据完整性 | 16 KiB 起始头同步、RX 溢出后自动重同步，以 epoch 和元数据标记间断 |
+| 数据完整性 | 每个 16 KiB 块带 16 字节头（序号、有效帧数、样点时间、校验）；溢出丢样数由时间戳差精确给出，以 epoch 和元数据标记间断 |
 | USB IQ 格式 | 默认 12bit packed；2TX2RX 可选 8bit signed，降低带宽占用 |
 | 桥接固件升级 | `och firmware update` 通过 USB 升级 CH32H417 桥接固件，中断后可重来（需桥接固件 1.0.0+） |
 | FIR 与时钟 | AD9361 硬件 FIR 装载与启停、采样率与六级时钟链配置 |
@@ -41,7 +45,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 ### 1. 安装
 
-**Windows**：运行 `dist/OmniCoreHost-0.5.0-win64-setup.exe`，默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
+**Windows**：运行 `OmniCoreHost-0.6.0-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
 
 ```powershell
 och-driver check      # 只检查，不修改系统
@@ -53,8 +57,8 @@ och-driver install    # 为 VID 1A86 / PID 5537 安装 libusbK（需 UAC）
 ```bash
 sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
 bash tools/build-linux.sh
-sudo cmake --install build/linux --prefix /opt/omnicore/0.5.0
-sudo ln -sfn /opt/omnicore/0.5.0/bin/och /usr/local/bin/och
+sudo cmake --install build/linux --prefix /opt/omnicore/0.6.0
+sudo ln -sfn /opt/omnicore/0.6.0/bin/och /usr/local/bin/och
 sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
@@ -66,11 +70,36 @@ sudo udevadm control --reload-rules
 ```powershell
 och version        # 软件版本与 ABI
 och find           # 枚举设备
-och info           # 身份、固件、USB 链路、射频能力、电源快照
+och info           # 身份、固件版本、USB 链路、RF 能力、时间基准、电源
 och selftest       # 数字接口自检（RX PRBS / TX 回环）
 ```
 
-<p align="center"><img src="docs/images/cli-info.png" width="640" alt="och info 输出"></p>
+~~~text
+  OmniCore Host 0.6.0  info  OMNICORE5A3C91D2
+
+━━ DEVICE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Identity ───────────────────────────────────────────────────────────────────
+    Name                      OmniCoreSDR
+    Driver                    libusbK
+    USB link                  5.0 Gbit/s  SuperSpeed
+
+  Firmware ───────────────────────────────────────────────────────────────────
+    Zynq SDK                  SDK_CMD_1.1_20261107_FRAMED
+    FPGA IP                   CH32H417_IP 1.3  (framed 16 KiB, hardware time)
+    CH32 bridge               1.0.0  (bootloader 1.0.0)
+
+  RF ─────────────────────────────────────────────────────────────────────────
+    Channels                  2 RX / 2 TX
+    Max sample rate           61.440 MSPS per channel
+
+  Time base ──────────────────────────────────────────────────────────────────
+    State                     Not set
+    PPS source                None
+
+  Power ──────────────────────────────────────────────────────────────────────
+    USB-C at startup          3000 mA available
+~~~
 
 ### 3. 收发 IQ
 
@@ -93,7 +122,7 @@ och bench --rx --tx --channels 1,2 --sample-rate 30.72M --seconds 10
 
 ### 设备固件要求
 
-安装包只含主机软件，不自动烧写板级固件。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/firmware-update.md)；Zynq 的 BOOT.bin 仍按板级工程流程更新。设备需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/firmware-compatibility.md)。
+安装包只含主机软件，不自动烧写板级固件。0.6.0 需要 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) v2026.11.07 及以上的 `BOOT.bin`（FPGA `CH32H417_IP` 1.3、`SDK_CMD_1.1`）；打开设备时检查 `transport=framed16k`，不满足则拒绝连接。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/firmware-update.md)。设备还需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/firmware-compatibility.md)。
 
 ## 命令行
 
@@ -149,18 +178,34 @@ och set fan.enabled on
 
 ### 终端输出
 
-交互终端中按“标题 → 分组 → 字段”分层显示，带颜色、状态标签和实时进度条；重定向到文件时自动切换为纯 ASCII（≤ 78 列），`--json` 则只输出 JSON。
+交互终端中按“标题 → 分组 → 字段”分层显示，带颜色、状态标签和实时进度条；重定向到文件时自动切换为纯 ASCII（≤ 78 列），`--json` 则只输出 JSON。事件每条一行，带硬件时间的事件附样点时间；结束时按方向给出吞吐与故障计数（数值为示意）：
 
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/images/cli-bench-running.png" alt="bench 运行中"></td>
-<td width="50%" valign="top"><img src="docs/images/cli-bench-summary.png" alt="bench 结束汇总"></td>
-</tr>
-<tr>
-<td align="center"><sub>运行中：会话信息、事件和实时进度</sub></td>
-<td align="center"><sub>结束时：吞吐汇总表与分组统计</sub></td>
-</tr>
-</table>
+~~~text
+    +1.092s  [WARN]  RX GAP      FIFO overflow, next block GAP  t=33,521,664
+    +2.001s  [ OK ]  TX ACK      Burst complete  t=61,440,000
+
+━━ RX STREAM SUMMARY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [ OK ]  No faults.
+
+  Overview ───────────────────────────────────────────────────────────────────
+    Rate                      2 ch x 30.720 MSPS
+    Elapsed                   12.196 s
+    Samples delivered/ch      373,779,114
+
+  Throughput ─────────────────────────────────────────────────────────────────
+    USB average               183.937 MB/s
+    Of expected               99.8 %  of 184.3 MB/s
+    Data volume               2.09 GiB
+    Host queue peak           944.0 KiB
+
+  Faults ─────────────────────────────────────────────────────────────────────
+    Device overflows (GAP)    0
+    Host dropped samples      0
+    Header errors             0
+    USB transfer errors       0
+    Event queue drops         0
+~~~
 
 退出码：`0` 完成 · `1` 设备/传输错误 · `2` 参数错误 · `3` `bench --fail-fast` 提前结束 · `130` Ctrl+C 中断。性能是否达标请检查 JSON 的 `stability.pass`，而非仅看退出码。
 
@@ -173,7 +218,7 @@ och set fan.enabled on
 | `fc32` | 8 字节 | float32 I/Q，归一化到 ±1 |
 | `sc8` | 2 字节 | int8 I/Q，需要 `--iq-bits 8` |
 
-双通道按 `I1,Q1,I2,Q2` 交织，文件无容器头。采集时旁边生成 `.metadata.jsonl`，记录配置、每个 epoch 的起始位置与最终统计——**溢出前后的数据不能当作连续采样拼接**。
+双通道按 `I1,Q1,I2,Q2` 交织，文件无容器头。采集时旁边生成 `.metadata.jsonl`，记录配置、每个 epoch 的文件位置、首样点硬件时间（`time_ticks`）、精确丢样数与最终统计——**溢出前后的数据不能当作连续采样拼接**，但可按 `time_ticks` 放回同一时间轴。
 
 ![RX 数据边界](docs/images/rx-boundaries.svg)
 
@@ -188,7 +233,7 @@ Linux 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，
 | 依赖 | `build-essential cmake ninja-build pkg-config libusb-1.0-0-dev`；运行时只需 `libusb-1.0-0` |
 | USB 权限 | 安装 `packaging/60-omnicore.rules`（只匹配 `1a86:5537`）。桌面会话经 uaccess 授权；SSH 用户执行 `sudo usermod -aG plugdev "$USER"` 后重新登录，并重新插拔设备 |
 | 安装布局 | 推荐 `/opt/omnicore/<版本>`，再把 `bin/och` 软链接到 `/usr/local/bin`。程序使用相对 RPATH，无需 `LD_LIBRARY_PATH`；需保持 `bin/` 与 `lib/` 的相对位置 |
-| 发布归档 | 解压 `OmniCoreHost-0.5.0-linux-x86_64.tar.gz` 后整体复制到安装目录；udev 规则同时位于 `share/omnicore/60-omnicore.rules` |
+| 发布归档 | 解压 `OmniCoreHost-<版本>-linux-x86_64.tar.gz` 后整体复制到安装目录；udev 规则同时位于 `share/omnicore/60-omnicore.rules` |
 | USB 队列 | 默认每方向 32 × 196608 B，在系统默认 `usbfs_memory_mb=16` 下即可满速。仅在增大 `--queue` / `--block` 后出现 `LIBUSB_ERROR_NO_MEM` 时才需调高该内核参数，程序不会自动修改 |
 | 主机缓冲 | `--buffer-mib` 调整用户态环形缓冲（默认 64 MiB），与内核 USB 队列预算无关 |
 | 构建参数 | `tools/build-linux.sh` 支持 `OCH_JOBS`（并发数）、`OCH_BUILD_DIR`、`OCH_INSTALL_DIR`；脚本优先使用 `/usr/bin` 下的工具，避免被其他 SDK 的旧版 CMake 覆盖 |
@@ -201,6 +246,24 @@ och bench --rx --tx --iq-bits 8 --channels 1,2 --sample-rate 61.44M \
 ```
 
 ## 测试结果
+
+### 0.6.0 成帧传输 · Windows · USB3
+
+固件 v2026.11.07（`SDK_CMD_1.1_20261107_FRAMED`，`CH32H417_IP` 1.3），Windows 11，USB 3.0，2026-11-07。`och bench` 5 秒零错误的最高采样率（搜索档位 61.44 / 56 / 50 / 46 / 42 MSPS）；USB MB/s 含每块 16 B 头。
+
+| 配置 | 采样率 / 通道 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
+|---|---:|---:|---:|---:|---:|
+| 1 RX | 61.44 MSPS | 184.1 / — | 184.3 | 99.9% / — | 0 |
+| 2 RX | 61.44 MSPS | 368.5 / — | 368.6 | 100.0% / — | 0 |
+| 1 RX + 1 TX | 61.44 MSPS | 183.9 / 183.8 | 184.3 | 99.8% / 99.7% | 0 |
+| 1 RX + 2 TX | 56 MSPS | 167.6 / 335.1 | 168.0 / 336.0 | 99.8% / 99.7% | 0 |
+| 2 RX + 1 TX | 56 MSPS | 335.2 / 167.6 | 336.0 / 168.0 | 99.8% / 99.8% | 0 |
+| 2 RX + 2 TX · 12bit | 42 MSPS | 251.4 / 251.4 | 252.0 | 99.8% / 99.8% | 0 |
+| 2 RX + 2 TX · 8bit | 61.44 MSPS | 245.2 / 245.1 | 245.8 | 99.8% / 99.7% | 0 |
+
+各档位与旧的起始头模式相同，块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响；上限来自 FPGA 与 CH32 之间的 UHSIF 总线（约 533 MB/s，RX 与 TX 共享）。另做长时间测试：2 RX 61.44 MSPS、8bit 全双工 61.44 MSPS 各 60 秒零错误，2 RX + 1 TX 56 MSPS 连续 5 次 10 秒零错误。`tools/bench_sweep.py` 可复现这张表。
+
+下面各节为 0.4.x（起始头模式、固件 `SDK_CMD_1.0_20261024_IQ8`）的历史测量，Linux 与 USB2 尚未在 0.6.0 成帧传输下复测。
 
 吞吐使用 `och bench` 测量，取整个流生命周期的平均值（含启停开销），MB/s 为十进制。理论 wire 速率 = 采样率 × 通道数 × 每样本字节（12bit 为 3，8bit 为 2）。“错误”指主机丢样、USB 传输错误、设备溢出 / 欠流、事件丢失与 TX 断供的合计。
 
@@ -267,6 +330,7 @@ USB2 测试的 TX 为 1 MHz 正弦、幅度 0.25、衰减 60 dB。启动后 1 �
 
 | 项目 | 平台 | 结果 |
 |---|---|---|
+| 硬件时间戳（0.6.0） | Windows | `hw_timestamp_test` 6 项通过：内部 PPS 间隔恰为采样率（61.44 / 30.72 / 7.68 MSPS）、PPS 装载精确、RX 时间戳连续、定时 RX 首样点精确、定时 TX 经数据口回环延迟逐突发恒定、迟到突发不发射 |
 | 数字接口自检 | Windows / Linux | RX PRBS 与 TX 数字回环通过 |
 | CLI 功能检查 | Linux | 20 / 20 通过：设备信息、时钟、FIR、温度、SC16 / FC32 / packed12 采集与元数据、独占访问、Ctrl+C 退出与重开、文件保护、循环回放、非法参数 |
 | 运行中改参 | Windows / Linux | RX、零 IQ TX、双向及 FIR / 时钟操作后原流恢复收发，以新 epoch 标记间断 |
@@ -288,7 +352,7 @@ USB2 测试的 TX 为 1 MHz 正弦、幅度 0.25、衰减 60 dB。启动后 1 �
 | `include/omnicore/och.hpp` | 仅头文件的 C++17 RAII 包装 |
 
 ```cmake
-find_package(OmniCoreHost 0.4 CONFIG REQUIRED)
+find_package(OmniCoreHost 0.6 CONFIG REQUIRED)
 target_link_libraries(myapp PRIVATE OmniCore::omnicore)
 ```
 
@@ -309,6 +373,24 @@ rx.start();
 运行中改参由同进程管理线程发起，流句柄保持不变，RX 以新 epoch 标记间断。只改频率、增益或衰减时不暂停流，单次切频约 11 ms（见 [快速调谐](docs/api.md#快速调谐046)）：
 
 ![运行中改参](docs/images/reconfigure.svg)
+
+### 硬件时间
+
+![硬件时间：PPS 对时、定时 RX 与定时 TX](docs/images/timestamps.svg)
+
+```c
+och_set_time_source(dev, OCH_TIME_SOURCE_INTERNAL);     // 或 EXTERNAL（J6 PPS）
+och_set_time(dev, 0, 1);                                // 下一个 PPS 沿把时间置 0
+
+och_stream_args a; och_default_stream_args(&a, OCH_RX); // 定时 RX：t = T 起接收 N 个样点
+a.start_flags = OCH_RX_TIMED; a.num_samples = N;
+a.start_time_lo = (uint32_t)T; a.start_time_hi = (uint32_t)(T >> 32);
+
+och_tx_metadata md = {sizeof md, OCH_TX_HAS_TIME | OCH_TX_START_OF_BURST | OCH_TX_END_OF_BURST, T2};
+och_send_burst(tx, samples, n, &md, &accepted, 1000);   // 在样点时间 T2 发射
+```
+
+RX 元数据的 `time_ticks` 是每批第一个样点的时间；突发完成、迟到、欠流以带 `hw_time` 的事件上报。详见 [硬件时间戳](docs/timestamps.md)。
 
 示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp)。接口与生命周期详见 [API 参考](docs/api.md)。
 
@@ -338,13 +420,14 @@ OmniCoreHost/
 ├── include/omnicore/   公共 C ABI (och.h) 与 C++ 包装 (och.hpp)
 ├── src/
 │   ├── core/           设备、配置事务、流线程、射频与板控
-│   ├── dsp/            IQ 编解码与起始头帧同步
+│   ├── dsp/            IQ 编解码、16 KiB 成帧块解析与生成
 │   ├── transport/      libusbK (Windows) / libusb (Linux) 传输层
 │   └── cli/            och 命令行
 ├── examples/           C++ 示例与 FTR 示例
+├── tests/              成帧解析单元测试、硬件时间戳板上测试
 ├── docs/               使用与开发文档、插图
 ├── cmake/              CMake 包配置模板
-├── tools/              构建脚本、驱动助手源码
+├── tools/              构建脚本、吞吐扫描（bench_sweep.py）、驱动助手源码
 ├── packaging/          安装包脚本、udev 规则
 └── third_party/        libusbK / libwdi 及其许可证
 ```
@@ -358,7 +441,7 @@ OmniCoreHost/
 | [Windows 安装](docs/INSTALL_WINDOWS.txt) | [设备协议](docs/protocol.md) | [PPS 监控](docs/pps.md) |
 | [Linux 安装](docs/INSTALL_LINUX.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
 | [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
-| [桥接固件升级](docs/firmware-update.md) | | |
+| [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | |
 
 ## 许可证
 

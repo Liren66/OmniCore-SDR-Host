@@ -5,65 +5,122 @@ using namespace och::transport;
 
 och_stream::och_stream(och_device* d,const och_stream_args& a):dev(d),args(a),
     nchan(channels(a.direction==OCH_RX?d->config.rx_mask:d->config.tx_mask)),wire_bytes(iq_bits(d->config)==8?2:3),group(nchan*wire_bytes),
-    ring(std::max<size_t>(2,a.host_buffer_bytes/a.transfer_bytes),a.transfer_bytes),framer(nchan,wire_bytes),
+    ring(std::max<size_t>(2,a.host_buffer_bytes/a.transfer_bytes),a.transfer_bytes),
+    fparser(nchan*(iq_bits(d->config)==8?2:3)),
     stop_event(CreateEventW(nullptr,TRUE,FALSE,nullptr)) {
     require(stop_event.h!=nullptr,OCH_IO,"stream stop event allocation failed");
-    slots.reserve(args.usb_queue_depth);
-    for(unsigned i=0;i<args.usb_queue_depth;++i)slots.push_back(std::make_unique<Slot>(dev->usb,args.transfer_bytes));
+    const bool block_xfers=a.direction==OCH_RX && (a.start_flags&OCH_RX_TIMED);
+    xfer_bytes=block_xfers?och::dsp::frame_block_bytes:a.transfer_bytes;
+    const unsigned nslots=block_xfers?128u:args.usb_queue_depth;
+    slots.reserve(nslots);
+    for(unsigned i=0;i<nslots;++i)slots.push_back(std::make_unique<Slot>(dev->usb,xfer_bytes));
 }
 och_stream::~och_stream(){stop_requested=true;SetEvent(stop_event.h);ring.wake();if(worker.joinable())worker.join();}
 void och_stream::fail(const std::string& s){{std::lock_guard<std::mutex> lock(failure_mutex);failure=s;}++errors;dev->emit(OCH_EVENT_TRANSPORT,s);}
 std::string och_stream::error(){std::lock_guard<std::mutex> lock(failure_mutex);return failure;}
-void och_stream::sink(void* self,const uint8_t* p,size_t n,uint64_t ep,bool begin){static_cast<och_stream*>(self)->rx_data(p,n,ep,begin);}
+void och_stream::frame_sink(void* self,const och::dsp::FrameHeader& h,const uint8_t* p,size_t n){static_cast<och_stream*>(self)->rx_frame(h,p,n);}
+// One framed block: whole samples starting at h.time. A new segment (and epoch)
+// starts at SOB, GAP, LATE or any time discontinuity; GAP gives the exact
+// number of samples the FPGA dropped (difference of timestamps).
+void och_stream::rx_frame(const och::dsp::FrameHeader& h,const uint8_t* p,size_t n) {
+    using namespace och::dsp;
+    const bool continuous=have_time && h.time==next_time && !(h.flags&(frame_rx_sob|frame_rx_gap|frame_rx_late));
+    if(!continuous) {
+        publish_rx();++fr_epochs;epoch=epoch_base+fr_epochs;index=0;
+        flags_pending=(flags_pending&OCH_META_HOST_OVERFLOW)|OCH_META_START;
+        gap_samples=0;
+        if(h.flags&frame_rx_gap){
+            flags_pending|=OCH_META_DISCONTINUITY|OCH_META_DEVICE_OVERFLOW;
+            gap_samples=have_time && h.time>=next_time?int64_t(h.time-next_time):-1;
+            ++dev->overflows;
+        }else if(have_time)flags_pending|=OCH_META_DISCONTINUITY;
+        if(h.flags&frame_rx_late)flags_pending|=OCH_META_LATE;
+        if(reconfigured_rx){flags_pending|=OCH_META_RECONFIGURED|OCH_META_DISCONTINUITY;reconfigured_rx=false;}
+    }
+    if(retuned.exchange(false)){publish_rx();flags_pending|=OCH_META_RECONFIGURED|OCH_META_DISCONTINUITY;}
+    have_time=true;cur_time=h.time;next_time=h.time+n/group;
+    const bool eob=(h.flags&frame_rx_eob)!=0;
+    if(!n && eob && !rx_filled) {   // empty end-of-burst marker block
+        auto b=ring.write();
+        if(b){och_metadata m{};m.struct_size=sizeof m;m.flags=flags_pending|OCH_META_END_OF_BURST|OCH_META_HAS_TIME;
+            m.epoch=epoch;m.sample_index=index;m.time_ticks=cur_time;m.tick_rate=dev->config.sample_rate;
+            m.host_monotonic_ns=now_ns();flags_pending=0;ring.publish(0,m);}
+        return;
+    }
+    while(n) {
+        auto b=ring.write();
+        if(!b){
+            auto lost=n/group;host_dropped+=lost;dropped_pending+=lost;index+=lost;cur_time+=lost;
+            flags_pending|=OCH_META_HOST_OVERFLOW|OCH_META_DISCONTINUITY;
+            auto now=now_ns();if(now-last_drop_notice>=500000000ULL){dev->emit(OCH_EVENT_HOST_OVERFLOW,"RX host ring full; new samples dropped (see stats)",epoch);last_drop_notice=now;}
+            return;
+        }
+        if(!rx_filled){rx_meta={};rx_meta.struct_size=sizeof rx_meta;rx_meta.flags=flags_pending|OCH_META_HAS_TIME;rx_meta.epoch=epoch;
+            rx_meta.sample_index=index;rx_meta.host_dropped_samples=dropped_pending;
+            rx_meta.device_dropped_samples=(flags_pending&OCH_META_DEVICE_OVERFLOW)?gap_samples:0;
+            rx_meta.time_ticks=cur_time;rx_meta.tick_rate=dev->config.sample_rate;
+            rx_meta.host_monotonic_ns=now_ns();flags_pending=0;dropped_pending=0;}
+        size_t take=std::min(n,args.transfer_bytes-rx_filled);take-=take%group;
+        memcpy(b->data.get()+rx_filled,p,take);rx_filled+=take;p+=take;n-=take;index+=take/group;cur_time+=take/group;
+        if(rx_filled==args.transfer_bytes)publish_rx();
+    }
+    if(eob && rx_filled){rx_meta.flags|=OCH_META_END_OF_BURST;publish_rx();}
+}
+// TX block builder. The open block lives directly in the USB slot at
+// blk_start; slot->used only advances over finished 16 KiB blocks.
+void och_stream::tx_open(Slot* s,uint32_t f,uint64_t t) {
+    blk_open=true;blk_start=s->used;blk_used=0;blk_time=0;blk_flags=0;
+    if(tx_first || (f&OCH_TX_START_OF_BURST))blk_flags|=och::dsp::frame_tx_sob;
+    if(f&OCH_TX_HAS_TIME){blk_flags|=och::dsp::frame_tx_has_time|och::dsp::frame_tx_sob;blk_time=t;}
+    tx_first=false;
+}
+void och_stream::tx_close(Slot* s,uint8_t extra) {
+    using namespace och::dsp;
+    uint8_t* b=s->bytes.get()+blk_start;
+    memset(b+frame_header_bytes+blk_used,0,frame_payload_bytes-blk_used);
+    FrameHeader h;h.flags=uint8_t(blk_flags|extra);h.seq=tx_seq++;h.valid=uint16_t(blk_used/group);h.time=blk_time;
+    write_frame_header(b,h);
+    padding+=(frame_payload_bytes-blk_used)/group;
+    s->used=blk_start+frame_block_bytes;blk_open=false;blk_used=0;
+}
+bool och_stream::fill_tx(Slot* s) {
+    using namespace och::dsp;
+    for(;;) {
+        if(!blk_open && s->used>=args.transfer_bytes){assembling=s->used;return true;}
+        auto b=ring.read();
+        if(!b) {
+            if(flushing && blk_open){tx_close(s,frame_tx_eob);assembling=0;return true;}
+            if(flushing && s->used){assembling=0;return true;}
+            assembling=s->used+(blk_open?blk_used:0);
+            return false;
+        }
+        if(tx_offset==0 && blk_open && blk_used && (b->meta.flags&(OCH_TX_START_OF_BURST|OCH_TX_HAS_TIME))) {
+            tx_close(s,0);continue;          // a new burst always starts a new block
+        }
+        if(!blk_open) {
+            if(s->used>=args.transfer_bytes){assembling=s->used;return true;}
+            tx_open(s,tx_offset==0?b->meta.flags:0,b->meta.time_ticks);
+        } else if(tx_offset==0 && !blk_used && (b->meta.flags&(OCH_TX_START_OF_BURST|OCH_TX_HAS_TIME))) {
+            blk_open=false;tx_open(s,b->meta.flags,b->meta.time_ticks);
+        }
+        const size_t n=std::min(b->size-tx_offset,frame_payload_bytes-blk_used);
+        memcpy(s->bytes.get()+blk_start+frame_header_bytes+blk_used,b->data.get()+tx_offset,n);
+        blk_used+=n;tx_offset+=n;
+        const bool done=tx_offset==b->size;
+        const bool eob=done && (b->meta.flags&OCH_TX_END_OF_BURST);
+        if(done){ring.release();tx_offset=0;}
+        if(eob){tx_close(s,frame_tx_eob);tx_first=false;assembling=0;return true;}
+        if(blk_used==frame_payload_bytes)tx_close(s,0);
+    }
+}
 void och_stream::publish_rx() {
     if(!rx_filled)return;
     ring.publish(rx_filled,rx_meta);rx_filled=0;
     auto bytes=ring.queued();auto prev=peak.load();if(bytes>prev)peak=bytes;
 }
-void och_stream::rx_data(const uint8_t* p,size_t n,uint64_t ep,bool begin) {
-    const auto local_epoch=ep;ep+=epoch_base;
-    if(begin || ep!=epoch) {
-        publish_rx();epoch=ep;index=0;headers=ep;resyncs=ep?ep-1:0;
-        flags_pending=(flags_pending&OCH_META_HOST_OVERFLOW)|OCH_META_START|
-            (local_epoch>1?(OCH_META_DISCONTINUITY|OCH_META_DEVICE_OVERFLOW):0);
-        if(reconfigured_rx){flags_pending|=OCH_META_RECONFIGURED|OCH_META_DISCONTINUITY;reconfigured_rx=false;}
-        dev->emit(OCH_EVENT_RX_SYNC,"RX preamble complete; new epoch="+std::to_string(ep),ep);
-    }
-    if(retuned.exchange(false)){publish_rx();flags_pending|=OCH_META_RECONFIGURED|OCH_META_DISCONTINUITY;}
-    while(n) {
-        auto b=ring.write();
-        if(!b){
-            auto lost=n/group;host_dropped+=lost;dropped_pending+=lost;index+=lost;
-            flags_pending|=OCH_META_HOST_OVERFLOW|OCH_META_DISCONTINUITY;
-            auto now=now_ns();if(now-last_drop_notice>=500000000ULL){dev->emit(OCH_EVENT_HOST_OVERFLOW,"RX host ring full; new samples dropped (see stats)",ep);last_drop_notice=now;}
-            return;
-        }
-        if(!rx_filled){rx_meta={};rx_meta.struct_size=sizeof rx_meta;rx_meta.flags=flags_pending|OCH_META_TIME_UNKNOWN;rx_meta.epoch=ep;
-            rx_meta.sample_index=index;rx_meta.host_dropped_samples=dropped_pending;rx_meta.device_dropped_samples=(flags_pending&(OCH_META_DEVICE_OVERFLOW|OCH_META_RECONFIGURED))?-1:0;
-            rx_meta.host_monotonic_ns=now_ns();flags_pending=0;dropped_pending=0;}
-        size_t take=std::min(n,args.transfer_bytes-rx_filled);take-=take%group;
-        memcpy(b->data.get()+rx_filled,p,take);rx_filled+=take;p+=take;n-=take;index+=take/group;
-        if(rx_filled==args.transfer_bytes)publish_rx();
-    }
-}
-bool och_stream::fill_tx(Slot* s) {
-    while(s->used<args.transfer_bytes) {
-        auto b=ring.read();if(!b)break;
-        auto n=std::min(b->size-tx_offset,args.transfer_bytes-s->used);
-        memcpy(s->bytes.get()+s->used,b->data.get()+tx_offset,n);s->used+=n;tx_offset+=n;assembling=s->used;
-        if(tx_offset==b->size){ring.release();tx_offset=0;}
-    }
-    assembling=s->used;
-    if(s->used==args.transfer_bytes)return true;
-    if(flushing && s->used){
-        auto size=((s->used+49151)/49152)*49152;
-        memset(s->bytes.get()+s->used,0,size-s->used);padding+=(size-s->used)/group;s->used=size;assembling=size;return true;
-    }
-    return false;
-}
 bool och_stream::submit(Slot* s) {
     auto& u=dev->usb;UCHAR ep=args.direction==OCH_RX?0x81:0x01;
-    if(args.direction==OCH_RX)s->used=args.transfer_bytes;
+    if(args.direction==OCH_RX)s->used=xfer_bytes;
     ResetEvent(s->ov.hEvent);BOOL ok=args.direction==OCH_RX?
         u.api.read(u.h,ep,s->bytes.get(),static_cast<ULONG>(s->used),nullptr,&s->ov):
         u.api.write(u.h,ep,s->bytes.get(),static_cast<ULONG>(s->used),nullptr,&s->ov);
@@ -121,8 +178,8 @@ void och_stream::run() {
             if(args.direction==OCH_TX)require(n==s->used,OCH_IO,"short TX completion; byte order cannot be retried safely");
             active.pop_front();s->pending=false;pending=active.size();usb_bytes+=n;
             if(args.direction==OCH_RX){
-                framer.feed(s->bytes.get(),n,&och_stream::sink,this);publish_rx();
-                const auto complete=epoch_base+framer.epoch();headers=complete;resyncs=complete?complete-1:0;
+                fparser.feed(s->bytes.get(),n,&och_stream::frame_sink,this);
+                headers=fparser.blocks();resyncs=fparser.resyncs();
             }
             s->used=0;free.push_back(s);
         }
@@ -133,7 +190,9 @@ void och_stream::start() {
     require(!ever_started && !stop_requested,OCH_BUSY,"stream is single-use; destroy and create a new stream after stop");
     require(dev->configured,OCH_INVALID,"configure the device before starting streams");
     if(dev->transport_dirty){require(!dev->rx_on&&!dev->tx_on,OCH_BUSY,"stop both directions before reopening a stream (CH32 buffer cleanup)");dev->reset_transport();}
-    if(args.direction==OCH_TX)require(ring.queued()>=args.transfer_bytes*2ULL,OCH_BUSY,"queue at least two transfer blocks of TX samples before start");
+    if(args.direction==OCH_TX)require(ring.queued()>0,OCH_BUSY,"queue TX samples before start");
+    if(args.direction==OCH_RX)
+        dev->command(std::string("rx_timed=")+((args.start_flags&OCH_RX_TIMED)?"1":"0"));
     if(args.direction==OCH_TX){dev->command("usb_data_en="+std::to_string(dev->rx_on?1:0)+" 1");dev->tx_on=true;}
     // Producers may already be waiting on a full prefill ring. Publish running
     // first so they cannot mistake the startup transition for a stopped worker.
@@ -143,12 +202,22 @@ void och_stream::start() {
         auto deadline=now_ns()+5000000000ULL;
         while(!queued && running && now_ns()<deadline)Sleep(1);
         require(queued&&running,OCH_IO,"USB queue startup failed: "+error());
-        if(args.direction==OCH_RX){dev->command("usb_data_en=1 "+std::to_string(dev->tx_on?1:0));dev->rx_on=true;}
+        if(args.direction==OCH_RX){dev->command("usb_data_en=1 "+std::to_string(dev->tx_on?1:0));dev->rx_on=true;
+            if((args.start_flags&OCH_RX_TIMED) && (args.start_flags&OCH_RX_NOW || args.start_time_lo || args.start_time_hi)) {
+                const uint64_t t=uint64_t(args.start_time_hi)<<32|args.start_time_lo;
+                dev->command("rx_stream="+((args.start_flags&OCH_RX_NOW)?std::string("now"):std::to_string(t))+" "+std::to_string(args.num_samples));
+            }
+        }
         else {
             // IQ8's first 16 KiB packet fills about 2046 raw FIFO groups.
             // Waiting for the legacy 2700 blocks the second packet before
             // TX_RUN drains the FIFO. Match the SDK's IQ8 first-packet gate.
-            bool filled=false;unsigned threshold=wire_bytes==2?1536:(dev->config.tx_mask==3?2700:1350);
+            // Framed: one complete block (1364 or 2046 groups) proves the
+            // first burst block reached the FPGA; the header controls timing.
+            // The DAC prefetch cache already holds up to 4 frames (1-2 groups);
+            // a single-channel FIFO admits block two only after half of block
+            // one played, so the count can stay just below a whole block.
+            bool filled=false;unsigned threshold=unsigned(frame_groups())-16;
             while(now_ns()<deadline && running){
                 auto reply=dev->command("usb_status?");auto i=reply.find("tx_main_fifo_groups=");
                 if(i!=std::string::npos){unsigned groups=0;auto first=reply.c_str()+i+20;
@@ -205,7 +274,8 @@ void och_stream::halt() {
 // Both the USB worker and the application IO endpoint are quiescent. Large
 // ring/USB allocations and the public stream pointer deliberately survive.
 void och_stream::prepare_restart(bool receive_gap) {
-    epoch_base+=framer.epoch();framer.reset();
+    epoch_base+=fr_epochs;fparser.reset();fr_epochs=0;have_time=false;
+    blk_open=false;blk_used=0;tx_first=true;
     reconfigured_rx=reconfigured_rx || (args.direction==OCH_RX && receive_gap);
     ring.reset();recv_offset=rx_filled=tx_offset=0;assembling=0;rx_meta={};
     active.clear();pending=0;

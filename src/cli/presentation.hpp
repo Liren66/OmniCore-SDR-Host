@@ -560,55 +560,43 @@ inline void stats(och_direction direction, const och_stats& s, unsigned channels
     if (!faults && expected > 0 && seconds >= 1 && measured < expected * 0.98)
         status(level::warn, "Throughput is below 98% of the requested wire rate.", out);
     else if (!faults && startup_accepted)
-        status(level::ok, "Stable after accepted startup RX recovery; raw counters are retained below.", out);
-    else if (!faults) status(level::ok, "No faults reported in this observation window.", out);
-    else if (hard) status(level::fail, "Host-side loss or transfer errors - inspect the counters below.", out);
-    else status(level::warn, "Device events reported - inspect the counters and event log.", out);
+        status(level::ok, "Stable after " + std::to_string(startup_accepted) + " startup gap(s) in the first second.", out);
+    else if (!faults) status(level::ok, "No faults.", out);
+    else if (hard) status(level::fail, "Host-side loss or USB transfer errors.", out);
+    else status(level::warn, "Device faults reported; see the counters and event log.", out);
 
     group("Overview", out);
-    field("Stream state", s.running ? "Running" : "Stopped", out);
-    field("Channels", channels_count, out);
-    field("Configured rate", detail::rate(configured_rate), out);
-    field("Elapsed", detail::fixed(seconds, 3) + " s", out);
-    if (startup_accepted) {
-        field("Startup RX recoveries", startup_accepted, out);
-        field("Remaining fault count", faults, out, faults ? tone::warn : tone::good);
-    }
+    field("Rate", std::to_string(channels_count) + " ch x " + detail::fixed(configured_rate / 1e6, 3) + " MSPS", out);
+    field("Elapsed", detail::fixed(seconds, 3) + " s" + (s.running ? "  (running)" : ""), out);
+    field(tx ? "Samples accepted/ch" : "Samples delivered/ch", detail::grouped(s.samples), out);
+    if (startup_accepted) field("Startup gaps accepted", startup_accepted, out);
 
     group("Throughput", out);
     field("USB average", seconds > 0 ? detail::fixed(measured) + " MB/s" : "Unknown (no elapsed time)", out, tone::accent);
-    field("Expected wire rate", expected > 0 ? detail::fixed(expected) + " MB/s" : "Unknown", out);
-    if (expected > 0 && seconds > 0) field("Measured / expected", detail::fixed(measured / expected * 100, 1) + " %", out);
-    field(tx ? "Accepted rate" : "Delivered rate", seconds > 0 ?
-        detail::fixed(s.samples / seconds / 1e6, 3) + " MSPS per channel" : "Unknown (no elapsed time)", out);
-    field("Data volume", detail::bytes(s.usb_bytes) + "  (" + detail::grouped(s.usb_bytes) + " bytes)", out);
-
-    group("Samples and buffers", out);
-    field(tx ? "Accepted samples/ch" : "Delivered samples/ch", detail::grouped(s.samples), out);
-    field("Headers / resyncs", std::to_string(s.headers) + " / " + std::to_string(s.resyncs), out,
-          s.resyncs ? tone::warn : tone::plain);
-    field("Host queue now / peak", detail::bytes(s.host_queue_bytes) + " / " + detail::bytes(s.host_queue_peak_bytes), out);
-    field("USB requests pending", s.usb_queue_pending, out);
-    if (tx) field("TX padding samples/ch", detail::grouped(s.tx_padding_samples), out);
+    if (expected > 0 && seconds > 0)
+        field("Of expected", detail::fixed(measured / expected * 100, 1) + " %  of " + detail::fixed(expected, 1) + " MB/s", out);
+    field("Data volume", detail::bytes(s.usb_bytes), out);
+    field("Host queue peak", detail::bytes(s.host_queue_peak_bytes), out);
 
     group("Faults", out);
     auto counter = [&](const char* label, uint64_t value, tone bad) {
         field(label, detail::grouped(value), out, value ? bad : tone::muted);
     };
-    counter("Host dropped samples", s.host_dropped_samples, tone::bad);
+    if (!tx) {
+        counter("Device overflows (GAP)", s.device_overflows, tone::warn);
+        counter("Host dropped samples", s.host_dropped_samples, tone::bad);
+        counter("Header errors", s.resyncs, tone::warn);
+    } else {
+        counter("Device underflows", s.device_underflows, tone::warn);
+        counter("Host starvation", s.tx_starvation_events, tone::warn);
+        counter("Padding samples/ch", s.tx_padding_samples, tone::warn);
+    }
     counter("USB transfer errors", s.transfer_errors, tone::bad);
-    counter("Device RX overflows", s.device_overflows, tone::warn);
-    counter("Device TX underflows", s.device_underflows, tone::warn);
-    counter("TX starvation events", s.tx_starvation_events, tone::warn);
     counter("Event queue drops", s.event_drops, tone::bad);
     end_group(out); out << '\n';
 
-    note("MB/s is decimal. Expected wire: " + std::to_string(wire_bytes) + " bytes x samples/channel x channels.", out);
-    note("Averages include stream start and stop; device fault counters are shared by RX and TX.", out);
-    if (tx) {
-        note("Accepted samples include prefill; USB completion does not confirm DAC or RF playback.", out);
-        note("A finite file can report tail underflow/starvation at EOF; these events stay visible.", out);
-    }
+    note("MB/s decimal, whole run incl. start/stop; expected = " + std::to_string(wire_bytes) + " B/sample/ch.", out);
+    if (tx) note("Accepted samples include prefill; USB completion is not DAC playback.", out);
 }
 inline void fir(const och_fir_config& f, std::ostream& out) {
     section(std::string(detail::direction(f.direction)) + " hardware FIR", out);
@@ -651,31 +639,72 @@ inline void clocks(const och_clock_config& c, std::ostream& out) {
         status(level::warn, "Reported BBPLL or sample rates differ between directions.", out);
     note("The AD9361 reference stays 40 MHz; an external 10 MHz disciplines the oscillator, otherwise PPS can steer it via the CH32 DAC.", out);
 }
+namespace detail {
+// Value of key=... inside an SDK EVT line, or empty.
+inline std::string evt_field(const std::string& s, const std::string& key) {
+    for (size_t at = s.find(key + "="); at != std::string::npos; at = s.find(key + "=", at + 1)) {
+        if (at && s[at - 1] != ' ') continue;
+        const auto begin = at + key.size() + 1;
+        return s.substr(begin, s.find(' ', begin) - begin);
+    }
+    return {};
+}
+// Raw SDK EVT lines lose their bookkeeping prefix (EVT, seq, stream, src).
+inline std::string evt_body(const std::string& s) {
+    std::istringstream in(s); std::string word, body;
+    while (in >> word) {
+        if (word == "EVT" || word.rfind("seq=", 0) == 0 || word.rfind("tseq=", 0) == 0 ||
+            word.rfind("stream=", 0) == 0 || word.rfind("src=", 0) == 0) continue;
+        body += (body.empty() ? "" : " ") + word;
+    }
+    return body;
+}
+inline std::string msps(const std::string& hz) {
+    try { return fixed(std::stod(hz) / 1e6, 3); } catch (...) { return hz; }
+}
+}
+// One line per event: elapsed time, severity, origin, plain-language text.
 inline void event(const och_event& e, double elapsed_seconds, std::ostream& out) {
     const std::string message = detail::text(e.message);
     const auto lowered = detail::lower(message);
-    // Badge = severity, tag = origin of the event.
-    const char* tag = e.type == OCH_EVENT_RX_SYNC ? "RX SYNC" : e.type == OCH_EVENT_HOST_OVERFLOW ? "HOST" :
-        e.type == OCH_EVENT_TRANSPORT ? "USB" : e.type == OCH_EVENT_TX_STARVED ? "TX FEED" :
-        e.type == OCH_EVENT_RECONFIGURED ? "RECONFIG" : e.type == OCH_EVENT_DEVICE ? "DEVICE" : "EVENT";
+    const std::string at = "  t=" + detail::grouped(e.hw_time);
+    const char* tag = "EVENT";
     level l = level::info;
-    if (e.type == OCH_EVENT_DEVICE && (lowered.find("action=rx_restarted ") != std::string::npos ||
-        (lowered.size() >= 19 && lowered.compare(lowered.size() - 19, 19, "action=rx_restarted") == 0))) { l = level::ok; tag = "RECOVERED"; }
-    else if (e.type == OCH_EVENT_TRANSPORT) l = level::fail;
-    else if (e.type == OCH_EVENT_HOST_OVERFLOW || e.type == OCH_EVENT_TX_STARVED) l = level::warn;
-    else if (lowered.rfind("err", 0) == 0 || lowered.find(" failed") != std::string::npos) l = level::fail;
-    else if (lowered.find("overflow") != std::string::npos || lowered.find("underflow") != std::string::npos ||
-             lowered.find("starved") != std::string::npos || lowered.find("warning") != std::string::npos) l = level::warn;
+    std::string text;
+    switch (e.type) {
+    case OCH_EVENT_RX_GAP: tag = "RX GAP"; l = level::warn; text = "FIFO overflow, next block GAP" + at; break;
+    case OCH_EVENT_RX_LATE: tag = "RX LATE"; l = level::warn;
+        text = lowered.find("ignored") != std::string::npos ? "Command ignored in this state"
+                                                          : "Command late, started at once"; break;
+    case OCH_EVENT_TX_BURST_ACK: tag = "TX ACK"; l = level::ok; text = "Burst complete" + at; break;
+    case OCH_EVENT_TX_LATE: tag = "TX LATE"; l = level::warn; text = "Late start, burst dropped" + at; break;
+    case OCH_EVENT_TX_UNDERFLOW: tag = "TX UNDERRUN"; l = level::warn; text = "FIFO empty mid-burst" + at; break;
+    case OCH_EVENT_TX_ERROR: tag = "TX BLOCK"; l = level::fail;
+        text = std::string(lowered.find("seq") != std::string::npos ? "Bad sequence" : "Bad header") +
+               ", block " + std::to_string(e.block) + " dropped"; break;
+    case OCH_EVENT_TIME_INVALIDATED: tag = "TIME"; l = level::warn;
+        text = "Rate " + detail::msps(detail::evt_field(message, "old_rate")) + " -> " +
+               detail::msps(detail::evt_field(message, "new_rate")) + " MSPS, time invalid"; break;
+    case OCH_EVENT_HOST_OVERFLOW: tag = "HOST"; l = level::warn;
+        text = lowered.find("ring full") != std::string::npos ? "Host ring full, samples dropped" : message; break;
+    case OCH_EVENT_TX_STARVED: tag = "TX FEED"; l = level::warn; text = message; break;
+    case OCH_EVENT_TRANSPORT: tag = "USB"; l = level::fail; text = message; break;
+    case OCH_EVENT_RECONFIGURED: tag = "RECONFIG"; text = message; break;
+    case OCH_EVENT_DEVICE: tag = "DEVICE"; text = detail::evt_body(message);
+        if (lowered.rfind("err", 0) == 0 || lowered.find(" failed") != std::string::npos) l = level::fail;
+        else if (lowered.find("overflow") != std::string::npos || lowered.find("underflow") != std::string::npos ||
+                 lowered.find("warning") != std::string::npos) l = level::warn;
+        break;
+    default: text = message; break;
+    }
     const auto& st = detail::look(out);
     std::string stamp = "+" + detail::fixed(elapsed_seconds, 3) + "s";
     if (stamp.size() < 9) stamp = std::string(9 - stamp.size(), ' ') + stamp;
     if (stamp.size() > 9) stamp = stamp.substr(0, 9);
     const std::string head = "  " + detail::paint(st, "90", stamp) + "  " + detail::badge(out, l) + "  ";
-    std::string label = tag; label.resize(11, ' ');
-    detail::lines(out, head + detail::paint(st, "1", label), 2 + 9 + 2 + 6 + 2 + 11,
-                  detail::ascii(detail::nonempty(message, "(empty event message)")), l == level::fail ? tone::bad : tone::plain);
-    detail::lines(out, std::string(32, ' '), 32, "seq=" + std::to_string(e.sequence) + " type=" + std::to_string(e.type)
-        + " epoch=" + std::to_string(e.epoch) + " host_ns=" + std::to_string(e.host_monotonic_ns), tone::muted);
+    std::string label = tag; label.resize(12, ' ');
+    detail::lines(out, head + detail::paint(st, "1", label), 2 + 9 + 2 + 6 + 2 + 12,
+                  detail::ascii(detail::nonempty(text, "(empty event message)")), l == level::fail ? tone::bad : tone::plain);
 }
 
 // Render an SDK key=value reply. Groups with many short fields use two

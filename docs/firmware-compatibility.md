@@ -2,6 +2,17 @@
 
 主机安装器只安装 Windows 程序、主机 C/C++ 开发接口和目标数据口的 libusbK 驱动，不含板级 SDK 源码副本、ELF、BOOT.bin 或 FPGA bitstream，不自动烧写 CH32、SDK、FPGA 或启动 Flash。把软件装到新电脑后仍须连接具有匹配固件的 OmniCoreSDR。
 
+## 0.6.0：成帧传输为唯一格式
+
+OCH 0.6.0 只支持成帧 USB 传输（每个 16 KiB 块带 16 B 头和样点时间），需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`，提示加载 FPGA `CH32H417_IP` 1.3 与 `SDK_CMD_1.1`。
+
+| OCH | Zynq 固件（BOOT.bin） | FPGA `CH32H417_IP` | SDK 标识 | CH32 桥接 |
+|---|---|---|---|---|
+| **0.6.0** | v2026.11.07 及以上 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_FRAMED` | 1.0.0（不变） |
+| 0.5.x | v2026.11.03 及以前 | 1.1 | `SDK_CMD_1.0_*` | 1.0.0 / legacy |
+
+两边必须配套：0.6.0 不能连接旧固件，0.5.x 也不能使用新固件收发 IQ（新固件不再发送 16 KiB 递增起始头）。CH32 桥接固件对数据内容透明，两种组合都可用 1.0.0。
+
 0.5.0 起，CH32 桥接固件 1.0.0 及以上可由用户手动执行 `och firmware update FILE.ocfw` 通过 USB 升级，详见 [桥接固件升级](firmware-update.md)。`och firmware info` 显示桥接固件版本；1.0.0 之前的桥接固件显示 legacy。
 
 本版实际检查/使用以下能力：
@@ -9,7 +20,8 @@
 | 组件 | 必要能力 | 检查方式 |
 |---|---|---|
 | ZYNQ SDK | 命令封装协议 v1 | host_protocol? 包含 host_protocol=1 |
-| ZYNQ SDK | RX 溢出清错后仅重启 RX 并重新发完整头 | system_info? 包含 header_on=rx_start_and_overflow_recovery |
+| ZYNQ SDK | 成帧 USB 传输（16 B 块头、样点时间、GAP） | system_info? 包含 transport=framed16k |
+| ZYNQ SDK 时间扩展 | 时间基准、PPS 对时、定时 RX、带时间的事件 | 使用时间 API 时要求 hw_time=1 |
 | ZYNQ SDK FIR 扩展 | 安全分块上传、快照读取、双通道 SPI 校验 | 使用 FIR 功能时要求 system_info? 包含 fir_upload=1 |
 | ZYNQ SDK 时钟扩展 | 无降速回退的共享 Fs 和完整链事务 | 使用安全时钟设置时要求 system_info? 包含 clock_config=1 |
 | ZYNQ SDK RX 校正扩展 | RF/BBDC 直流及 RX 正交跟踪开关、状态回读 | 使用 RX correction 时要求 system_info? 包含 rx_correction=1 |
@@ -17,11 +29,11 @@
 | ZYNQ SDK 外部 LO 扩展 | 独立 RX/TX 源、验证和名义频率状态 | 使用 LO source 时要求 external_lo=1 |
 | 可选 2TX2RX 8bit 扩展 | SDK 格式命令与 FPGA signed8 路径 | 仅选择 8bit 时要求 iq_format=1 iq8_2t2r=1；默认 12bit 保持旧 SDK 兼容 |
 | CH32 | 已有诊断及流清理协议 v4 | USB 厂商请求 0xD0 的诊断版本 |
-| FPGA/IP | RX 启动时 16384 B 的 00..FF×64 头；现有 packed12 及通道布局 | 匹配本工程使用的 FPGA 构建；由数据流检测头 |
+| FPGA/IP | `CH32H417_IP` 1.3：16 KiB 成帧块、64 位样点时间、事件 FIFO；packed12 / signed8 通道布局不变 | SDK 回报 `fpga=CH32H417_IP_0x01030001`；数据流逐块校验头部 |
 | USB | SuperSpeed 或 USB 2.0 High-Speed（480 Mbit/s）；数据端点 01/81，控制端点 02/82 | 枚举及打开时确认；Full-Speed（12 Mbit/s）不支持 |
 | Windows 驱动 | 发行包 libusbK 3.1.0.0 | och-driver check；实际安装仍受 Windows 策略约束 |
 
-旧 SDK 即使支持原始串口命令和 16 KiB 起始头，也可能缺少 OCH 所需的命令封装协议，不能直接假定兼容。版本不满足时基座明确失败，避免把超时/残留回复误认为新命令已成功。
+旧 SDK 即使支持原始串口命令，也可能缺少 OCH 所需的命令封装协议或成帧传输，不能直接假定兼容。版本不满足时基座明确失败，避免把超时/残留回复误认为新命令已成功。
 
 FIR/clock 扩展继续沿用固件名字 SDK_CMD_1.0_20261023，因此不能只比较名字来判断功能。以能力字段为准；规范的 sample-rate setter 使用安全时钟入口，也需要新扩展。协议详细格式见 [设备协议参考](protocol.md)。自定义 FIR/时钟状态保存在运行中 SDK 的 RAM，重新下载 ELF 或断电不保证保留。
 
@@ -33,7 +45,7 @@ RX 校正同样按 `rx_correction=1` 检查，不要求更换 CH32 固件。旧 
 
 封装请求在原 SDK 命令前加入 @请求号；响应以相同请求号的 RSP begin/end 包围，结束行给出结果。独立 EVT 可穿插其间，由控制线程分离。这样多行回复、异步错误和连续命令不会靠不可靠的“静默一段时间”猜测完成。本版同时只在控制通道发出一条待完成请求，不是命令并行执行。
 
-CH32 的协议 v4 是使用原有诊断能力，不代表主机安装器为您升级了 CH32 固件。实际板级 SDK 工程位于同级 AD9361_Template_1/AD9361_Template.sdk，FPGA 工程也在 AD9361_Template_1 内，独立于 OmniCoreHost。构建、下载及持久化状态由这些板级工程管理；RAM 中已运行的新 ELF 不等于断电后仍会启动该版本。需要长期使用时，请按板级工程流程部署已确认兼容的启动镜像。
+CH32 的协议 v4 是使用原有诊断能力，不代表主机安装器为您升级了 CH32 固件。板级 SDK 与 FPGA 工程在 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) 仓库，独立于 OmniCoreHost。构建、下载及持久化状态由这些板级工程管理；RAM 中已运行的新 ELF 不等于断电后仍会启动该版本。需要长期使用时，请按板级工程流程部署已确认兼容的启动镜像。
 
 打开设备会停止旧 USB 会话并清理缓存，因此不要同时让原上位机、调试脚本和本基座操作同一个数据口。只需检查 Windows 驱动时用 och-driver check，只需枚举时用 och find。
 

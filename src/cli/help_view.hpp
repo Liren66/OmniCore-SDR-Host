@@ -17,7 +17,7 @@ inline const std::vector<help_group>& help_groups() {
     static const std::vector<help_group> groups = {
         {"Device", {
             {"find", "List connected OmniCoreSDR devices"},
-            {"info", "Identity, firmware, USB link, power snapshot"},
+            {"info", "Identity, firmware, USB link, time base, power"},
             {"power [status]", "USB-C power from the startup log"},
             {"rssi on|off", "Switch RX RSSI reporting (off after power-up)"},
             {"rssi [--count N] [--interval 0.5]", "RX1/RX2 RSSI, relative dB; --count 0 = until Ctrl+C"},
@@ -58,7 +58,7 @@ inline const std::vector<help_group>& help_groups() {
             {"--tone 1M --amplitude 0.25", "Generated tone, amplitude 0..1"},
             {"--overwrite", "Replace an existing RX capture"},
             {"--buffer-mib 64 --queue 32", "Host ring MiB, parallel USB requests"},
-            {"--block 196608", "USB request size, multiple of 49152"}}},
+            {"--block 196608", "USB request size, multiple of 16384"}}},
         {"RF options", {
             {"--lo-frequency 1G", "RX+TX LO (or --rx-/--tx-lo-frequency)"},
             {"--bandwidth 18M", "Analog bandwidth (or --rx-bw / --tx-bw)"},
@@ -79,9 +79,9 @@ inline const char* const help_notes[] = {
     "FTR files with clock/bandwidth metadata require --coefficients-only to ignore it. A valid FIR file is not a frequency-response guarantee.",
     "bench uses the native wire format: packed12 by default, sc8 with --iq-bits 8. sc16 is left aligned; sc8 requires --iq-bits 8.",
     "USB2 needs an explicit lower --sample-rate. Run och info for measured references; the 30.72M streaming examples target USB3.",
-    "RX strips every complete 16 KiB preamble; gaps and epochs go to the metadata sidecar. Existing captures need --overwrite.",
+    "RX strips the 16-byte header of every 16 KiB block; hardware time, gaps and epochs go to the metadata sidecar. Existing captures need --overwrite.",
     "Finite-file EOF has no device end-of-burst acknowledgement: the tail can report TX underflow/starvation, and USB completion is not DAC completion.",
-    "No timed transmission, hardware timestamps or PPS-scheduled streaming. PPS without 10M steers the 40M oscillator through the CH32 DAC; with 10M it is a frequency check only.",
+    "Hardware time, timed RX and timed TX bursts are C API features (och_set_time, OCH_RX_TIMED, och_send_burst); och rx/tx/bench stream untimed. PPS without 10M also steers the 40M oscillator through the CH32 DAC.",
     "Power data come from the HD3SS3220 startup log, not live current or LED readback; unknown supports_3a is null in JSON.",
 };
 inline void print_help(std::ostream& out) {

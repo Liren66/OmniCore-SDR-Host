@@ -38,8 +38,8 @@
 <text x="762.0" y="316.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">板控</text>
 <text x="762.0" y="332.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">RGB · 风扇 · 温度</text>
 <rect x="834.0" y="292" width="128.0" height="56" rx="8" fill="#ffffff" stroke="#9ec5f4" stroke-width="1"/>
-<text x="898.0" y="316.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">Event · Metadata</text>
-<text x="898.0" y="332.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">epoch · 间断 · 统计</text>
+<text x="898.0" y="316.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">Time · Event</text>
+<text x="898.0" y="332.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">样点时间 · 定时 · 事件</text>
 <text x="154" y="370" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#8a8984" text-anchor="start">控制面</text>
 <rect x="154" y="378" width="808" height="58" rx="8" fill="#eaf2fd" stroke="#9ec5f4" stroke-width="1"/>
 <text x="170" y="403" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="14" font-weight="700" fill="#184f95" text-anchor="start">RX</text>
@@ -49,8 +49,8 @@
 <text x="340.25" y="419.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">32 个并行请求</text>
 <line x1="416.5" y1="407" x2="442.5" y2="407" stroke="#2a78d6" stroke-width="2" stroke-linecap="round" marker-end="url(#a-blue)"/>
 <rect x="446.5" y="386" width="144.5" height="42" rx="8" fill="#ffffff" stroke="#9ec5f4" stroke-width="1"/>
-<text x="518.75" y="403.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">起始头同步</text>
-<text x="518.75" y="419.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">framer · 新 epoch</text>
+<text x="518.75" y="403.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">块头解析</text>
+<text x="518.75" y="419.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">16 B 头 · 时间戳 · GAP</text>
 <line x1="595.0" y1="407" x2="621.0" y2="407" stroke="#2a78d6" stroke-width="2" stroke-linecap="round" marker-end="url(#a-blue)"/>
 <rect x="625.0" y="386" width="144.5" height="42" rx="8" fill="#ffffff" stroke="#9ec5f4" stroke-width="1"/>
 <text x="697.25" y="403.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">环形队列</text>
@@ -67,8 +67,8 @@
 <text x="340.25" y="485.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">32 个并行请求</text>
 <line x1="442.5" y1="473" x2="416.5" y2="473" stroke="#eb6834" stroke-width="2" stroke-linecap="round" marker-end="url(#a-orange)"/>
 <rect x="446.5" y="452" width="144.5" height="42" rx="8" fill="#ffffff" stroke="#f3b49a" stroke-width="1"/>
-<text x="518.75" y="469.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">预填 · flush</text>
-<text x="518.75" y="485.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">≥ 4 块 · 补零计数</text>
+<text x="518.75" y="469.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">成帧 · 突发</text>
+<text x="518.75" y="485.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">16 B 头 · HAS_TIME · EOB</text>
 <line x1="621.0" y1="473" x2="595.0" y2="473" stroke="#eb6834" stroke-width="2" stroke-linecap="round" marker-end="url(#a-orange)"/>
 <rect x="625.0" y="452" width="144.5" height="42" rx="8" fill="#ffffff" stroke="#f3b49a" stroke-width="1"/>
 <text x="697.25" y="469.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="middle">环形队列</text>
@@ -99,8 +99,8 @@
 <text x="350" y="708" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">Zynq</text>
 <rect x="350" y="718" width="157.0" height="54" rx="8" fill="#f3f2ef" stroke="#cfcdc6" stroke-width="1"/>
 <text x="428.5" y="733.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">PL 数据通路</text>
-<text x="428.5" y="749.0" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10.5" font-weight="400" fill="#52514e" text-anchor="middle">IQ 打包 · 16 KiB 起始头</text>
-<text x="428.5" y="764.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10.5" font-weight="400" fill="#52514e" text-anchor="middle">PPS 测频 · 板控 AXI</text>
+<text x="428.5" y="749.0" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10.5" font-weight="400" fill="#52514e" text-anchor="middle">16 KiB 成帧 · 64 位时间</text>
+<text x="428.5" y="764.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10.5" font-weight="400" fill="#52514e" text-anchor="middle">PPS 对时 · 测频 · 板控</text>
 <rect x="519.0" y="718" width="157.0" height="54" rx="8" fill="#f3f2ef" stroke="#cfcdc6" stroke-width="1"/>
 <text x="597.5" y="733.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="middle">PS · SDK</text>
 <text x="597.5" y="749.0" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="10.5" font-weight="400" fill="#52514e" text-anchor="middle">命令解析 · 射频驱动</text>

@@ -62,15 +62,18 @@ void och_device::open(const DeviceInfo& d) {
     auto p=command("host_protocol?",3000);
     require(p.find("host_protocol=1")!=std::string::npos,OCH_UNSUPPORTED,"SDK command envelope v1 required; see firmware/README");
     auto s=command("system_info?");
-    require(s.find("header_on=rx_start_and_overflow_recovery")!=std::string::npos,OCH_UNSUPPORTED,"SDK RX recovery header support required");
+    require(s.find("transport=framed16k")!=std::string::npos,OCH_UNSUPPORTED,
+            "framed USB transport required: load FPGA CH32H417_IP 1.3 and SDK_CMD_1.1 (OCH 0.6 has no legacy preamble mode)");
     copy_text(info.firmware,sizeof info.firmware,value(s,"firmware"));
     capabilities=s;
+    info.hardware_timestamps=supports_capability("hw_time")?1:0;
     command("usb_stop!");rx_on=tx_on=false;
     och_default_config(&config);
     reset_transport();
 }
-void och_device::emit(uint32_t type,const std::string& message,uint64_t ep) {
+void och_device::emit(uint32_t type,const std::string& message,uint64_t ep,uint64_t hw_time,uint32_t code,uint32_t block) {
     och_event e{};e.struct_size=sizeof e;e.type=type;e.host_monotonic_ns=now_ns();e.epoch=ep;
+    e.hw_time=hw_time;e.code=code;e.block=block;
     copy_text(e.message,sizeof e.message,message);
     std::lock_guard<std::mutex> lock(events_mutex);
     e.sequence=++event_seq;
@@ -78,6 +81,7 @@ void och_device::emit(uint32_t type,const std::string& message,uint64_t ep) {
 }
 void och_device::line(const std::string& s) {
     if(s.rfind("EVT ",0)==0) {
+        if(och::core::timed_event(*this,s))return;
         if(s.find("type=rx_overflow")!=std::string::npos && s.find("action=waiting_rx_resync")!=std::string::npos)++overflows;
         if(s.find("type=tx_underflow")!=std::string::npos && s.find("action=clearing_continue")!=std::string::npos)++underflows;
         emit(OCH_EVENT_DEVICE,s);return;

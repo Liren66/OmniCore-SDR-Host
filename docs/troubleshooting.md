@@ -24,11 +24,15 @@ USB2 先查看 README 测试结果中的 USB2 表和 [USB2 测试结果](usb2.md
 
 有限 TX 文件 EOF 后 flush 会排空主机/USB 队列，关闭硬件前的尾部可能报告 TX 欠流和主机欠供。本版不隐藏这些事件。结合 EOF、完成字节数、padding 与传输错误判断，并把它与持续流中途欠流分开；不能仅凭全部 USB 完成就确认精确定长 DAC 播放。精确 RF 最后一个样本时刻当前不可观测，不提供虚构的 end-of-burst。
 
-## 起始头与旧数据
+## 成帧块与旧数据
 
-不要只搜索前五个 00 01 02 03 04 就认定帧头。核心检测完整 16384 B 递增模式，支持跨 USB 块。纯 IQ 文件已去头；旧程序 USB dump 应先按协议解析，不能当作 sc16。
+`och_open` 报 `framed USB transport required`：Zynq 固件太旧，需要 Firmware v2026.11.07（FPGA `CH32H417_IP` 1.3）。旧固件请继续使用 OCH 0.5.x。
 
-SDK 溢出事件可能早于或晚于数据到达。以数据通路确认的 epoch/metadata 定位，不能在收到 EVT 时任意切断当前块。
+`resyncs`（终端显示为 Header errors）非零表示收到魔数或校验错误的块头，核心已按字节重新对齐。正常运行时应为 0；持续出现时检查固件版本是否配套、USB 线缆与端口。
+
+纯 IQ 文件已去掉块头；原始 USB dump 每 16 KiB 含 16 B 头，应先按 [设备协议](protocol.md#成帧块格式) 解析，不能当作 sc16。
+
+设备溢出事件（`RX_GAP`）可能早于或晚于对应数据到达。以数据通路的 epoch/metadata（GAP 标志和 device_dropped_samples）定位，不能在收到 EVT 时任意切断当前块。
 
 ## 重开方向返回 BUSY
 

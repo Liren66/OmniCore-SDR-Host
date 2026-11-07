@@ -6,7 +6,7 @@
 
 ![USB IQ 格式](images/wire-format.svg)
 
-12bit 每通道每复样本为 3 字节 packed12。8bit 仅在 RX/TX mask 都为 3、TX source 为 USB 时选择；每时间帧为 `I1[11:4],Q1[11:4],I2[11:4],Q2[11:4]` 四字节，均为二补码 signed8。FPGA TX 恢复每个 12bit 值时补低 4 位零。通道顺序和 16384 字节递增起始头完全不变；USB 请求完成边界仍不是样本或起始头边界。
+12bit 每通道每复样本为 3 字节 packed12。8bit 仅在 RX/TX mask 都为 3、TX source 为 USB 时选择；每时间帧为 `I1[11:4],Q1[11:4],I2[11:4],Q2[11:4]` 四字节，均为二补码 signed8。FPGA TX 恢复每个 12bit 值时补低 4 位零。通道顺序不变；每个 16 KiB 块的 16368 B 载荷正好容纳 4092 个 8bit 时间帧，块内总是整数个样点。
 
 | 应用格式 | 每通道每复样本字节 | 8bit RX 输出 | 8bit TX 输入处理 |
 |---|---:|---|---|
@@ -40,7 +40,7 @@ och bench --rx --tx --channels 1,2 --iq-bits 12 --sample-rate 30.72M --seconds 1
 
 bench 自动为 8bit 选择 sc8，为 12bit 选择 packed12，并只支持这两种原生应用格式。SC16/FC32 转换须通过 API 的 `och_send` / `och_recv` 测试；不能用 bench 或零拷贝 RX 冒充转换测试。以上命令输出零 IQ，TX 衰减为 89.75 dB，不读写 IQ 文件。
 
-31.25 MSPS 时 8bit 双通道每方向为 125 MB/s；30.72 MSPS 时为 122.88 MB/s（双向 245.76 MB/s）；61.44 MSPS 时每方向 245.76 MB/s（双向 491.52 MB/s）。起始头及 USB 协议开销另计。CLI JSON `usb_MBps` 为该流累计 USB 字节除以 `elapsed_seconds`，含启动/停止开销；不是独立稳态窗口的速率。
+31.25 MSPS 时 8bit 双通道每方向为 125 MB/s；30.72 MSPS 时为 122.88 MB/s（双向 245.76 MB/s）；61.44 MSPS 时每方向 245.76 MB/s（双向 491.52 MB/s）。每块 16 B 头（约 0.1%）及 USB 协议开销另计。CLI JSON `usb_MBps` 为该流累计 USB 字节除以 `elapsed_seconds`，含启动/停止开销；不是独立稳态窗口的速率。
 
 `examples/duplex_iq8.cpp` 展示双通道 SC8 接收和双通道零 IQ 发送，使用独立 TX producer。改变应用 args.format 可用 SC16/FC32/packed12，缓冲按应用格式尺寸分配。
 

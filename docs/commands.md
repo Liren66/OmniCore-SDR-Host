@@ -110,7 +110,7 @@ TX1、TX2 各有两个 tone，全部 12 个属性都可 get/set。频率以整�
 | `usb.clear` | action | 请求异步清错；保留历史、不复位 FIFO | `usb_clear!` |
 | `usb.stop` | action | 停 USB 路径；USB TX 源模式还会关闭 TX | `usb_stop!` |
 
-`usb.rx`、`usb.tx`、`usb.config` 是高级桥调试入口，不能绕过 SDK 的 TX 显式启用、预填充和状态检查。双通道时 select-channel2 不参与选择。恢复 RX 溢出时由 SDK 重启 RX 并发送既有 16 KiB 头，用户态基座据此开始新 epoch；清错不等于找回丢失的 IQ 数据。
+`usb.rx`、`usb.tx`、`usb.config` 是高级桥调试入口，不能绕过 SDK 的 TX 显式启用、预填充和状态检查。双通道时 select-channel2 不参与选择。RX 溢出由 FPGA 处理：当前块补零结束，下一块带 GAP 标志，基座据此开始新 epoch 并给出精确丢样数；不会找回丢失的 IQ 数据。
 
 ## 旧命令兼容
 

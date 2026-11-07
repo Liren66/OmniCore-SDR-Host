@@ -5,9 +5,10 @@ README 与 `docs/` 中使用的正式插图，保留 SVG 图表与 PNG 终端图
 | 文件 | 内容 | 数据来源 |
 |---|---|---|
 | `architecture.svg` | 软件分层、控制面 / 数据面、USB 链路与板卡组成 | `docs/architecture.md` |
-| `rx-boundaries.svg` | RX 起始头、溢出恢复、epoch 与 metadata 记录 | `src/core/stream.cpp` 的元数据标志 |
+| `rx-boundaries.svg` | RX 成帧块头时间、溢出 GAP、epoch 与 metadata 记录 | `src/core/stream.cpp` 的元数据标志 |
+| `timestamps.svg` | PPS 对时、定时 RX、定时 TX 突发与事件的时间关系 | `docs/timestamps.md`、FPGA `CH32H417_IP` 1.3 |
 | `reconfigure.svg` | 运行中改参的暂停、应用、恢复流程 | `docs/architecture.md` |
-| `wire-format.svg` | packed12 / signed8 字节布局、应用格式、USB 请求对齐 | `docs/iq8.md`、编解码实现 |
+| `wire-format.svg` | packed12 / signed8 字节布局、应用格式、16 KiB 成帧块 | `docs/iq8.md`、编解码实现 |
 | `clock-tree.svg` | 外部 10 MHz、ADF4002、AD9361 时钟链、外部 LO、PPS 监控 | 设备 `clock status` / `adf4002_status` 回读 |
 | `throughput.svg` | 实测 USB 吞吐与理论 wire 速率 | 2026-10-25 CLI 实板测试与 8bit 61.44 MSPS 长时间测试（OCH 0.4.2） |
 | `linux-throughput.svg` | Linux 版 USB3 实测吞吐与理论 wire 速率 | 2026-10-25 Ubuntu 24.04.3 实板测试（OCH 0.4.3） |

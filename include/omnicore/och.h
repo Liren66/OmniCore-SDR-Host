@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 #define OCH_ABI_VERSION 1u
-#define OCH_VERSION "0.5.0"
+#define OCH_VERSION "0.6.0"
 #define OCH_PPS_LOCK_TOLERANCE_PPM 1
 typedef struct och_device och_device;
 typedef struct och_stream och_stream;
@@ -28,10 +28,26 @@ typedef enum och_result {
 typedef enum och_direction { OCH_RX=0, OCH_TX=1 } och_direction;
 typedef enum och_format { OCH_PACKED12=0, OCH_SC16=1, OCH_FC32=2, OCH_SC8=3 } och_format;
 enum { OCH_META_START=1u, OCH_META_DISCONTINUITY=2u, OCH_META_HOST_OVERFLOW=4u,
-       OCH_META_DEVICE_OVERFLOW=8u, OCH_META_TIME_UNKNOWN=16u,
-       OCH_META_RECONFIGURED=32u };
+       OCH_META_DEVICE_OVERFLOW=8u, OCH_META_TIME_UNKNOWN=16u, /* no longer produced */
+       OCH_META_RECONFIGURED=32u,
+       /* Framed USB transport (always on since 0.6.0): */
+       OCH_META_HAS_TIME=64u,      /* time_ticks is the hardware time of the first sample */
+       OCH_META_END_OF_BURST=128u, /* last samples of a finite/stopped RX command */
+       OCH_META_LATE=256u };       /* the RX command time had already passed */
 enum { OCH_EVENT_DEVICE=1, OCH_EVENT_RX_SYNC=2, OCH_EVENT_HOST_OVERFLOW=3,
-       OCH_EVENT_TRANSPORT=4, OCH_EVENT_TX_STARVED=5, OCH_EVENT_RECONFIGURED=6 };
+       OCH_EVENT_TRANSPORT=4, OCH_EVENT_TX_STARVED=5, OCH_EVENT_RECONFIGURED=6,
+       /* Hardware-timed events (FPGA event FIFO); och_event.hw_time is valid. */
+       OCH_EVENT_TX_BURST_ACK=7, OCH_EVENT_TX_LATE=8, OCH_EVENT_TX_UNDERFLOW=9,
+       OCH_EVENT_TX_ERROR=10, OCH_EVENT_RX_GAP=11, OCH_EVENT_RX_LATE=12,
+       OCH_EVENT_TIME_INVALIDATED=13 };
+/* TX burst metadata flags (och_send_burst). */
+enum { OCH_TX_HAS_TIME=1u, OCH_TX_START_OF_BURST=2u, OCH_TX_END_OF_BURST=8u };
+/* RX stream start / och_rx_command flags. */
+enum { OCH_RX_TIMED=1u,    /* stream args: RX waits for a command; start_time used */
+       OCH_RX_NOW=2u,      /* start immediately (ignore time) */
+       OCH_RX_STOP=4u };   /* och_rx_command: stop, finishing with END_OF_BURST */
+/* PPS / time source for och_set_time_source. */
+enum { OCH_TIME_SOURCE_NONE=0, OCH_TIME_SOURCE_EXTERNAL=1, OCH_TIME_SOURCE_INTERNAL=2 };
 typedef struct och_device_info {
     uint32_t struct_size, abi_version;
     char serial[128], name[128], driver[32], firmware[128];
@@ -50,23 +66,43 @@ typedef struct och_config {
     uint32_t usb_iq_bits; /* 0 or 12: legacy packed12. 8: signed8 wire, requires both masks=3.
                           * Occupies the first former reserved slot; ABI 1 size is unchanged.
                           * Destroy all streams before changing the wire format. */
-    uint32_t reserved[6];
+    uint32_t usb_framing; /* Ignored: since 0.6.0 every 16 KiB block carries a 16-byte header
+                          * with hardware sample time (FPGA CH32H417_IP 1.3); there is
+                          * no legacy preamble mode. Kept for source compatibility. */
+    uint32_t reserved[5];
 } och_config;
 typedef struct och_stream_args {
     uint32_t struct_size, direction, format;
-    uint32_t transfer_bytes; /* default196608, multiple49152, max1048576 */
+    uint32_t transfer_bytes; /* default196608, multiple of 16384, max1048576 */
     uint32_t usb_queue_depth; /* default32 */
     uint32_t host_buffer_bytes; /* default64MiB, allocated before start */
-    uint32_t reserved[10];
+    /* RX, framed transport only: start_flags OCH_RX_TIMED makes the receiver
+     * wait; och_start then issues one command at start_time (or OCH_RX_NOW)
+     * for num_samples per channel (0 = continuous). Former reserved slots. */
+    uint32_t start_flags, num_samples, start_time_lo, start_time_hi;
+    uint32_t reserved[6];
 } och_stream_args;
 typedef struct och_metadata {
     uint32_t struct_size, flags;
-    uint64_t epoch; /* increases on each complete RX preamble */
+    uint64_t epoch; /* increases at each start, gap or time discontinuity */
     uint64_t sample_index; /* per-channel position within this epoch, NOT a HW timestamp */
     uint64_t host_dropped_samples; /* known local loss since previous delivered block */
     int64_t device_dropped_samples; /* -1: unavailable in current FPGA protocol */
     uint64_t host_monotonic_ns; /* observation time, NOT sample time */
+    /* 0.6.0 extension (struct_size selects the layout; older sizes remain
+     * accepted). Valid when flags has OCH_META_HAS_TIME. 1 tick = 1 sample. */
+    uint64_t time_ticks;
+    uint32_t tick_rate, reserved_meta;
 } och_metadata;
+typedef struct och_tx_metadata {
+    uint32_t struct_size, flags; /* OCH_TX_* */
+    uint64_t time_ticks;         /* first sample of the burst when OCH_TX_HAS_TIME */
+} och_tx_metadata;
+typedef struct och_time_status {
+    uint32_t struct_size, capable, valid, armed, source, ref_present, pps_count, tick_rate;
+    uint64_t now, last_pps;      /* sample ticks; now is a snapshot when read */
+    uint32_t framing, rx_timed, fpga_version, reserved[5];
+} och_time_status;
 typedef struct och_stats {
     uint32_t struct_size, running;
     uint64_t usb_bytes, samples, host_dropped_samples, headers, resyncs;
@@ -78,6 +114,8 @@ typedef struct och_event {
     uint32_t struct_size, type;
     uint64_t sequence, host_monotonic_ns, epoch;
     char message[512];
+    uint64_t hw_time; /* 0.6.0 extension: sample time for timed event types */
+    uint32_t code, block;
 } och_event;
 /* AD9361 hardware FIR. Both physical channels in the selected direction share
  * these coefficients. get returns the last configuration verified by SDK SPI
@@ -391,6 +429,19 @@ OCH_API int och_flush(och_stream*, uint32_t timeout_ms);
  * recv never combines epochs or discontinuities into one returned buffer. */
 OCH_API int och_recv(och_stream*, void* samples, size_t capacity_samples,
                      size_t* received, och_metadata*, uint32_t timeout_ms);
+/* Hardware time base. when: 0 now, 1 at the next PPS edge
+ * of the selected source. A sample-rate change invalidates the time. */
+OCH_API int och_get_time(och_device*, och_time_status*);
+OCH_API int och_set_time(och_device*, uint64_t ticks, uint32_t at_next_pps);
+OCH_API int och_set_time_source(och_device*, uint32_t source);
+/* Timed RX command on a started framed RX stream created with OCH_RX_TIMED:
+ * flags OCH_RX_NOW / OCH_RX_STOP; num_samples 0 = continuous. */
+OCH_API int och_rx_command(och_stream*, uint32_t flags, uint64_t time_ticks, uint32_t num_samples);
+/* Framed TX: one call may carry a whole burst or part of one. Each
+ * OCH_TX_START_OF_BURST or OCH_TX_HAS_TIME starts a new 16 KiB block;
+ * OCH_TX_END_OF_BURST closes the block and submits it immediately. */
+OCH_API int och_send_burst(och_stream*, const void* samples, size_t samples_per_channel,
+                           const och_tx_metadata*, size_t* accepted, uint32_t timeout_ms);
 OCH_API int och_send(och_stream*, const void* samples, size_t samples_per_channel,
                      size_t* accepted, uint32_t timeout_ms);
 /* Zero-copy application view of current wire RX buffers; no conversion:

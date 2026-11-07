@@ -4,7 +4,7 @@
 #include "power_status.hpp"
 #include "../transport/transport.hpp"
 #include "../dsp/codec.hpp"
-#include "../dsp/framer.hpp"
+#include "../dsp/frame.hpp"
 #include <condition_variable>
 #include <functional>
 #include <future>
@@ -38,6 +38,8 @@ och_firmware_info firmware_query(const char* serial);
 void firmware_enter_bootloader(const char* serial);
 void firmware_start_app(const char* serial);
 void firmware_update(const char* serial,const char* path,och_firmware_progress,void* user);
+// EVT lines from the SDK time module; true when consumed (timebase.cpp).
+bool timed_event(och_device&,const std::string& line);
 }
 
 struct och_device {
@@ -66,7 +68,7 @@ struct och_device {
     void open(const och::transport::DeviceInfo&);
     std::string command(const std::string&,uint32_t timeout=5000);
     void control_loop();void line(const std::string&);
-    void emit(uint32_t type,const std::string&,uint64_t epoch=0);
+    void emit(uint32_t type,const std::string&,uint64_t epoch=0,uint64_t hw_time=0,uint32_t code=0,uint32_t block=0);
     void reset_transport();void configure(const och_config&);
     void apply_config(const och_config&);
     // LO, manual gain and attenuation changes that keep IQ streams running.
@@ -107,6 +109,7 @@ struct och_device {
     bool supports_capability(const char*);
     void require_capability(const char*);
     och_power_status get_power_status(uint32_t timeout_ms);
+    och_time_status get_time();
 };
 
 struct och_stream {
@@ -118,7 +121,14 @@ struct och_stream {
         }
     };
     och_device* dev;och_stream_args args;unsigned nchan,wire_bytes,group;
-    och::core::Ring ring;och::dsp::Framer framer;
+    och::core::Ring ring;
+    // Framed transport: 16-byte header per 16 KiB block (the only transport).
+    och::dsp::FrameParser fparser;
+    // Timed framed RX: one 16 KiB device block per USB transfer, so a finite
+    // burst's last block (and its END_OF_BURST) completes without a short packet.
+    size_t xfer_bytes=0;
+    bool have_time=false;uint64_t next_time=0,cur_time=0,fr_epochs=0;int64_t gap_samples=0;
+    bool blk_open=false,tx_first=true;size_t blk_start=0,blk_used=0;uint8_t blk_flags=0;uint64_t blk_time=0;uint16_t tx_seq=0;
     std::vector<std::unique_ptr<Slot>> slots;och::core::FixedQueue<Slot*,128> active;
     och::transport::Handle stop_event;
     std::thread worker;
@@ -144,7 +154,10 @@ struct och_stream {
     void start();void stop(uint32_t timeout_ms);void flush(uint32_t timeout_ms);void run();
     void halt();void prepare_restart(bool receive_gap);
     void fail(const std::string&);std::string error();
-    bool submit(Slot*);bool fill_tx(Slot*);void cancel_all();
-    void rx_data(const uint8_t*,size_t,uint64_t,bool);void publish_rx();
-    static void sink(void*,const uint8_t*,size_t,uint64_t,bool);
+    bool submit(Slot*);void cancel_all();
+    void publish_rx();
+    void rx_frame(const och::dsp::FrameHeader&,const uint8_t*,size_t);
+    static void frame_sink(void*,const och::dsp::FrameHeader&,const uint8_t*,size_t);
+    bool fill_tx(Slot*);void tx_open(Slot*,uint32_t flags,uint64_t time);void tx_close(Slot*,uint8_t extra);
+    size_t frame_groups()const{return wire_bytes==2?2046:1364;}
 };

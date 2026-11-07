@@ -214,8 +214,88 @@ void print_power(const och_power_status& p) {
 }
 std::string firmware_json(const och_firmware_info& f);
 void print_firmware(const och_firmware_info& f);
+std::string firmware_version(uint32_t v);
+std::string time_json(const och_time_status& t) {
+    std::ostringstream out;
+    out << "{\"supported\":" << (t.capable ? "true" : "false");
+    if (t.capable) {
+        const char* src = t.source == OCH_TIME_SOURCE_EXTERNAL ? "external" : t.source == OCH_TIME_SOURCE_INTERNAL ? "internal" : "none";
+        out << ",\"valid\":" << (t.valid ? "true" : "false") << ",\"armed\":" << (t.armed ? "true" : "false")
+            << ",\"source\":" << json(src) << ",\"now\":" << t.now << ",\"last_pps\":" << t.last_pps
+            << ",\"pps_count\":" << t.pps_count << ",\"tick_rate\":" << t.tick_rate
+            << ",\"ref40_present\":" << (t.ref_present ? "true" : "false")
+            << ",\"fpga_version\":\"0x" << std::hex << std::setw(8) << std::setfill('0') << t.fpga_version << std::dec << '"';
+    }
+    out << '}';
+    return out.str();
+}
+// och info: one screen, grouped; details stay in och power / och firmware.
+void print_device_summary(const och_device_info& i, const och_firmware_info* f, const och_time_status* t,
+                          const och_power_status* p) {
+    using presentation::tone;
+    namespace d = presentation::detail;
+    auto& o = std::cout;
+    presentation::title("info", d::nonempty(d::ascii(d::text(i.serial))), o);
+    presentation::section("Device", o);
+
+    presentation::group("Identity", o);
+    presentation::field("Name", d::nonempty(d::text(i.name)), o, tone::accent);
+    presentation::field("Driver", d::nonempty(d::text(i.driver)), o);
+    const auto mbps = i.usb_speed_mbps;
+    presentation::field("USB link", !mbps ? std::string("Unknown") :
+        (mbps >= 1000 ? d::fixed(mbps / 1000.0, 1) + " Gbit/s" : std::to_string(mbps) + " Mbit/s") + "  " +
+        (mbps >= 10000 ? "SuperSpeed+" : mbps >= 5000 ? "SuperSpeed" : mbps >= 480 ? "High-Speed (USB 2.0)" : "Full-Speed, unsupported"),
+        o, mbps >= 5000 ? tone::good : tone::warn);
+
+    presentation::group("Firmware", o);
+    presentation::field("Zynq SDK", d::nonempty(d::text(i.firmware)), o);
+    if (t && t->capable && t->fpga_version)
+        presentation::field("FPGA IP", "CH32H417_IP " + std::to_string(t->fpga_version >> 24) + "." +
+                            std::to_string((t->fpga_version >> 16) & 255) + "  (framed 16 KiB, hardware time)", o);
+    if (f) {
+        if (f->mode == OCH_FW_MODE_APP)
+            presentation::field("CH32 bridge", firmware_version(f->running_version) + "  (bootloader " +
+                                firmware_version(f->bootloader_version) + ")", o);
+        else presentation::field("CH32 bridge", f->mode == OCH_FW_MODE_BOOTLOADER ? "Bootloader mode" :
+                                 "Legacy, no USB update", o, tone::warn);
+    }
+
+    presentation::group("RF", o);
+    presentation::field("Channels", std::to_string(i.rx_channels) + " RX / " + std::to_string(i.tx_channels) + " TX", o);
+    presentation::field("Max sample rate", d::rate(i.max_sample_rate), o);
+
+    if (t && t->capable) {
+        presentation::group("Time base", o);
+        const char* src = t->source == OCH_TIME_SOURCE_EXTERNAL ? "External, J6" :
+            t->source == OCH_TIME_SOURCE_INTERNAL ? "Internal, AD9361 40 MHz" : "None";
+        presentation::field("State", t->valid ? "Valid" : t->armed ? "Armed, loads on next PPS" : "Not set",
+                            o, t->valid ? tone::good : tone::muted);
+        presentation::field("PPS source", src, o);
+        if (t->source) presentation::field("PPS count", d::grouped(t->pps_count), o);
+        if (t->valid && t->tick_rate)
+            presentation::field("Now", d::grouped(t->now) + "  (" + d::fixed(double(t->now) / t->tick_rate, 1) + " s at " +
+                                d::fixed(t->tick_rate / 1e6, 3) + " MSPS)", o);
+    }
+
+    if (p) {
+        presentation::group("Power", o);
+        const bool valid = p->snapshot_valid == 1 && p->conflicting_snapshots == 0;
+        const bool sink = valid && p->attached_state == 2;
+        presentation::field("USB-C at startup", !valid ? std::string("Unknown (see och power)") :
+            !sink ? std::string("Not attached as sink") :
+            (p->source_current_ma >= 0 ? std::to_string(p->source_current_ma) + " mA available" : std::string("USB default current")),
+            o, !valid ? tone::muted : p->supports_3a == 1 ? tone::good : tone::warn);
+    }
+    presentation::end_group(o);
+    o << '\n';
+    if (f && f->mode == OCH_FW_MODE_BOOTLOADER)
+        presentation::status(presentation::level::warn, "Bridge is in its bootloader: och firmware boot, or och firmware update FILE.", o);
+    else if (f && f->mode == OCH_FW_MODE_LEGACY)
+        presentation::status(presentation::level::warn, "Bridge firmware predates 1.0.0: flash Merge.bin once with WCH-Link.", o);
+    presentation::note("Link speed is negotiated; RX and TX share one USB link and sample clock.", o);
+}
 void print_info(const och_device_info& i, bool json_mode, const och_power_status* power = nullptr,
-                const och_firmware_info* bridge = nullptr) {
+                const och_firmware_info* bridge = nullptr, const och_time_status* time = nullptr) {
     if (json_mode) {
         std::cout << "{\"serial\":" << json(i.serial) << ",\"name\":" << json(i.name)
             << ",\"driver\":" << json(i.driver) << ",\"firmware\":" << json(i.firmware)
@@ -238,13 +318,14 @@ void print_info(const och_device_info& i, bool json_mode, const och_power_status
             std::cout << "]}";
         }
         if (bridge) std::cout << ",\"bridge\":" << firmware_json(*bridge);
+        if (time) std::cout << ",\"time\":" << time_json(*time);
         if (power) std::cout << ",\"power\":" << power_json(*power);
         std::cout << '}';
+    } else if (power || bridge || time) {
+        print_device_summary(i, bridge, time, power);
     } else {
-        presentation::device(i, power != nullptr, std::cout);
-        if (bridge) print_firmware(*bridge);
+        presentation::device(i, false, std::cout);
     }
-    if (!json_mode && power) print_power(*power);
 }
 std::string stats_json(const och_stats& s, unsigned channels_count) {
     double seconds = static_cast<double>(s.elapsed_ns) / 1e9;
@@ -387,8 +468,8 @@ int run_stream(const options& opt) {
     if (opt.has("buffer-mib")) args.host_buffer_bytes = static_cast<uint32_t>(integer(opt.get("buffer-mib"), 512) * 1048576);
     if (opt.has("queue")) args.usb_queue_depth = u32(opt.get("queue"));
     if (opt.has("block")) args.transfer_bytes = u32(opt.get("block"));
-    if (!args.transfer_bytes || args.transfer_bytes > 1048576 || args.transfer_bytes % 49152)
-        throw std::invalid_argument("block must be a multiple of 49152, at most 1048576");
+    if (!args.transfer_bytes || args.transfer_bytes > 1048576 || args.transfer_bytes % 16384)
+        throw std::invalid_argument("block must be a multiple of 16384, at most 1048576");
     if (args.usb_queue_depth < 2 || args.usb_queue_depth > 128) throw std::invalid_argument("queue must be 2..128");
     if (args.host_buffer_bytes < args.transfer_bytes * 4ull) throw std::invalid_argument("host buffer must hold at least four USB blocks");
 
@@ -457,7 +538,8 @@ int run_stream(const options& opt) {
         metadata.open(std::filesystem::u8path(opt.get("file") + ".metadata.jsonl"), std::ios::trunc);
         if (!output || !metadata) throw std::runtime_error("cannot create RX capture and metadata files");
         metadata << "{\"type\":\"capture\",\"version\":" << json(och_version()) << ",\"format\":" << json(format_name(format))
-            << ",\"config\":" << config_json(config) << ",\"hardware_timestamps\":false}\n";
+            << ",\"config\":" << config_json(config) << ",\"hardware_timestamps\":"
+            << (device.info().hardware_timestamps ? "true" : "false") << "}\n";
     }
     std::unique_ptr<och::stream> rx, tx;
     if (do_rx) { args.direction = OCH_RX; args.format = format; rx = std::make_unique<och::stream>(device, args); }
@@ -520,6 +602,8 @@ int run_stream(const options& opt) {
                             << ",\"sample_index\":" << m.sample_index << ",\"flags\":" << m.flags
                             << ",\"host_dropped_samples\":" << m.host_dropped_samples
                             << ",\"device_dropped_samples\":" << m.device_dropped_samples
+                            << ",\"time_ticks\":" << ((m.flags & OCH_META_HAS_TIME) ? std::to_string(m.time_ticks) : std::string("null"))
+                            << ",\"tick_rate\":" << m.tick_rate
                             << ",\"host_monotonic_ns\":" << m.host_monotonic_ns << "}\n";
                         if (!metadata) throw std::runtime_error("RX metadata write failed");
                     }
@@ -972,7 +1056,9 @@ int execute(const options& opt) {
         auto info = d.info(); auto power = d.power_status();
         och_firmware_info bridge{}; bridge.struct_size = sizeof bridge;
         och::check(och_get_firmware_info(d.native_handle(), &bridge));
-        print_info(info, json_mode, &power, &bridge);
+        och_time_status time{}; time.struct_size = sizeof time;
+        const bool have_time = och_get_time(d.native_handle(), &time) == OCH_OK;
+        print_info(info, json_mode, &power, &bridge, have_time ? &time : nullptr);
         if (json_mode) std::cout << '\n';
         return 0;
     }

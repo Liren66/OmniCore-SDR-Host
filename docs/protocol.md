@@ -4,7 +4,7 @@
 
 ## 能力与端点
 
-固件名字可能保持 `SDK_CMD_1.0_20261023`，不能仅按名字判断扩展是否存在。通过 `host_protocol?` 确认 `host_protocol=1`，通过 `system_info?` 确认 `header_on=rx_start_and_overflow_recovery`；FIR 和安全时钟配置还分别要求 `fir_upload=1`、`clock_config=1`。
+不能仅按固件名字判断扩展是否存在。通过 `host_protocol?` 确认 `host_protocol=1`，通过 `system_info?` 确认 `transport=framed16k`（0.6.0 起必需；旧固件的 `header_on=rx_start_and_overflow_recovery` 不再接受）；硬件时间 API 还要求 `hw_time=1`，FIR 和安全时钟配置分别要求 `fir_upload=1`、`clock_config=1`。
 
 RX 校正扩展要求 `system_info?` 含 `rx_correction=1`。`rx_dc_correction?` / `rx_dc_correction=0|1` 同时控制 AD9361 RF 与基带直流跟踪，`rx_iq_correction?` / `rx_iq_correction=0|1` 控制 RX 正交跟踪，均作用于两个物理接收通道。回应的同名标量为 0/1，后面可附加状态字段。SDK setter 要求流已停止，OCH typed API 负责协调现有 RX/TX 会话；CH32 控制/数据协议不变。
 
@@ -12,8 +12,8 @@ RX 校正扩展要求 `system_info?` 含 `rx_correction=1`。`rx_dc_correction?`
 
 | USB 端点 | 用途 |
 |---|---|
-| 0x01 OUT | TX packed12 IQ，或显式选择的 2TX2RX signed8 IQ |
-| 0x81 IN | RX packed12/signed8 IQ 与不变的 16 KiB 起始头 |
+| 0x01 OUT | TX 成帧块：16 B 头（HAS_TIME/SOB/EOB、序号、样点时间）+ packed12 或 2TX2RX signed8 IQ |
+| 0x81 IN | RX 成帧块：16 B 头（标志、序号、有效帧数、首样点时间）+ packed12/signed8 IQ |
 | 0x02 OUT | CH32/ZYNQ 控制命令文本 |
 | 0x82 IN | 命令响应与异步 EVT |
 | 0x83 IN | 可选的现有 CH32 调试日志；电源查询读取启动快照 |
@@ -45,11 +45,54 @@ RSP id=42 end result=0
 
 不能用“若干毫秒没有新字节”判断成功。必须收到完整事务结束记录，否则报告超时/失败。超时后控制会话视为不可继续使用，应等待设备完成响应，再关闭并重新打开，避免把迟到响应用于下一条命令。
 
-## 异步事件和 RX 边界
+## 异步事件
 
 `EVT ` 开头的行是异步事件，可在命令前、响应中间或响应后到达。控制线程把它送入有界事件队列，不附加到响应体，也不据此完成命令；队列未及时消费时 `event_drops` 可增加。
 
-RX 每次启动及 SDK 溢出恢复后，由 FPGA 发送完整 16384 字节递增头：`00 01 ... FF` 重复 64 次。新 IQ epoch 从数据流中完整头之后开始；EVT 到达时刻不能确定 IQ 字节偏移。没有精确设备丢样计数或硬件时间戳。起始头没有序号、CRC 或转义机制，因此它不是完整端到端校验帧。
+FPGA 的定时事件带样点时间，由 SDK 按以下格式上报，OCH 映射为对应的 `och_event.type`，并填入 `hw_time`、`code` 和 `block`：
+
+~~~text
+EVT tseq=<n> type=<name> src=fpga_time code=<n> block=<seq> time=<ticks> lost_before=<0|1>
+EVT tseq=<n> type=time_invalidated src=sdk old_rate=<Hz> new_rate=<Hz>
+~~~
+
+| SDK type | code | OCH 事件 |
+|---|---|---|
+| `tx_burst_ack` | 0x01 | `OCH_EVENT_TX_BURST_ACK` |
+| `tx_underflow` | 0x02 | `OCH_EVENT_TX_UNDERFLOW` |
+| `tx_late` | 0x03 | `OCH_EVENT_TX_LATE` |
+| `tx_seq_error` / `tx_header_error` | 0x04 / 0x05 | `OCH_EVENT_TX_ERROR` |
+| `rx_overflow_gap` | 0x10 | `OCH_EVENT_RX_GAP` |
+| `rx_late_command` / `rx_command_ignored` | 0x11 / 0x12 | `OCH_EVENT_RX_LATE` |
+| `time_invalidated` | — | `OCH_EVENT_TIME_INVALIDATED` |
+
+## 成帧块格式
+
+![16 KiB 块格式](images/wire-format.svg)
+
+IQ 端点上的每个 16384 B 块 = 16 B 头 + 16368 B 载荷。块头为 4 个小端 u32：
+
+~~~text
+h0 = 0x4F43_0000 | flags<<8 | check     字节序：check, flags, 'C', 'O'
+h1 = seq<<16 | valid                    valid = 本块有效帧数，其后补零
+h2 = time[31:0]，h3 = time[63:32]       本块第一个样点的时间，1 tick = 1 个样点
+check = 字节 1..15 的 XOR
+~~~
+
+| 方向 | flags |
+|---|---|
+| RX | bit0 TIME_VALID，bit1 SOB，bit2 GAP（此块之前丢过样），bit3 EOB，bit4 LATE，bit5 PAD |
+| TX | bit0 HAS_TIME，bit1 SOB，bit3 EOB；`valid=0` 的块被丢弃 |
+
+| wire 格式 | 每帧 | 每块帧数 |
+|---|---:|---:|
+| 12bit 单通道 | 3 B | 5456 |
+| 12bit 双通道 | 6 B | 2728 |
+| 8bit 双通道 | 4 B | 4092 |
+
+USB 请求完成边界总是 16 KiB 的整数倍，因此块头总在请求内对齐；核心仍按字节流解析，遇到校验失败会重新搜索块头。
+
+时间相关的 SDK 命令（`time_now?/=`、`time_next_pps=`、`time_last_pps?`、`time_source=`、`time_status?`、`rx_timed=`、`rx_stream=`、`rx_stream_stop!`）由 OCH 的时间 API 调用，详见 [硬件时间戳](timestamps.md) 和 Firmware 仓库的 `docs/sdk-commands.md`。
 
 现有控制台的 UART 接收有有限软件缓冲，错误/溢出时丢弃已排队和部分解析命令，到后续行边界重新同步，并可能输出：
 
@@ -114,7 +157,7 @@ clock_chain ref=<Hz> unit=Hz rx=<six CSV rates> tx=<six CSV rates>
 
 `clock_sample_rate` 计算合法共享链，不能降速回退。完整链的时钟暂存槽与 FIR 槽独立，begin 替换旧 token；commit 要求同一 token 已提交两个方向，并在应用之前消耗 token。所有频率为正 uint32 Hz，RX/TX 的 BBPLL 与最终采样率必须相同，Fs 不高于 61.44 MHz。
 
-设备检查 BBPLL 715..1430 MHz、ADC 25..640 MHz、DAC 不高于 320 MHz、可用整数分频/半带因子、FIR 因子和有效 taps 运算预算。AD9361 参考钟仍为板上 40 MHz；可通过独立 ADF4002 命令选择外部 10 MHz 驯服，PPS 命令只提供频率监控，不提供设备间同步。详见 [PPS 协议字段](pps.md)。
+设备检查 BBPLL 715..1430 MHz、ADC 25..640 MHz、DAC 不高于 320 MHz、可用整数分频/半带因子、FIR 因子和有效 taps 运算预算。AD9361 参考钟仍为板上 40 MHz；可通过独立 ADF4002 命令选择外部 10 MHz 驯服。PPS 频率监控见 [PPS 协议字段](pps.md)；用 PPS 装载硬件时间见 [硬件时间戳](timestamps.md)。
 
 ## 应用、校验与恢复
 
@@ -129,4 +172,4 @@ ERR fir_or_clock_apply ... rollback=failed applied=unknown ...
 
 后一种情况把 RF/数字状态标为无效，成功 `rf_reinit!` 前禁止流。主机在任何失败硬件修改后使配置缓存失效，应用应确认恢复并重新配置。`rf_reinit!` 可重载 RAM 中保留的当前自定义 FIR/时钟；断电或重新下载 ELF 会丢失 RAM 自定义状态。
 
-主机源码构建和安装均不编译、下载或写入 SDK、CH32、FPGA、BOOT.bin 或启动 Flash。板级工程独立位于同级 `AD9361_Template_1`，须按其自身流程管理兼容固件。
+主机源码构建和安装均不编译、下载或写入 SDK、CH32、FPGA、BOOT.bin 或启动 Flash。板级固件在 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) 仓库，须按其自身流程构建和发布。

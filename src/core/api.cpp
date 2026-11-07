@@ -1,5 +1,6 @@
 #include "internal.hpp"
 #include <limits>
+#include <cstddef>
 using namespace och::core;
 namespace {
 thread_local std::string last_error;
@@ -9,11 +10,20 @@ template<class F> int protect(F f) noexcept {
     catch(...){last_error="unexpected internal error";return OCH_IO;}
 }
 template<class T> void out_struct(T* p){require(p && p->struct_size==sizeof(T),OCH_INVALID,"output struct_size mismatch");}
+// Structures extended in 0.6.0 accept the earlier, shorter layout too.
+constexpr size_t meta_v1=offsetof(och_metadata,time_ticks), event_v1=offsetof(och_event,hw_time);
+template<class T> void out_struct_v(T* p,size_t v1){require(p && (p->struct_size==sizeof(T)||p->struct_size==v1),OCH_INVALID,"output struct_size mismatch");}
+void put_meta(och_metadata* out,const och_metadata& m){const auto n=out->struct_size;memcpy(out,&m,n);out->struct_size=n;}
 void device(och_device* p){require(p!=nullptr,OCH_INVALID,"null device");}
 void stream(och_stream* s,unsigned direction){require(s && s->args.direction==direction,OCH_INVALID,"wrong or null stream direction");}
 och_metadata adjusted(och_stream* s,const och::core::Ring::Block& b) {
     auto m=b.meta;m.sample_index+=s->recv_offset/s->group;
-    if(s->recv_offset){m.flags=OCH_META_TIME_UNKNOWN;m.host_dropped_samples=0;m.device_dropped_samples=0;}
+    if(s->recv_offset){
+        const bool timed=(m.flags&OCH_META_HAS_TIME)!=0;
+        m.flags=timed?uint32_t(OCH_META_HAS_TIME|(m.flags&OCH_META_END_OF_BURST)):uint32_t(OCH_META_TIME_UNKNOWN);
+        m.host_dropped_samples=0;m.device_dropped_samples=0;
+        if(timed)m.time_ticks+=s->recv_offset/s->group;
+    }
     return m;
 }
 int await_rx(och_stream* s,uint32_t timeout) {
@@ -98,14 +108,14 @@ int och_command(och_device* d,const char* cmd,char* reply,size_t capacity,uint32
     require(result.size()<capacity,OCH_BUFFER_SMALL,"command reply buffer too small (reply truncated)");return OCH_OK;
 });}
 int och_poll_event(och_device* d,och_event* e,uint32_t timeout){return protect([&]{
-    device(d);out_struct(e);std::unique_lock<std::mutex> lock(d->events_mutex);
+    device(d);out_struct_v(e,event_v1);std::unique_lock<std::mutex> lock(d->events_mutex);
     if(!d->events_cv.wait_for(lock,std::chrono::milliseconds(timeout),[&]{return !d->events.empty();}))return OCH_TIMEOUT;
-    *e=d->events.front();d->events.pop_front();return OCH_OK;
+    const auto n=e->struct_size;memcpy(e,&d->events.front(),n);e->struct_size=n;d->events.pop_front();return OCH_OK;
 });}
 int och_create_stream(och_device* d,const och_stream_args* a,och_stream** out){return protect([&]{
     device(d);require(a&&out,OCH_INVALID,"null stream arguments");*out=nullptr;
     require(a->struct_size==sizeof(*a) && a->direction<=OCH_TX && a->format<=OCH_SC8,OCH_INVALID,"stream ABI/direction/format invalid");
-    require(a->transfer_bytes>=49152 && a->transfer_bytes<=1048576 && a->transfer_bytes%49152==0,OCH_INVALID,"transfer_bytes must be a multiple of 49152 in 49152..1048576");
+    require(a->transfer_bytes>=16384 && a->transfer_bytes<=1048576 && a->transfer_bytes%16384==0,OCH_INVALID,"transfer_bytes must be a multiple of 16384 in 16384..1048576");
     require(a->usb_queue_depth>=2 && a->usb_queue_depth<=128,OCH_INVALID,"USB queue depth must be 2..128");
     require(a->host_buffer_bytes>=a->transfer_bytes*4ULL && a->host_buffer_bytes<=512U*1024*1024,OCH_INVALID,"host buffer must hold at least four blocks and at most 512 MiB");
     std::lock_guard<std::mutex> lock(d->state_mutex);require(d->configured,OCH_INVALID,"configure before creating streams");
@@ -125,11 +135,11 @@ int och_start(och_stream* s){return protect([&]{require(s!=nullptr,OCH_INVALID,"
 int och_stop(och_stream* s,uint32_t timeout){return protect([&]{require(s!=nullptr,OCH_INVALID,"null stream");std::lock_guard<std::mutex> lock(s->dev->state_mutex);s->stop(timeout);return OCH_OK;});}
 int och_flush(och_stream* s,uint32_t timeout){return protect([&]{stream(s,OCH_TX);std::unique_lock<std::mutex> io(s->io_mutex,std::try_to_lock);require(io.owns_lock(),OCH_BUSY,"TX IO in progress");s->flush(timeout);return OCH_OK;});}
 int och_recv(och_stream* s,void* output,size_t capacity,size_t* received,och_metadata* m,uint32_t timeout){return protect([&]{
-    stream(s,OCH_RX);require(output&&capacity&&received,OCH_INVALID,"invalid receive buffer");*received=0;out_struct(m);
+    stream(s,OCH_RX);require(output&&capacity&&received,OCH_INVALID,"invalid receive buffer");*received=0;out_struct_v(m,meta_v1);
     std::unique_lock<std::mutex> io(s->io_mutex,std::try_to_lock);if(!io.owns_lock() || s->reconfiguring)return OCH_TIMEOUT;
     require(!s->lease,OCH_BUSY,"release zero-copy lease before recv");
     int rc=await_rx(s,timeout);if(rc)return static_cast<och_result>(rc);
-    auto b=s->ring.read();size_t frames=std::min(capacity,(b->size-s->recv_offset)/s->group);auto p=b->data.get()+s->recv_offset;*m=adjusted(s,*b);
+    auto b=s->ring.read();size_t frames=std::min(capacity,(b->size-s->recv_offset)/s->group);auto p=b->data.get()+s->recv_offset;put_meta(m,adjusted(s,*b));
     if(s->args.format==OCH_SC8)memcpy(output,p,frames*s->group);
     else if(s->args.format==OCH_PACKED12){if(s->wire_bytes==2)och::dsp::unpack8_packed12(p,static_cast<uint8_t*>(output),frames*s->nchan);else memcpy(output,p,frames*s->group);}
     else if(s->args.format==OCH_SC16){require(reinterpret_cast<uintptr_t>(output)%alignof(int16_t)==0,OCH_INVALID,"sc16 buffer alignment");
@@ -140,15 +150,21 @@ int och_recv(och_stream* s,void* output,size_t capacity,size_t* received,och_met
     if(s->recv_offset==b->size){s->ring.release();s->recv_offset=0;}return OCH_OK;
 });}
 int och_rx_acquire(och_stream* s,const void** data,size_t* bytes,och_metadata* m,uint32_t timeout){return protect([&]{
-    stream(s,OCH_RX);require(data&&bytes,OCH_INVALID,"null lease output");*data=nullptr;*bytes=0;out_struct(m);
+    stream(s,OCH_RX);require(data&&bytes,OCH_INVALID,"null lease output");*data=nullptr;*bytes=0;out_struct_v(m,meta_v1);
     std::unique_lock<std::mutex> io(s->io_mutex,std::try_to_lock);if(!io.owns_lock() || s->reconfiguring)return OCH_TIMEOUT;
     require(!s->lease,OCH_BUSY,"only one RX lease allowed");
     int rc=await_rx(s,timeout);if(rc)return static_cast<och_result>(rc);
-    auto b=s->ring.read();*data=b->data.get()+s->recv_offset;*bytes=b->size-s->recv_offset;*m=adjusted(s,*b);s->lease=true;return OCH_OK;
+    auto b=s->ring.read();*data=b->data.get()+s->recv_offset;*bytes=b->size-s->recv_offset;put_meta(m,adjusted(s,*b));s->lease=true;return OCH_OK;
 });}
 int och_rx_release(och_stream* s){return protect([&]{stream(s,OCH_RX);std::lock_guard<std::mutex> io(s->io_mutex);require(s->lease,OCH_INVALID,"no RX lease");auto b=s->ring.read();s->samples+=(b->size-s->recv_offset)/s->group;s->ring.release();s->recv_offset=0;s->lease=false;return OCH_OK;});}
-int och_send(och_stream* s,const void* data,size_t count,size_t* accepted,uint32_t timeout){return protect([&]{
+namespace {
+int send_impl(och_stream* s,const void* data,size_t count,const och_tx_metadata* md,size_t* accepted,uint32_t timeout){return protect([&]{
     stream(s,OCH_TX);require(accepted && (data||!count),OCH_INVALID,"invalid TX input");*accepted=0;
+    uint32_t mflags=0;uint64_t mtime=0;
+    if(md){
+        require(md->struct_size==sizeof(*md) && !(md->flags&~uint32_t(OCH_TX_HAS_TIME|OCH_TX_START_OF_BURST|OCH_TX_END_OF_BURST)),OCH_INVALID,"invalid och_tx_metadata");
+        mflags=md->flags;mtime=md->time_ticks;
+    }
     std::unique_lock<std::mutex> io(s->io_mutex,std::try_to_lock);if(!io.owns_lock() || s->reconfiguring)return OCH_TIMEOUT;
     require(count<=std::numeric_limits<size_t>::max()/(8*s->nchan),OCH_INVALID,"sample count overflow");
     require(!s->flushing,OCH_BUSY,"TX flush in progress");if(s->stop_requested)return OCH_STOPPED;
@@ -172,11 +188,39 @@ int och_send(och_stream* s,const void* data,size_t count,size_t* accepted,uint32
         else if(s->args.format==OCH_PACKED12){if(s->wire_bytes==2)och::dsp::pack8_packed12(src,b->data.get(),frames*s->nchan);else memcpy(b->data.get(),src,frames*s->group);}
         else if(s->args.format==OCH_SC16)(s->wire_bytes==2?och::dsp::pack8_sc16:och::dsp::pack_sc16)(reinterpret_cast<const int16_t*>(src),b->data.get(),frames*s->nchan);
         else (s->wire_bytes==2?och::dsp::pack8_fc32:och::dsp::pack_fc32)(reinterpret_cast<const float*>(src),b->data.get(),frames*s->nchan);
-        och_metadata empty{};s->ring.publish(frames*s->group,empty);*accepted+=frames;s->samples+=frames;
+        och_metadata tag{};
+        if(*accepted==0){tag.flags=mflags&(OCH_TX_HAS_TIME|OCH_TX_START_OF_BURST);tag.time_ticks=mtime;}
+        if(*accepted+frames==count)tag.flags|=mflags&OCH_TX_END_OF_BURST;
+        s->ring.publish(frames*s->group,tag);*accepted+=frames;s->samples+=frames;
         auto used=s->ring.queued();if(used>s->peak)s->peak=used;
     }
     return OCH_OK;
 });}
+}
+int och_send(och_stream* s,const void* data,size_t count,size_t* accepted,uint32_t timeout){return send_impl(s,data,count,nullptr,accepted,timeout);}
+int och_send_burst(och_stream* s,const void* data,size_t count,const och_tx_metadata* md,size_t* accepted,uint32_t timeout){
+    return send_impl(s,data,count,md,accepted,timeout);
+}
+int och_get_time(och_device* d,och_time_status* t){return protect([&]{
+    device(d);out_struct(t);std::lock_guard<std::mutex> lock(d->state_mutex);*t=d->get_time();return OCH_OK;});}
+int och_set_time(och_device* d,uint64_t ticks,uint32_t at_next_pps){return protect([&]{
+    device(d);require(at_next_pps<=1,OCH_INVALID,"at_next_pps must be 0 or 1");
+    std::lock_guard<std::mutex> lock(d->state_mutex);d->require_capability("hw_time");
+    d->command((at_next_pps?"time_next_pps=":"time_now=")+std::to_string(ticks));return OCH_OK;});}
+int och_set_time_source(och_device* d,uint32_t source){return protect([&]{
+    device(d);require(source<=OCH_TIME_SOURCE_INTERNAL,OCH_INVALID,"time source must be 0..2");
+    std::lock_guard<std::mutex> lock(d->state_mutex);d->require_capability("hw_time");
+    static const char* names[]={"none","external","internal"};
+    d->command(std::string("time_source=")+names[source]);return OCH_OK;});}
+int och_rx_command(och_stream* s,uint32_t flags,uint64_t time,uint32_t num_samples){return protect([&]{
+    stream(s,OCH_RX);
+    require((s->args.start_flags&OCH_RX_TIMED)!=0,OCH_INVALID,"och_rx_command requires an RX stream created with OCH_RX_TIMED");
+    require(!(flags&~uint32_t(OCH_RX_NOW|OCH_RX_STOP)),OCH_INVALID,"invalid RX command flags");
+    std::lock_guard<std::mutex> lock(s->dev->state_mutex);
+    require(s->started,OCH_INVALID,"start the RX stream before issuing commands");
+    if(flags&OCH_RX_STOP)s->dev->command("rx_stream_stop!");
+    else s->dev->command("rx_stream="+((flags&OCH_RX_NOW)?std::string("now"):std::to_string(time))+" "+std::to_string(num_samples));
+    return OCH_OK;});}
 int och_get_stats(och_stream* s,och_stats* st){return protect([&]{
     require(s!=nullptr,OCH_INVALID,"null stream");out_struct(st);*st={};st->struct_size=sizeof(*st);st->running=s->running;
     st->usb_bytes=s->usb_bytes;st->samples=s->samples;st->host_dropped_samples=s->host_dropped;st->headers=s->headers;st->resyncs=s->resyncs;
