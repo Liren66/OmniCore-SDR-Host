@@ -1,0 +1,33 @@
+# OmniCore Host code style.
+# Matches the CLion formatting of commit 43b4487 (4 spaces, 120 columns,
+# indented namespaces, `T *p` / `T &r`). Only whitespace may change:
+# include order and comments are left alone.
+# Format: clang-format -i <files>   (clang-format 18 or newer)
+BasedOnStyle: LLVM
+Language: Cpp
+IndentWidth: 4
+ContinuationIndentWidth: 8
+ColumnLimit: 120
+NamespaceIndentation: All
+AccessModifierOffset: -4
+EmptyLineBeforeAccessModifier: LogicalBlock
+PointerAlignment: Right
+ReferenceAlignment: Right
+SpaceAfterCStyleCast: true
+SpaceAfterTemplateKeyword: false
+SpaceBeforeRangeBasedForLoopColon: false
+AlwaysBreakTemplateDeclarations: Yes
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+LineEnding: LF
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+# Windows headers depend on include order.
+SortIncludes: Never
+IncludeBlocks: Preserve
+SortUsingDeclarations: Never
+FixNamespaceComments: false
+ReflowComments: false
+BreakStringLiterals: false
