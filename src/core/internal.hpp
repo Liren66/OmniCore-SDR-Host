@@ -16,11 +16,12 @@ namespace och::core {
     struct Failure : std::runtime_error {
         int code;
 
-        Failure(int c, const std::string &s) : std::runtime_error(s), code(c) {
-        }
+        Failure(int c, const std::string &s) : std::runtime_error(s), code(c) {}
     };
 
-    inline void require(bool ok, int code, const std::string &why) { if (!ok)throw Failure(code, why); }
+    inline void require(bool ok, int code, const std::string &why) {
+        if (!ok) throw Failure(code, why);
+    }
 
     inline uint64_t now_ns() {
         return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
@@ -49,7 +50,7 @@ namespace och::core {
         T front() const { return values[first]; }
 
         void push_back(T p) {
-            if (count == N)throw std::logic_error("fixed USB queue overflow");
+            if (count == N) throw std::logic_error("fixed USB queue overflow");
             values[(first + count) % N] = p;
             ++count;
         }
@@ -91,8 +92,8 @@ namespace och::core {
 
     void sync_trigger(och_device &, uint32_t mode);
 
-    void multi_sync(och_device * const * devices, size_t count, const och_multi_sync_args &,
-                    och_multi_sync_result * results);
+    void multi_sync(och_device *const *devices, size_t count, const och_multi_sync_args &,
+                    och_multi_sync_result *results);
 }
 
 struct och_device {
@@ -248,7 +249,7 @@ struct och_stream {
     uint8_t blk_flags = 0;
     uint64_t blk_time = 0;
     uint16_t tx_seq = 0;
-    std::vector<std::unique_ptr<Slot> > slots;
+    std::vector<std::unique_ptr<Slot>> slots;
     och::core::FixedQueue<Slot *, 128> active;
     och::transport::Handle stop_event;
     std::thread worker;
@@ -260,8 +261,8 @@ struct och_stream {
     std::atomic<bool> reconfiguring{false};
     std::mutex failure_mutex;
     std::string failure;
-    std::atomic<uint64_t> usb_bytes{0}, samples{0}, host_dropped{0}, headers{0}, resyncs{0}, peak{0}, pending{0}, errors
-                    {0}, starved{0}, padding{0};
+    std::atomic<uint64_t> usb_bytes{0}, samples{0}, host_dropped{0}, headers{0}, resyncs{0}, peak{0}, pending{0},
+            errors{0}, starved{0}, padding{0};
     std::atomic<uint64_t> cancelled_bytes{0};
     std::atomic<size_t> assembling{0};
     std::atomic<uint64_t> started_ns{0}, ended_ns{0};

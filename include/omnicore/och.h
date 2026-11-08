@@ -4,13 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #if defined(_WIN32)
-# if defined(OCH_BUILD)
-#  define OCH_API __declspec(dllexport)
-# else
-#  define OCH_API __declspec(dllimport)
-# endif
+#if defined(OCH_BUILD)
+#define OCH_API __declspec(dllexport)
 #else
-# define OCH_API __attribute__((visibility("default")))
+#define OCH_API __declspec(dllimport)
+#endif
+#else
+#define OCH_API __attribute__((visibility("default")))
 #endif
 #ifdef __cplusplus
 extern "C" {
@@ -21,36 +21,64 @@ extern "C" {
 typedef struct och_device och_device;
 typedef struct och_stream och_stream;
 typedef enum och_result {
-    OCH_OK=0, OCH_TIMEOUT=-1, OCH_INVALID=-2, OCH_NOT_FOUND=-3,
-    OCH_BUSY=-4, OCH_IO=-5, OCH_UNSUPPORTED=-6, OCH_STOPPED=-7,
-    OCH_BUFFER_SMALL=-8, OCH_PROTOCOL=-9
+    OCH_OK = 0,
+    OCH_TIMEOUT = -1,
+    OCH_INVALID = -2,
+    OCH_NOT_FOUND = -3,
+    OCH_BUSY = -4,
+    OCH_IO = -5,
+    OCH_UNSUPPORTED = -6,
+    OCH_STOPPED = -7,
+    OCH_BUFFER_SMALL = -8,
+    OCH_PROTOCOL = -9
 } och_result;
-typedef enum och_direction { OCH_RX=0, OCH_TX=1 } och_direction;
-typedef enum och_format { OCH_PACKED12=0, OCH_SC16=1, OCH_FC32=2, OCH_SC8=3 } och_format;
-enum { OCH_META_START=1u, OCH_META_DISCONTINUITY=2u, OCH_META_HOST_OVERFLOW=4u,
-       OCH_META_DEVICE_OVERFLOW=8u, OCH_META_TIME_UNKNOWN=16u, /* no longer produced */
-       OCH_META_RECONFIGURED=32u,
-       /* Framed USB transport (always on since 0.6.0): */
-       OCH_META_HAS_TIME=64u,      /* time_ticks is the hardware time of the first sample */
-       OCH_META_END_OF_BURST=128u, /* last samples of a finite/stopped RX command */
-       OCH_META_LATE=256u };       /* the RX command time had already passed */
-enum { OCH_EVENT_DEVICE=1, OCH_EVENT_RX_SYNC=2, OCH_EVENT_HOST_OVERFLOW=3,
-       OCH_EVENT_TRANSPORT=4, OCH_EVENT_TX_STARVED=5, OCH_EVENT_RECONFIGURED=6,
-       /* Hardware-timed events (FPGA event FIFO); och_event.hw_time is valid. */
-       OCH_EVENT_TX_BURST_ACK=7, OCH_EVENT_TX_LATE=8, OCH_EVENT_TX_UNDERFLOW=9,
-       OCH_EVENT_TX_ERROR=10, OCH_EVENT_RX_GAP=11, OCH_EVENT_RX_LATE=12,
-       OCH_EVENT_TIME_INVALIDATED=13,
-       /* 0.7.0: AD9361_SYNC edges (firmware SDK_CMD_1.2, OC_SYNC_AXI); count = new edges. */
-       OCH_EVENT_SYNC_IN=14 };
+typedef enum och_direction { OCH_RX = 0, OCH_TX = 1 } och_direction;
+typedef enum och_format { OCH_PACKED12 = 0, OCH_SC16 = 1, OCH_FC32 = 2, OCH_SC8 = 3 } och_format;
+enum {
+    OCH_META_START = 1u,
+    OCH_META_DISCONTINUITY = 2u,
+    OCH_META_HOST_OVERFLOW = 4u,
+    OCH_META_DEVICE_OVERFLOW = 8u,
+    OCH_META_TIME_UNKNOWN = 16u, /* no longer produced */
+    OCH_META_RECONFIGURED = 32u,
+    /* Framed USB transport (always on since 0.6.0): */
+    OCH_META_HAS_TIME = 64u,      /* time_ticks is the hardware time of the first sample */
+    OCH_META_END_OF_BURST = 128u, /* last samples of a finite/stopped RX command */
+    OCH_META_LATE = 256u
+}; /* the RX command time had already passed */
+enum {
+    OCH_EVENT_DEVICE = 1,
+    OCH_EVENT_RX_SYNC = 2,
+    OCH_EVENT_HOST_OVERFLOW = 3,
+    OCH_EVENT_TRANSPORT = 4,
+    OCH_EVENT_TX_STARVED = 5,
+    OCH_EVENT_RECONFIGURED = 6,
+    /* Hardware-timed events (FPGA event FIFO); och_event.hw_time is valid. */
+    OCH_EVENT_TX_BURST_ACK = 7,
+    OCH_EVENT_TX_LATE = 8,
+    OCH_EVENT_TX_UNDERFLOW = 9,
+    OCH_EVENT_TX_ERROR = 10,
+    OCH_EVENT_RX_GAP = 11,
+    OCH_EVENT_RX_LATE = 12,
+    OCH_EVENT_TIME_INVALIDATED = 13,
+    /* 0.7.0: AD9361_SYNC edges (firmware SDK_CMD_1.2, OC_SYNC_AXI); count = new edges. */
+    OCH_EVENT_SYNC_IN = 14
+};
 /* TX burst metadata flags (och_send_burst). */
-enum { OCH_TX_HAS_TIME=1u, OCH_TX_START_OF_BURST=2u, OCH_TX_END_OF_BURST=8u };
+enum { OCH_TX_HAS_TIME = 1u, OCH_TX_START_OF_BURST = 2u, OCH_TX_END_OF_BURST = 8u };
 /* RX stream start / och_rx_command flags. */
-enum { OCH_RX_TIMED=1u,    /* stream args: RX waits for a command; start_time used */
-       OCH_RX_NOW=2u,      /* start immediately (ignore time) */
-       OCH_RX_STOP=4u };   /* och_rx_command: stop, finishing with END_OF_BURST */
+enum {
+    OCH_RX_TIMED = 1u, /* stream args: RX waits for a command; start_time used */
+    OCH_RX_NOW = 2u,   /* start immediately (ignore time) */
+    OCH_RX_STOP = 4u
+}; /* och_rx_command: stop, finishing with END_OF_BURST */
 /* PPS / time source for och_set_time_source. */
-enum { OCH_TIME_SOURCE_NONE=0, OCH_TIME_SOURCE_EXTERNAL=1, OCH_TIME_SOURCE_INTERNAL=2,
-       OCH_TIME_SOURCE_SYNC=3 /* 0.7.0: AD9361_SYNC (shared TRIG), needs sync capability */ };
+enum {
+    OCH_TIME_SOURCE_NONE = 0,
+    OCH_TIME_SOURCE_EXTERNAL = 1,
+    OCH_TIME_SOURCE_INTERNAL = 2,
+    OCH_TIME_SOURCE_SYNC = 3 /* 0.7.0: AD9361_SYNC (shared TRIG), needs sync capability */
+};
 typedef struct och_device_info {
     uint32_t struct_size, abi_version;
     char serial[128], name[128], driver[32], firmware[128];
@@ -65,7 +93,7 @@ typedef struct och_config {
     uint64_t rx_frequency, tx_frequency;
     uint32_t rx_bandwidth, tx_bandwidth;
     double rx_gain[2], tx_attenuation[2];
-    uint32_t rx_agc; /* 0 manual, 1 fast, 2 slow, 3 hybrid (device supported modes). */
+    uint32_t rx_agc;      /* 0 manual, 1 fast, 2 slow, 3 hybrid (device supported modes). */
     uint32_t usb_iq_bits; /* 0 or 12: legacy packed12. 8: signed8 wire, requires both masks=3.
                           * Occupies the first former reserved slot; ABI 1 size is unchanged.
                           * Destroy all streams before changing the wire format. */
@@ -76,8 +104,8 @@ typedef struct och_config {
 } och_config;
 typedef struct och_stream_args {
     uint32_t struct_size, direction, format;
-    uint32_t transfer_bytes; /* default196608, multiple of 16384, max1048576 */
-    uint32_t usb_queue_depth; /* default32 */
+    uint32_t transfer_bytes;    /* default196608, multiple of 16384, max1048576 */
+    uint32_t usb_queue_depth;   /* default32 */
     uint32_t host_buffer_bytes; /* default64MiB, allocated before start */
     /* RX, framed transport only: start_flags OCH_RX_TIMED makes the receiver
      * wait; och_start then issues one command at start_time (or OCH_RX_NOW)
@@ -87,11 +115,11 @@ typedef struct och_stream_args {
 } och_stream_args;
 typedef struct och_metadata {
     uint32_t struct_size, flags;
-    uint64_t epoch; /* increases at each start, gap or time discontinuity */
-    uint64_t sample_index; /* per-channel position within this epoch, NOT a HW timestamp */
-    uint64_t host_dropped_samples; /* known local loss since previous delivered block */
+    uint64_t epoch;                 /* increases at each start, gap or time discontinuity */
+    uint64_t sample_index;          /* per-channel position within this epoch, NOT a HW timestamp */
+    uint64_t host_dropped_samples;  /* known local loss since previous delivered block */
     int64_t device_dropped_samples; /* -1: unavailable in current FPGA protocol */
-    uint64_t host_monotonic_ns; /* observation time, NOT sample time */
+    uint64_t host_monotonic_ns;     /* observation time, NOT sample time */
     /* 0.6.0 extension (struct_size selects the layout; older sizes remain
      * accepted). Valid when flags has OCH_META_HAS_TIME. 1 tick = 1 sample. */
     uint64_t time_ticks;
@@ -103,7 +131,7 @@ typedef struct och_tx_metadata {
 } och_tx_metadata;
 typedef struct och_time_status {
     uint32_t struct_size, capable, valid, armed, source, ref_present, pps_count, tick_rate;
-    uint64_t now, last_pps;      /* sample ticks; now is a snapshot when read */
+    uint64_t now, last_pps; /* sample ticks; now is a snapshot when read */
     uint32_t framing, rx_timed, fpga_version, reserved[5];
 } och_time_status;
 typedef struct och_stats {
@@ -147,7 +175,7 @@ typedef struct och_clock_config {
 typedef struct och_rx_correction_config {
     uint32_t struct_size, dc_enabled, iq_enabled, reserved[5];
 } och_rx_correction_config;
-typedef enum och_signal_source { OCH_SOURCE_INTERNAL=0, OCH_SOURCE_EXTERNAL=1 } och_signal_source;
+typedef enum och_signal_source { OCH_SOURCE_INTERNAL = 0, OCH_SOURCE_EXTERNAL = 1 } och_signal_source;
 /* Nominal RF frequencies in Hz, not measurements of an external signal.
  * External LO input must be twice the nominal RF frequency (70 MHz..4 GHz).
  * Returning to internal restores the SDK's saved internal PLL frequency. */
@@ -191,8 +219,12 @@ typedef struct och_reference_status {
  * Show locked only when lock_known=1; 1 means abs(error)<=1 ppm, 0 means
  * outside tolerance. Otherwise locked=-1. This is not PLL/phase lock. */
 typedef enum och_pps_state {
-    OCH_PPS_DISABLED, OCH_PPS_WAITING, OCH_PPS_VALID, OCH_PPS_NO_SIGNAL,
-    OCH_PPS_INVALID_INTERVAL, OCH_PPS_CLOCK_UNAVAILABLE
+    OCH_PPS_DISABLED,
+    OCH_PPS_WAITING,
+    OCH_PPS_VALID,
+    OCH_PPS_NO_SIGNAL,
+    OCH_PPS_INVALID_INTERVAL,
+    OCH_PPS_CLOCK_UNAVAILABLE
 } och_pps_state;
 typedef struct och_pps_status {
     uint32_t struct_size, available, enabled, state, signal_present, frequency_valid;
@@ -216,12 +248,14 @@ typedef struct och_reference_test_result {
  * otherwise state=UNKNOWN, pa4_driving=-1, dac_code=-1 and the rest zero.
  * locked is -1 outside mode PPS; in PPS it is 1 when the CH32 phase loop
  * tracks within +/-1000 ns of the PPS edges. */
-typedef enum och_vcxo_mode {
-    OCH_VCXO_OFF=0, OCH_VCXO_REF=1, OCH_VCXO_PPS=2, OCH_VCXO_REF_PPS=3
-} och_vcxo_mode;
+typedef enum och_vcxo_mode { OCH_VCXO_OFF = 0, OCH_VCXO_REF = 1, OCH_VCXO_PPS = 2, OCH_VCXO_REF_PPS = 3 } och_vcxo_mode;
 typedef enum och_vcxo_state {
-    OCH_VCXO_STATE_OFF, OCH_VCXO_STATE_CALIBRATE, OCH_VCXO_STATE_ACQUIRE,
-    OCH_VCXO_STATE_TRACK, OCH_VCXO_STATE_HOLD, OCH_VCXO_STATE_UNKNOWN
+    OCH_VCXO_STATE_OFF,
+    OCH_VCXO_STATE_CALIBRATE,
+    OCH_VCXO_STATE_ACQUIRE,
+    OCH_VCXO_STATE_TRACK,
+    OCH_VCXO_STATE_HOLD,
+    OCH_VCXO_STATE_UNKNOWN
 } och_vcxo_state;
 typedef struct och_vcxo_status {
     uint32_t struct_size, requested_mode, applied_mode, pending;
@@ -245,46 +279,46 @@ typedef struct och_power_status {
     uint32_t struct_size, log_endpoint_present, snapshot_valid, conflicting_snapshots;
     uint32_t attached_state, current_detected;
     int32_t source_current_ma; /* -1 unknown, including USB-default advertisement */
-    int32_t supports_3a; /* -1 unknown/not attached as sink, 0 no, 1 yes */
+    int32_t supports_3a;       /* -1 unknown/not attached as sink, 0 no, 1 yes */
     uint32_t raw_08, raw_09, raw_0a;
-    uint32_t live;        /* 0.7.1: 1 = read on demand just now (bridge 1.0.1+) */
+    uint32_t live; /* 0.7.1: 1 = read on demand just now (bridge 1.0.1+) */
     uint32_t reserved[4];
 } och_power_status;
 /* timeout_ms: 0 returns this handle's cache; 1..2000 permits a bounded
  * query / EP83 read when no stream objects exist. During streaming, only the
  * cache is read. No reply/no EP83/timeout is OCH_OK with snapshot_valid=0,
  * never a false 3 A. Reads consume pending EP83 debug bytes. */
-OCH_API int och_get_power_status(och_device*, och_power_status*, uint32_t timeout_ms);
-OCH_API int och_get_fir(och_device*, och_direction, och_fir_config*);
+OCH_API int och_get_power_status(och_device *, och_power_status *, uint32_t timeout_ms);
+OCH_API int och_get_fir(och_device *, och_direction, och_fir_config *);
 /* Typed configuration changes pause existing streams and restore only the
  * directions that were running. Handles/buffers remain valid. RX leases must
  * be released first (BUSY otherwise). Failure stops both directions and
  * invalidates configuration; explicitly configure and recreate streams. */
-OCH_API int och_set_fir(och_device*, const och_fir_config*);
-OCH_API int och_set_fir_enabled(och_device*, uint32_t rx_enabled, uint32_t tx_enabled);
-OCH_API int och_get_clock(och_device*, och_clock_config*);
-OCH_API int och_set_clock(och_device*, const och_clock_config*);
+OCH_API int och_set_fir(och_device *, const och_fir_config *);
+OCH_API int och_set_fir_enabled(och_device *, uint32_t rx_enabled, uint32_t tx_enabled);
+OCH_API int och_get_clock(och_device *, och_clock_config *);
+OCH_API int och_set_clock(och_device *, const och_clock_config *);
 /* Sample rate (also och_configure): if the SDK has no exact clock plan for
  * the rate, e.g. 11.2 MSPS needs a BBPLL its fractional-N cannot hit exactly,
  * the nearest whole-Hz rate that it can hit is applied instead (11200011 Hz,
  * typically within ~20 Hz). Read the applied rate with och_get_config or
  * och_get_clock. Rates outside the clock/FIR limits still fail. */
-OCH_API int och_set_sample_rate(och_device*, uint32_t sample_rate_hz);
+OCH_API int och_set_sample_rate(och_device *, uint32_t sample_rate_hz);
 /* Requires SDK system_info rx_correction=1. get reads both current enables.
  * Setters preserve the other correction and verify readback. Unsupported
  * firmware and unchanged settings do not pause streams. Changed settings
  * use the same coordinated reconfiguration and failure semantics as above. */
-OCH_API int och_get_rx_correction(och_device*, och_rx_correction_config*);
-OCH_API int och_set_rx_dc_correction(och_device*, uint32_t enabled);
-OCH_API int och_set_rx_iq_correction(och_device*, uint32_t enabled);
+OCH_API int och_get_rx_correction(och_device *, och_rx_correction_config *);
+OCH_API int och_set_rx_dc_correction(och_device *, uint32_t enabled);
+OCH_API int och_set_rx_iq_correction(och_device *, uint32_t enabled);
 /* Requires SDK external_lo=1. Preserves the other direction, verifies source
  * and nominal frequencies, and synchronizes the och_config frequency cache.
  * Returning RX to another band also reads back band-clamped manual gains.
  * configure preserves source selection; external frequency writes only declare
  * the external generator's frequency, they cannot tune that generator. */
-OCH_API int och_get_lo_source(och_device*, och_lo_source_config*);
-OCH_API int och_set_rx_lo_source(och_device*, uint32_t source);
-OCH_API int och_set_tx_lo_source(och_device*, uint32_t source);
+OCH_API int och_get_lo_source(och_device *, och_lo_source_config *);
+OCH_API int och_set_rx_lo_source(och_device *, uint32_t source);
+OCH_API int och_set_tx_lo_source(och_device *, uint32_t source);
 /* Requires adf4002=1 and, for source changes, ref_source=1. Source 0 is internal
  * free-running and source 1 enables discipline from the external 10 MHz input.
  * No external-reference presence or lock guarantee is implied by success.
@@ -293,21 +327,21 @@ OCH_API int och_set_tx_lo_source(och_device*, uint32_t source);
  * a human must observe D5 to confirm chip communication. Unknown/failed source
  * state is readable but cannot be a setter no-op or self-test starting state.
  * Explicitly set internal to recover before testing; no RF reinit is implicit. */
-OCH_API int och_get_reference_status(och_device*, och_reference_status*);
+OCH_API int och_get_reference_status(och_device *, och_reference_status *);
 /* With SDK vcxo=1, selecting external waits up to 5 s for the CH32 PA4
  * high-Z handshake and fails with OCH_PROTOCOL if the SDK reports an error. */
-OCH_API int och_set_reference_source(och_device*, uint32_t source);
-OCH_API int och_test_reference(och_device*, och_reference_test_result*);
+OCH_API int och_set_reference_source(och_device *, uint32_t source);
+OCH_API int och_test_reference(och_device *, och_reference_test_result *);
 /* Requires SDK pps_monitor=1 and PPS-capable FPGA. Both calls are safe during
  * streaming (including an RX lease): no stop, reconfiguration or queue reset.
  * Enable persists across handles/RF reinit, but not firmware restart.
  * With SDK vcxo=1 and internal reference, enabling PPS starts the CH32 PA4
  * loop: its first calibration steps the 40 MHz oscillator by about 1-2 ppm
  * for 18 s, and acquisition then pulls it to the PPS frequency. */
-OCH_API int och_get_pps_status(och_device*, och_pps_status*);
-OCH_API int och_set_pps_enabled(och_device*, uint32_t enabled);
+OCH_API int och_get_pps_status(och_device *, och_pps_status *);
+OCH_API int och_set_pps_enabled(och_device *, uint32_t enabled);
 /* Requires SDK vcxo=1. Safe during streaming; no stop or reconfiguration. */
-OCH_API int och_get_vcxo_status(och_device*, och_vcxo_status*);
+OCH_API int och_get_vcxo_status(och_device *, och_vcxo_status *);
 /* Board services added in 0.3.5; existing ABI 1 structures are unchanged.
  * RGB defaults on at 15% channel scale; legacy 25% firmware is also supported.
  * Fan automatic control defaults off.
@@ -315,8 +349,15 @@ OCH_API int och_get_vcxo_status(och_device*, och_vcxo_status*);
  * not measured RPM. Invalid temperatures have value=0; always check valid.
  * milli_celsius is Zynq die temperature; age_ms=UINT32_MAX means no sample. */
 typedef enum och_rgb_state {
-    OCH_RGB_OFF, OCH_RGB_INITIALIZING, OCH_RGB_IDLE, OCH_RGB_RX, OCH_RGB_TX,
-    OCH_RGB_DUPLEX, OCH_RGB_RECOVERING, OCH_RGB_FAULT, OCH_RGB_OVERTEMP
+    OCH_RGB_OFF,
+    OCH_RGB_INITIALIZING,
+    OCH_RGB_IDLE,
+    OCH_RGB_RX,
+    OCH_RGB_TX,
+    OCH_RGB_DUPLEX,
+    OCH_RGB_RECOVERING,
+    OCH_RGB_FAULT,
+    OCH_RGB_OVERTEMP
 } och_rgb_state;
 typedef struct och_rgb_status {
     uint32_t struct_size, available, enabled, brightness_pct, state;
@@ -336,11 +377,11 @@ typedef struct och_core_temperature {
 /* Requires board_rgb / fan_control / core_temp capabilities respectively.
  * These calls preserve active streams, queues and outstanding RX leases.
  * Switches persist across RF reinit and host handles, not firmware restart. */
-OCH_API int och_get_rgb_status(och_device*, och_rgb_status*);
-OCH_API int och_set_rgb_enabled(och_device*, uint32_t enabled);
-OCH_API int och_get_fan_status(och_device*, och_fan_status*);
-OCH_API int och_set_fan_enabled(och_device*, uint32_t enabled);
-OCH_API int och_get_core_temperature(och_device*, och_core_temperature*);
+OCH_API int och_get_rgb_status(och_device *, och_rgb_status *);
+OCH_API int och_set_rgb_enabled(och_device *, uint32_t enabled);
+OCH_API int och_get_fan_status(och_device *, och_fan_status *);
+OCH_API int och_set_fan_enabled(och_device *, uint32_t enabled);
+OCH_API int och_get_core_temperature(och_device *, och_core_temperature *);
 
 /* RX symbol RSSI (0.4.7). Relative dB from the AD9361 RSSI word, higher is
  * stronger; NOT calibrated input power (gain table and front end apply).
@@ -355,8 +396,8 @@ typedef struct och_rx_rssi {
     double rssi_db[2];
     uint32_t reserved[4];
 } och_rx_rssi;
-OCH_API int och_get_rx_rssi(och_device*, och_rx_rssi*);
-OCH_API int och_set_rx_rssi_enabled(och_device*, uint32_t enabled);
+OCH_API int och_get_rx_rssi(och_device *, och_rx_rssi *);
+OCH_API int och_set_rx_rssi_enabled(och_device *, uint32_t enabled);
 
 /* CH32 bridge firmware (0.5.0). Uses USB EP0 vendor requests only, so it
  * works without the ZYNQ SDK and while the bridge runs its bootloader.
@@ -364,8 +405,8 @@ OCH_API int och_set_rx_rssi_enabled(och_device*, uint32_t enabled);
  * the bootloader (before 1.0.0); flash Merge.bin once with WCH-Link. The
  * serial argument selects a device as in och_open (NULL: the only one); the
  * device must not be open by another handle or process (BUSY). */
-enum { OCH_FW_MODE_LEGACY=0, OCH_FW_MODE_APP=1, OCH_FW_MODE_BOOTLOADER=2 };
-enum { OCH_FW_APP_PROGRAMMED=1u, OCH_FW_APP_HEADER_OK=2u, OCH_FW_APP_IMAGE_OK=4u };
+enum { OCH_FW_MODE_LEGACY = 0, OCH_FW_MODE_APP = 1, OCH_FW_MODE_BOOTLOADER = 2 };
+enum { OCH_FW_APP_PROGRAMMED = 1u, OCH_FW_APP_HEADER_OK = 2u, OCH_FW_APP_IMAGE_OK = 4u };
 typedef struct och_firmware_info {
     uint32_t struct_size, mode;
     uint32_t running_version;    /* bridge application or bootloader answering */
@@ -382,28 +423,33 @@ typedef struct och_firmware_image {
     char build_id[24];
     uint32_t reserved[4];
 } och_firmware_image;
-enum { OCH_FW_STAGE_BOOTLOADER=1, OCH_FW_STAGE_ERASE=2, OCH_FW_STAGE_WRITE=3,
-       OCH_FW_STAGE_VERIFY=4, OCH_FW_STAGE_RESTART=5 };
+enum {
+    OCH_FW_STAGE_BOOTLOADER = 1,
+    OCH_FW_STAGE_ERASE = 2,
+    OCH_FW_STAGE_WRITE = 3,
+    OCH_FW_STAGE_VERIFY = 4,
+    OCH_FW_STAGE_RESTART = 5
+};
 /* done/total are bytes for OCH_FW_STAGE_WRITE, otherwise 0/0 or 1/1. */
-typedef void (*och_firmware_progress)(void* user, uint32_t stage, uint32_t done, uint32_t total);
-OCH_API int och_firmware_query(const char* serial, och_firmware_info*);
-OCH_API int och_get_firmware_info(och_device*, och_firmware_info*); /* cached at och_open */
-OCH_API int och_firmware_read_image(const char* path, och_firmware_image*);
+typedef void (*och_firmware_progress)(void *user, uint32_t stage, uint32_t done, uint32_t total);
+OCH_API int och_firmware_query(const char *serial, och_firmware_info *);
+OCH_API int och_get_firmware_info(och_device *, och_firmware_info *); /* cached at och_open */
+OCH_API int och_firmware_read_image(const char *path, och_firmware_image *);
 /* Enters the bootloader if needed, erases, writes and verifies the image,
  * then restarts into it and confirms the new version (about 10-20 s). An
  * interrupted update leaves the device in the bootloader; run it again. */
-OCH_API int och_firmware_update(const char* serial, const char* path, och_firmware_progress, void* user);
-OCH_API int och_firmware_enter_bootloader(const char* serial);
-OCH_API int och_firmware_start_app(const char* serial); /* leave the bootloader */
+OCH_API int och_firmware_update(const char *serial, const char *path, och_firmware_progress, void *user);
+OCH_API int och_firmware_enter_bootloader(const char *serial);
+OCH_API int och_firmware_start_app(const char *serial); /* leave the bootloader */
 
-OCH_API const char* och_version(void);
-OCH_API const char* och_last_error(void); /* thread-local; valid until next failing call */
-OCH_API void och_default_config(och_config*);
-OCH_API void och_default_stream_args(och_stream_args*, och_direction);
-OCH_API int och_list(och_device_info* devices, size_t capacity, size_t* count);
-OCH_API int och_open(const char* serial, och_device**); /* NULL selects only connected device */
-OCH_API int och_close(och_device*); /* destroy streams first; otherwise BUSY */
-OCH_API int och_get_info(och_device*, och_device_info*);
+OCH_API const char *och_version(void);
+OCH_API const char *och_last_error(void); /* thread-local; valid until next failing call */
+OCH_API void och_default_config(och_config *);
+OCH_API void och_default_stream_args(och_stream_args *, och_direction);
+OCH_API int och_list(och_device_info *devices, size_t capacity, size_t *count);
+OCH_API int och_open(const char *serial, och_device **); /* NULL selects only connected device */
+OCH_API int och_close(och_device *);                     /* destroy streams first; otherwise BUSY */
+OCH_API int och_get_info(och_device *, och_device_info *);
 /* With streams: channel masks must stay unchanged; identical config is a no-op.
  * RX drops queued old samples and reports RECONFIGURED/START/DISCONTINUITY in
  * the next epoch. Running TX discards old queued/in-flight data (delivery of
@@ -415,23 +461,25 @@ OCH_API int och_get_info(och_device*, och_device_info*);
  * carries RECONFIGURED|DISCONTINUITY at an approximate boundary (USB queue
  * latency) and samples near it may contain the PLL transient. A TX LO change
  * while a TX stream exists still uses the stopping transaction above. */
-OCH_API int och_configure(och_device*, const och_config*);
-OCH_API int och_get_config(och_device*, och_config*); /* last successfully applied request on this handle; sample_rate is the applied rate */
+OCH_API int och_configure(och_device *, const och_config *);
+OCH_API int
+och_get_config(och_device *,
+               och_config *); /* last successfully applied request on this handle; sample_rate is the applied rate */
 /* Raw SDK query or command, serialised with event reception. Mutations only while
  * no stream exists; configure again afterwards. Reply is UTF-8, nul terminated. */
-OCH_API int och_command(och_device*, const char* command, char* reply, size_t capacity, uint32_t timeout_ms);
-OCH_API int och_poll_event(och_device*, och_event*, uint32_t timeout_ms);
-OCH_API int och_create_stream(och_device*, const och_stream_args*, och_stream**);
+OCH_API int och_command(och_device *, const char *command, char *reply, size_t capacity, uint32_t timeout_ms);
+OCH_API int och_poll_event(och_device *, och_event *, uint32_t timeout_ms);
+OCH_API int och_create_stream(och_device *, const och_stream_args *, och_stream **);
 /* BUSY (outstanding RX lease) retains the handle. On OK or IO the handle is
  * destroyed; IO reports a hardware-stop error. Do not retry a freed handle.
  * close/destroy must not race other operations on that device/stream. */
-OCH_API int och_destroy_stream(och_stream*);
-OCH_API int och_start(och_stream*); /* TX: queue samples with send() before start */
-OCH_API int och_stop(och_stream*, uint32_t timeout_ms);
+OCH_API int och_destroy_stream(och_stream *);
+OCH_API int och_start(och_stream *); /* TX: queue samples with send() before start */
+OCH_API int och_stop(och_stream *, uint32_t timeout_ms);
 /* Drain host/USB TX, padding the final wire block with zero IQ if required.
  * No concurrent send allowed. This is not an RF end-of-burst acknowledgement.
  * Finite EOF can report tail underflow/starvation before stop; events are retained. */
-OCH_API int och_flush(och_stream*, uint32_t timeout_ms);
+OCH_API int och_flush(och_stream *, uint32_t timeout_ms);
 /* Sample counts are per channel. Layout: time-major interleaved channels.
  * sc16: signed I,Q left-aligned; fc32: normalized I,Q. In 8-bit wire mode,
  * sc16=sign8*256, fc32=sign8/128, packed12 expands with four zero low bits.
@@ -439,13 +487,13 @@ OCH_API int och_flush(och_stream*, uint32_t timeout_ms);
  * sc8 is signed I,Q bytes (8-bit wire mode only); other formats keep their sizes.
  * One producer per TX stream and one consumer per RX stream. RX/TX concurrent.
  * recv never combines epochs or discontinuities into one returned buffer. */
-OCH_API int och_recv(och_stream*, void* samples, size_t capacity_samples,
-                     size_t* received, och_metadata*, uint32_t timeout_ms);
+OCH_API int och_recv(och_stream *, void *samples, size_t capacity_samples, size_t *received, och_metadata *,
+                     uint32_t timeout_ms);
 /* Hardware time base. when: 0 now, 1 at the next PPS edge
  * of the selected source. A sample-rate change invalidates the time. */
-OCH_API int och_get_time(och_device*, och_time_status*);
-OCH_API int och_set_time(och_device*, uint64_t ticks, uint32_t at_next_pps);
-OCH_API int och_set_time_source(och_device*, uint32_t source);
+OCH_API int och_get_time(och_device *, och_time_status *);
+OCH_API int och_set_time(och_device *, uint64_t ticks, uint32_t at_next_pps);
+OCH_API int och_set_time_source(och_device *, uint32_t source);
 /* ---------------------------------------------------------------------------
  * 0.7.0 multi-board synchronisation (firmware SDK_CMD_1.2 with OC_SYNC_AXI;
  * capability "sync"). Cycles are periods of the board's own 40 MHz reference.
@@ -454,7 +502,7 @@ OCH_API int och_set_time_source(och_device*, uint32_t source);
  * ------------------------------------------------------------------------- */
 typedef struct och_sync_status {
     uint32_t struct_size, capable;
-    uint32_t ref40_present, ref40_hz;   /* measured CLK_FB_FPGA, 16 Hz resolution */
+    uint32_t ref40_present, ref40_hz; /* measured CLK_FB_FPGA, 16 Hz resolution */
     uint32_t ref_out, trig_out, trig_falling, trig_width, trig_period, armed, loopback;
     uint32_t time_pps_sync;             /* time base PPS input is AD9361_SYNC */
     uint32_t sync_count, sync_interval; /* AD9361_SYNC rising edges / cycles between the last two */
@@ -471,15 +519,15 @@ typedef struct och_sync_config {
     uint32_t ref_out, trig_out, trig_falling, trig_width, trig_period, loopback;
     uint32_t reserved[5];
 } och_sync_config;
-enum { OCH_SYNC_TRIGGER_NOW=0, OCH_SYNC_TRIGGER_AT_PPS=1, OCH_SYNC_TRIGGER_DISARM=2 };
-OCH_API void och_default_sync_config(och_sync_config*);
-OCH_API int och_get_sync_status(och_device*, och_sync_status*);
-OCH_API int och_set_sync(och_device*, const och_sync_config*);
-OCH_API int och_sync_trigger(och_device*, uint32_t mode);
-OCH_API int och_sync_clear(och_device*);
+enum { OCH_SYNC_TRIGGER_NOW = 0, OCH_SYNC_TRIGGER_AT_PPS = 1, OCH_SYNC_TRIGGER_DISARM = 2 };
+OCH_API void och_default_sync_config(och_sync_config *);
+OCH_API int och_get_sync_status(och_device *, och_sync_status *);
+OCH_API int och_set_sync(och_device *, const och_sync_config *);
+OCH_API int och_sync_trigger(och_device *, uint32_t mode);
+OCH_API int och_sync_clear(och_device *);
 /* One AD9361 multi-chip-sync step 0..5 (streams stopped). Steps 2 and 4 need
  * one TRIG on AD9361_SYNC (master och_sync_trigger) before the next step. */
-OCH_API int och_mcs_step(och_device*, uint32_t step);
+OCH_API int och_mcs_step(och_device *, uint32_t step);
 
 /* Synchronise a group of boards. devices[0] is the master.
  *  OCH_SYNC_CHAIN : no external reference needed. Master runs on its own
@@ -495,49 +543,49 @@ OCH_API int och_mcs_step(och_device*, uint32_t step);
  * use its internal TRIG, so no cable is needed; MCS pulses cannot reach the
  * AD9361 that way. On success every board's time is start_time at the same
  * edge; results (count entries, may be NULL) report each board. */
-enum { OCH_SYNC_CHAIN=0, OCH_SYNC_COMMON=1 };
+enum { OCH_SYNC_CHAIN = 0, OCH_SYNC_COMMON = 1 };
 typedef struct och_multi_sync_args {
     uint32_t struct_size, mode;
-    uint32_t master_external_ref;  /* CHAIN: master also locks to its J3 10 MHz */
-    uint32_t mcs;                  /* run AD9361 MCS (needs the SYNC wiring) */
-    uint32_t loopback;             /* CHAIN with one board: internal TRIG -> SYNC */
-    uint32_t lock_timeout_ms;      /* 0 = 15000 */
-    uint32_t monitor_period;       /* CHAIN: periodic TRIG after sync, cycles; 0 = off */
+    uint32_t master_external_ref; /* CHAIN: master also locks to its J3 10 MHz */
+    uint32_t mcs;                 /* run AD9361 MCS (needs the SYNC wiring) */
+    uint32_t loopback;            /* CHAIN with one board: internal TRIG -> SYNC */
+    uint32_t lock_timeout_ms;     /* 0 = 15000 */
+    uint32_t monitor_period;      /* CHAIN: periodic TRIG after sync, cycles; 0 = off */
     uint32_t reserved0;
-    uint64_t start_time;           /* time loaded at the sync edge */
+    uint64_t start_time; /* time loaded at the sync edge */
     uint32_t reserved[6];
 } och_multi_sync_args;
 typedef struct och_multi_sync_result {
     uint32_t struct_size;
-    uint32_t locked;               /* interval matched the generator period */
-    uint32_t edges;                /* SYNC (CHAIN) or PPS (COMMON) edges seen while checking */
-    uint32_t interval;             /* last measured interval, 40 MHz cycles */
-    int32_t interval_error;        /* interval - expected */
+    uint32_t locked;        /* interval matched the generator period */
+    uint32_t edges;         /* SYNC (CHAIN) or PPS (COMMON) edges seen while checking */
+    uint32_t interval;      /* last measured interval, 40 MHz cycles */
+    int32_t interval_error; /* interval - expected */
     uint32_t mcs_done, time_valid, tick_rate;
-    uint64_t time_at_sync;         /* time_last_pps after the load: equals start_time */
+    uint64_t time_at_sync; /* time_last_pps after the load: equals start_time */
     uint32_t reserved[6];
 } och_multi_sync_result;
-OCH_API void och_default_multi_sync_args(och_multi_sync_args*);
-OCH_API int och_multi_sync(och_device* const* devices, size_t count, const och_multi_sync_args*,
-                           och_multi_sync_result* results);
+OCH_API void och_default_multi_sync_args(och_multi_sync_args *);
+OCH_API int och_multi_sync(och_device *const *devices, size_t count, const och_multi_sync_args *,
+                           och_multi_sync_result *results);
 /* Timed RX command on a started framed RX stream created with OCH_RX_TIMED:
  * flags OCH_RX_NOW / OCH_RX_STOP; num_samples 0 = continuous. */
-OCH_API int och_rx_command(och_stream*, uint32_t flags, uint64_t time_ticks, uint32_t num_samples);
+OCH_API int och_rx_command(och_stream *, uint32_t flags, uint64_t time_ticks, uint32_t num_samples);
 /* Framed TX: one call may carry a whole burst or part of one. Each
  * OCH_TX_START_OF_BURST or OCH_TX_HAS_TIME starts a new 16 KiB block;
  * OCH_TX_END_OF_BURST closes the block and submits it immediately. */
-OCH_API int och_send_burst(och_stream*, const void* samples, size_t samples_per_channel,
-                           const och_tx_metadata*, size_t* accepted, uint32_t timeout_ms);
-OCH_API int och_send(och_stream*, const void* samples, size_t samples_per_channel,
-                     size_t* accepted, uint32_t timeout_ms);
+OCH_API int och_send_burst(och_stream *, const void *samples, size_t samples_per_channel, const och_tx_metadata *,
+                           size_t *accepted, uint32_t timeout_ms);
+OCH_API int och_send(och_stream *, const void *samples, size_t samples_per_channel, size_t *accepted,
+                     uint32_t timeout_ms);
 /* Zero-copy application view of current wire RX buffers; no conversion:
  * 3 bytes/complex sample for 12-bit, 2 for 8-bit, independent of args.format.
  * A single
  * lease per stream; release before recv/acquire/destroy. Core USB->ring copy
  * still occurs. Capacity/size measured in bytes. Lease invalid after release. */
-OCH_API int och_rx_acquire(och_stream*, const void** data, size_t* bytes, och_metadata*, uint32_t timeout_ms);
-OCH_API int och_rx_release(och_stream*);
-OCH_API int och_get_stats(och_stream*, och_stats*);
+OCH_API int och_rx_acquire(och_stream *, const void **data, size_t *bytes, och_metadata *, uint32_t timeout_ms);
+OCH_API int och_rx_release(och_stream *);
+OCH_API int och_get_stats(och_stream *, och_stats *);
 OCH_API size_t och_sample_size(och_format format); /* per complex channel sample */
 #ifdef __cplusplus
 }

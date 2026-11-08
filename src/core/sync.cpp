@@ -11,40 +11,41 @@
 using namespace och::core;
 
 namespace {
-std::string field(const std::string& s, const std::string& name) {
-    size_t at = 0;
-    while ((at = s.find(name + "=", at)) != std::string::npos) {
-        if (!at || s[at - 1] == ' ' || s[at - 1] == '\t' || s[at - 1] == '\r' || s[at - 1] == '\n') {
-            at += name.size() + 1;
-            return s.substr(at, s.find_first_of(" \t\r\n", at) - at);
+    std::string field(const std::string &s, const std::string &name) {
+        size_t at = 0;
+        while ((at = s.find(name + "=", at)) != std::string::npos) {
+            if (!at || s[at - 1] == ' ' || s[at - 1] == '\t' || s[at - 1] == '\r' || s[at - 1] == '\n') {
+                at += name.size() + 1;
+                return s.substr(at, s.find_first_of(" \t\r\n", at) - at);
+            }
+            ++at;
         }
-        ++at;
+        throw Failure(OCH_PROTOCOL, "SDK reply missing " + name);
     }
-    throw Failure(OCH_PROTOCOL, "SDK reply missing " + name);
-}
-uint64_t u64(const std::string& s) {
-    uint64_t v = 0;
-    auto p = std::from_chars(s.data(), s.data() + s.size(), v);
-    require(p.ec == std::errc() && p.ptr == s.data() + s.size(), OCH_PROTOCOL, "invalid integer in SDK reply");
-    return v;
-}
-uint32_t u32f(const std::string& r, const char* name) { return uint32_t(u64(field(r, name))); }
-void sleep_ms(unsigned ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
-uint64_t now_ms() { return now_ns() / 1000000u; }
+    uint64_t u64(const std::string &s) {
+        uint64_t v = 0;
+        auto p = std::from_chars(s.data(), s.data() + s.size(), v);
+        require(p.ec == std::errc() && p.ptr == s.data() + s.size(), OCH_PROTOCOL, "invalid integer in SDK reply");
+        return v;
+    }
+    uint32_t u32f(const std::string &r, const char *name) { return uint32_t(u64(field(r, name))); }
+    void sleep_ms(unsigned ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+    uint64_t now_ms() { return now_ns() / 1000000u; }
 
-constexpr uint32_t REF_HZ = 40000000u;
-constexpr uint32_t LOCK_PERIOD = 4000000u;   // 100 ms TRIG while checking the chain
+    constexpr uint32_t REF_HZ = 40000000u;
+    constexpr uint32_t LOCK_PERIOD = 4000000u; // 100 ms TRIG while checking the chain
 
-std::string board_name(size_t i) { return i ? "board " + std::to_string(i) : std::string("master"); }
+    std::string board_name(size_t i) { return i ? "board " + std::to_string(i) : std::string("master"); }
 
-// Locks one device for one control transaction.
-template<class F> auto with(och_device* d, F f) {
-    std::lock_guard<std::mutex> lock(d->state_mutex);
-    return f(*d);
+    // Locks one device for one control transaction.
+    template<class F>
+    auto with(och_device *d, F f) {
+        std::lock_guard<std::mutex> lock(d->state_mutex);
+        return f(*d);
+    }
 }
-}
 
-och_sync_status och::core::read_sync_status(och_device& d) {
+och_sync_status och::core::read_sync_status(och_device &d) {
     och_sync_status s{};
     s.struct_size = sizeof s;
     s.mcs_step = -1;
@@ -73,7 +74,7 @@ och_sync_status och::core::read_sync_status(och_device& d) {
     return s;
 }
 
-void och::core::apply_sync_config(och_device& d, const och_sync_config& c) {
+void och::core::apply_sync_config(och_device &d, const och_sync_config &c) {
     d.require_capability("sync");
     require(c.trig_width <= 65535, OCH_INVALID, "trig_width must be 0..65535 cycles");
     require(c.trig_period == 0 || c.trig_period >= 1000, OCH_INVALID, "trig_period must be 0 or >= 1000 cycles");
@@ -90,37 +91,48 @@ void och::core::apply_sync_config(och_device& d, const och_sync_config& c) {
     if (c.trig_period) d.command("trig_period=" + std::to_string(c.trig_period));
 }
 
-void och::core::sync_trigger(och_device& d, uint32_t mode) {
+void och::core::sync_trigger(och_device &d, uint32_t mode) {
     d.require_capability("sync");
     require(mode <= OCH_SYNC_TRIGGER_DISARM, OCH_INVALID, "trigger mode must be 0..2");
-    d.command(mode == OCH_SYNC_TRIGGER_NOW ? "trig_pulse!" : mode == OCH_SYNC_TRIGGER_AT_PPS ? "trig_at_pps!" : "trig_disarm!");
+    d.command(mode == OCH_SYNC_TRIGGER_NOW      ? "trig_pulse!"
+              : mode == OCH_SYNC_TRIGGER_AT_PPS ? "trig_at_pps!"
+                                                : "trig_disarm!");
 }
 
 namespace {
-struct Group {
-    och_device* const* dev;
-    size_t n;
-    std::string cmd(size_t i, const std::string& c, uint32_t timeout = 5000) {
-        try { return with(dev[i], [&](och_device& d) { return d.command(c, timeout); }); }
-        catch (const Failure& e) { throw Failure(e.code, board_name(i) + ": " + c + ": " + e.what()); }
-    }
-    void all(const std::string& c) { for (size_t i = 0; i < n; ++i) cmd(i, c); }
-    och_sync_status status(size_t i) { return with(dev[i], [](och_device& d) { return read_sync_status(d); }); }
-    och_time_status time(size_t i) { return with(dev[i], [](och_device& d) { return d.get_time(); }); }
-};
+    struct Group {
+        och_device *const *dev;
+        size_t n;
+        std::string cmd(size_t i, const std::string &c, uint32_t timeout = 5000) {
+            try {
+                return with(dev[i], [&](och_device &d) { return d.command(c, timeout); });
+            } catch (const Failure &e) {
+                throw Failure(e.code, board_name(i) + ": " + c + ": " + e.what());
+            }
+        }
+        void all(const std::string &c) {
+            for (size_t i = 0; i < n; ++i) cmd(i, c);
+        }
+        och_sync_status status(size_t i) {
+            return with(dev[i], [](och_device &d) { return read_sync_status(d); });
+        }
+        och_time_status time(size_t i) {
+            return with(dev[i], [](och_device &d) { return d.get_time(); });
+        }
+    };
 
-// Waits for the next PPS_EXT edge seen by board 0 and returns soon after it,
-// leaving most of a second for commands that must land before the next one.
-void after_pps_edge(Group& g, uint64_t deadline) {
-    const auto first = g.status(0).pps_count;
-    while (g.status(0).pps_count == first) {
-        require(now_ms() < deadline, OCH_TIMEOUT, "no PPS edge on the master's PPS_EXT within the timeout");
-        sleep_ms(5);
+    // Waits for the next PPS_EXT edge seen by board 0 and returns soon after it,
+    // leaving most of a second for commands that must land before the next one.
+    void after_pps_edge(Group &g, uint64_t deadline) {
+        const auto first = g.status(0).pps_count;
+        while (g.status(0).pps_count == first) {
+            require(now_ms() < deadline, OCH_TIMEOUT, "no PPS edge on the master's PPS_EXT within the timeout");
+            sleep_ms(5);
+        }
     }
 }
-}
 
-void och_default_multi_sync_args(och_multi_sync_args* a) {
+void och_default_multi_sync_args(och_multi_sync_args *a) {
     if (!a) return;
     *a = {};
     a->struct_size = sizeof *a;
@@ -129,45 +141,55 @@ void och_default_multi_sync_args(och_multi_sync_args* a) {
     a->lock_timeout_ms = 15000;
 }
 
-void och_default_sync_config(och_sync_config* c) {
+void och_default_sync_config(och_sync_config *c) {
     if (!c) return;
     *c = {};
     c->struct_size = sizeof *c;
     c->trig_width = 80;
 }
 
-void och::core::multi_sync(och_device* const* devices, size_t n, const och_multi_sync_args& a,
-                           och_multi_sync_result* results) {
+void och::core::multi_sync(och_device *const *devices, size_t n, const och_multi_sync_args &a,
+                           och_multi_sync_result *results) {
     require(devices && n >= 1 && n <= 64, OCH_INVALID, "1..64 devices required");
     require(a.mode <= OCH_SYNC_COMMON, OCH_INVALID, "mode must be OCH_SYNC_CHAIN or OCH_SYNC_COMMON");
     require(!a.loopback || (a.mode == OCH_SYNC_CHAIN && n == 1), OCH_INVALID, "loopback is a single-board CHAIN test");
     for (size_t i = 0; i < n; ++i) {
         require(devices[i] != nullptr, OCH_INVALID, "null device");
         for (size_t j = 0; j < i; ++j) require(devices[i] != devices[j], OCH_INVALID, "device listed twice");
-        with(devices[i], [&](och_device& d) {
-            try { d.require_capability("sync"); d.require_capability("hw_time"); }
-            catch (const Failure& e) { throw Failure(e.code, board_name(i) + ": " + e.what()); }
+        with(devices[i], [&](och_device &d) {
+            try {
+                d.require_capability("sync");
+                d.require_capability("hw_time");
+            } catch (const Failure &e) {
+                throw Failure(e.code, board_name(i) + ": " + e.what());
+            }
             require(!d.rx_on && !d.tx_on, OCH_BUSY, board_name(i) + ": stop RX/TX streams before synchronising");
             return 0;
         });
     }
     Group g{devices, n};
     std::vector<och_multi_sync_result> res(n);
-    for (auto& r : res) r.struct_size = sizeof r;
+    for (auto &r: res) r.struct_size = sizeof r;
     const uint64_t timeout = a.lock_timeout_ms ? a.lock_timeout_ms : 15000;
     const bool chain = a.mode == OCH_SYNC_CHAIN;
 
     // 1. Reference sources and outputs.
     for (size_t i = 0; i < n; ++i) {
         const unsigned ref = chain ? (i ? 1u : (a.master_external_ref ? 1u : 0u)) : 1u;
-        with(devices[i], [&](och_device& d) { d.set_reference_source(ref); return 0; });
+        with(devices[i], [&](och_device &d) {
+            d.set_reference_source(ref);
+            return 0;
+        });
         och_sync_config c{};
         c.struct_size = sizeof c;
-        c.ref_out = chain ? 1 : 0;               // every board forwards the chain
-        c.trig_out = chain ? (i == 0) : a.mcs;    // COMMON: own TRIG -> own J1 for MCS
+        c.ref_out = chain ? 1 : 0;             // every board forwards the chain
+        c.trig_out = chain ? (i == 0) : a.mcs; // COMMON: own TRIG -> own J1 for MCS
         c.trig_width = 80;
         c.loopback = a.loopback;
-        with(devices[i], [&](och_device& d) { apply_sync_config(d, c); return 0; });
+        with(devices[i], [&](och_device &d) {
+            apply_sync_config(d, c);
+            return 0;
+        });
         g.cmd(i, "trig_disarm!");
         g.cmd(i, "sync_clear!");
     }
@@ -203,18 +225,22 @@ void och::core::multi_sync(och_device* const* devices, size_t n, const och_multi
                 for (size_t i = 0; i < n; ++i) {
                     if (res[i].locked) continue;
                     if (res[i].edges == 0)
-                        throw Failure(OCH_TIMEOUT, board_name(i) + (chain
-                            ? ": no SYNC edges; wire the master's TRIG (J9) through a 1:N splitter to every board's AD9361_SYNC (J1)"
-                            : ": no PPS edges on PPS_EXT"));
+                        throw Failure(
+                                OCH_TIMEOUT,
+                                board_name(i) +
+                                        (chain ? ": no SYNC edges; wire the master's TRIG (J9) through a 1:N splitter to every board's AD9361_SYNC (J1)"
+                                               : ": no PPS edges on PPS_EXT"));
                     throw Failure(OCH_TIMEOUT, board_name(i) + ": reference not locked, interval " +
-                        std::to_string(res[i].interval) + " cycles, expected " + std::to_string(expect) +
-                        (chain ? " (check the REF_OUT J13 -> 10M_EXT J3 chain)" : " (check the 10 MHz on J3)"));
+                                                       std::to_string(res[i].interval) + " cycles, expected " +
+                                                       std::to_string(expect) +
+                                                       (chain ? " (check the REF_OUT J13 -> 10M_EXT J3 chain)"
+                                                              : " (check the 10 MHz on J3)"));
                 }
             }
             sleep_ms(50);
         }
         if (chain) g.cmd(0, "trig_period=0");
-        sleep_ms(150);   // the last periodic pulse ends
+        sleep_ms(150); // the last periodic pulse ends
     }
 
     // 3. AD9361 multi-chip synchronisation: steps on every board, SYNC_IN
@@ -226,7 +252,8 @@ void och::core::multi_sync(och_device* const* devices, size_t n, const och_multi
             if (step == 2 || step == 4) {
                 std::vector<uint32_t> before(n);
                 for (size_t i = 0; i < n; ++i) before[i] = chain ? g.status(i).sync_count : g.status(i).trig_count;
-                if (chain) g.cmd(0, "trig_pulse!");
+                if (chain)
+                    g.cmd(0, "trig_pulse!");
                 else {
                     after_pps_edge(g, now_ms() + 3000);
                     g.all("trig_at_pps!");
@@ -239,7 +266,7 @@ void och::core::multi_sync(och_device* const* devices, size_t n, const och_multi
                         if (now_ms() > deadline) {
                             g.all("mcs_step=5");
                             throw Failure(OCH_TIMEOUT, board_name(i) + ": MCS step " + std::to_string(step) +
-                                          " pulse not seen (SYNC wiring?)");
+                                                               " pulse not seen (SYNC wiring?)");
                         }
                         sleep_ms(5);
                     }
@@ -247,7 +274,7 @@ void och::core::multi_sync(och_device* const* devices, size_t n, const och_multi
             }
             sleep_ms(100);
         }
-        for (auto& r : res) r.mcs_done = 1;
+        for (auto &r: res) r.mcs_done = 1;
     }
 
     // 4. Common time: every board loads start_time at the same edge.

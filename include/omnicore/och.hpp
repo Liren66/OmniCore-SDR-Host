@@ -12,11 +12,12 @@ namespace och {
     public:
         int code;
 
-        explicit error(int value) : std::runtime_error(och_last_error()), code(value) {
-        }
+        explicit error(int value) : std::runtime_error(och_last_error()), code(value) {}
     };
 
-    inline void check(int result) { if (result != OCH_OK) throw error(result); }
+    inline void check(int result) {
+        if (result != OCH_OK) throw error(result);
+    }
 
     inline och_config default_config() {
         och_config c{};
@@ -58,14 +59,15 @@ namespace och {
             check(och_open(serial.empty() ? nullptr : serial.c_str(), &handle_));
         }
 
-        ~device() { if (handle_) (void) och_close(handle_); }
+        ~device() {
+            if (handle_) (void) och_close(handle_);
+        }
 
         device(const device &) = delete;
 
         device &operator=(const device &) = delete;
 
-        device(device &&other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {
-        }
+        device(device &&other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {}
 
         device &operator=(device &&) = delete;
 
@@ -249,8 +251,7 @@ namespace och {
 
         stream &operator=(const stream &) = delete;
 
-        stream(stream &&other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {
-        }
+        stream(stream &&other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {}
 
         stream &operator=(stream &&) = delete;
 
@@ -280,8 +281,7 @@ namespace och {
 
         // TIMEOUT (also a temporary reconfiguration pause) and STOPPED are returned
         // intact. Retry TIMEOUT; a control failure stops the session permanently.
-        int recv(void *samples, size_t capacity, size_t &count, och_metadata &meta,
-                 uint32_t timeout_ms = 1000) {
+        int recv(void *samples, size_t capacity, size_t &count, och_metadata &meta, uint32_t timeout_ms = 1000) {
             count = 0;
             meta = {};
             meta.struct_size = sizeof(meta);

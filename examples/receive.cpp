@@ -5,12 +5,13 @@
 #include <iostream>
 #include <vector>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     try {
         och::device dev(argc > 1 ? argv[1] : "");
         auto config = och::default_config();
         config.sample_rate = 30720000;
-        config.rx_mask = 3; config.tx_mask = 0;
+        config.rx_mask = 3;
+        config.tx_mask = 0;
         dev.configure(config);
         auto args = och::stream_args(OCH_RX);
         args.format = OCH_SC16;
@@ -27,7 +28,7 @@ int main(int argc, char** argv) {
             och::check(rc);
             if (meta.flags & (OCH_META_START | OCH_META_DISCONTINUITY))
                 std::cerr << "new segment epoch=" << meta.epoch << " index=" << meta.sample_index
-                    << " lost_on_device=" << meta.device_dropped_samples << '\n';
+                          << " lost_on_device=" << meta.device_dropped_samples << '\n';
             // samples: I1,Q1,I2,Q2,I1,Q1,I2,Q2,...; sc16 is signed 12-bit << 4.
             // Replace this comment with one bounded-time consumer or a downstream queue.
             total += received;
@@ -35,10 +36,11 @@ int main(int argc, char** argv) {
         rx.stop();
         auto stats = rx.stats();
         std::cout << "received " << total << " samples/channel, USB bytes=" << stats.usb_bytes
-            << ", host loss=" << stats.host_dropped_samples << '\n';
+                  << ", host loss=" << stats.host_dropped_samples << '\n';
         // rx is destroyed first, then dev. Do not let a stream outlive its device.
         return 0;
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << '\n'; return 1;
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << '\n';
+        return 1;
     }
 }

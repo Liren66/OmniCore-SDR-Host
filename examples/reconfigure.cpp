@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     try {
         och::device dev(argc > 1 ? argv[1] : "");
         auto config = och::default_config();
@@ -73,8 +73,7 @@ int main(int argc, char** argv) {
                     och_event event{};
                     // Bound work per iteration, even if device events are frequent.
                     for (unsigned i = 0; i < 16 && dev.poll_event(event, 0); ++i) {
-                        if (event.type == OCH_EVENT_RECONFIGURED)
-                            std::cout << event.message << '\n';
+                        if (event.type == OCH_EVENT_RECONFIGURED) std::cout << event.message << '\n';
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(20));
                 }
@@ -103,20 +102,23 @@ int main(int argc, char** argv) {
         // Always stop and join before destroying the stream, including on configuration
         // failure. Never let an exception unwind through a joinable std::thread.
         done.store(true);
-        try { rx.stop(); }
-        catch (...) { if (!management_error) management_error = std::current_exception(); }
+        try {
+            rx.stop();
+        } catch (...) {
+            if (!management_error) management_error = std::current_exception();
+        }
         consumer.join();
         if (management_error) std::rethrow_exception(management_error);
         if (consumer_error) std::rethrow_exception(consumer_error);
 
         auto stats = rx.stats();
-        std::cout << "Received " << received_total << " samples/channel, segments="
-                  << new_segments << ", reconfigured segments=" << reconfigured_segments
+        std::cout << "Received " << received_total << " samples/channel, segments=" << new_segments
+                  << ", reconfigured segments=" << reconfigured_segments
                   << ", known host loss=" << stats.host_dropped_samples << '\n';
         rx.close();
         dev.close();
         return 0;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         // A failed hardware mutation needs explicit recovery/configuration and new streams;
         // this example exits without retrying or restarting any transmitter.
         std::cerr << e.what() << '\n';
