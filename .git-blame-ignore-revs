@@ -4,3 +4,6 @@
 
 # format some files (CLion)
 43b4487be45059e834faf73160de32b6c8604703
+
+# Format all sources with clang-format
+3d1fc24474f907d5ce4138d769a06061b4f8ddab
