@@ -26,7 +26,6 @@ namespace och::core {
             if (blocks < 2 || !bytes) throw std::invalid_argument("ring dimensions");
             for (auto &b: blocks_) {
                 b.data = std::make_unique<uint8_t[]>(bytes);
-                std::memset(b.data.get(), 0, bytes);
             }
         }
 
