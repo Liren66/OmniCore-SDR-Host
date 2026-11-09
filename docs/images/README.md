@@ -17,4 +17,4 @@ README 与 `docs/` 中使用的正式插图，保留 SVG 图表与 PNG 终端图
 | `cli-usb2-bench.png` | 8bit 双通道全双工 5 MSPS、300 秒测试输出 | 300 秒测试记录，经 CLI 显示代码绘制 |
 | `cli-*.png` | 终端输出截图 | 见下文 |
 
-`cli-info.png` 是 Windows Terminal 的实机截图（OCH 0.7.1，Zynq `SDK_CMD_1.2_20261107_SYNC`，CH32 桥接 1.0.1，USB 5 Gbit/s，2026-11-08）。`cli-bench-running.png`、`cli-bench-summary.png` 也是实机截图（OCH 0.6.2，固件 v2026.11.07.1，USB 5 Gbit/s，2026-11-07；2T2R 12bit 44 MSPS，TX 衰减 89.75 dB）。其余终端图片按 CLI 显示代码（`src/cli/presentation.hpp`）与 Windows Terminal 默认配色绘制，使用 0.4.x 时期（固件 `SDK_CMD_1.0_20261024_IQ8`）的实测数据，较长的输出以 `...` 标明省略部分。
+`cli-info.png` 是 Windows Terminal 的实机截图（OCH 0.7.1，Zynq `SDK_CMD_1.2_20261107_SYNC`，CH32 桥接 1.0.1，USB 5 Gbit/s，2026-11-08）。`cli-bench-running.png`、`cli-bench-summary.png` 也是实机截图（OCH 0.6.2，固件 v2026.11.07.1，USB 5 Gbit/s，2026-11-07；2T2R 12bit 44 MSPS，TX 衰减 89.75 dB）。其余终端图片按 CLI 显示代码（`apps/och/presentation.hpp`）与 Windows Terminal 默认配色绘制，使用 0.4.x 时期（固件 `SDK_CMD_1.0_20261024_IQ8`）的实测数据，较长的输出以 `...` 标明省略部分。

@@ -1,6 +1,6 @@
 // Offline test of the framed-transport parser/writer (no device needed).
-// g++ -std=c++17 -O2 -I src tests/frame_parser_test.cpp src/dsp/frame.cpp
-#include "dsp/frame.hpp"
+// g++ -std=c++17 -O2 -I src tests/frame_parser_test.cpp src/protocol/frame.cpp
+#include "protocol/frame.hpp"
 #include <cstdio>
 #include <cstring>
 #include <random>

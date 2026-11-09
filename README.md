@@ -394,11 +394,13 @@ bash tools/build-linux.sh
 ```text
 OmniCoreHost/
 ├── include/omnicore/   公共 C ABI (och.h) 与 C++ 包装 (och.hpp)
+├── apps/
+│   └── och/            och 命令行
 ├── src/
 │   ├── core/           设备、配置事务、流线程、射频与板控
-│   ├── dsp/            IQ 编解码、16 KiB 成帧块解析与生成
-│   ├── transport/      libusbK (Windows) / libusb (Linux) 传输层
-│   └── cli/            och 命令行
+│   ├── dsp/            IQ 编解码
+│   ├── protocol/       16 KiB 成帧块解析与生成
+│   └── transport/      libusbK (Windows) / libusb (Linux) 传输层
 ├── examples/           C++ 示例与 FTR 示例
 ├── tests/              成帧解析单元测试、硬件时间戳板上测试
 ├── docs/               使用与开发文档、插图

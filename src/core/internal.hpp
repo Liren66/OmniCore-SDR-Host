@@ -4,7 +4,7 @@
 #include "power_status.hpp"
 #include "../transport/transport.hpp"
 #include "../dsp/codec.hpp"
-#include "../dsp/frame.hpp"
+#include "../protocol/frame.hpp"
 #include <condition_variable>
 #include <functional>
 #include <future>
