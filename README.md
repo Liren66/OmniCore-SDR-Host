@@ -363,6 +363,13 @@ RX 元数据的 `time_ticks` 是每批第一个样点的时间；突发完成、
 
 示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp)。接口与生命周期详见 [API 参考](docs/api.md)。
 
+从源码构建时示例默认一起编译（`-DOCH_BUILD_EXAMPLES=OFF` 可关闭），可执行文件在构建目录的 `examples/` 下（Windows 与 `omnicore.dll` 同目录）。已安装的 OCH 也可以单独编译示例：
+
+```bash
+cmake -S <安装目录>/examples -B build-examples -DCMAKE_PREFIX_PATH=<安装目录>
+cmake --build build-examples
+```
+
 ## 从源码构建与打包
 
 需要 CMake 3.20+、Ninja 与 C++17 x64 工具链（Windows 使用 MSYS2 MinGW-w64，默认 `C:\msys64\mingw64\bin`）。

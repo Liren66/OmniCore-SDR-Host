@@ -388,6 +388,21 @@ namespace och::transport {
             if (!device) throw std::runtime_error("USB device disappeared; enumerate again");
             libusb_config_descriptor *raw = nullptr;
             rc = libusb_get_active_config_descriptor(libusb_get_device(device), &raw);
+#ifdef __APPLE__
+            if (rc == LIBUSB_ERROR_NOT_FOUND) {
+                // macOS leaves a device with no kernel driver unconfigured; select its first configuration.
+                rc = libusb_get_config_descriptor(libusb_get_device(device), 0, &raw);
+                if (rc) throw std::runtime_error(std::string("Cannot read OmniCore USB configuration: ") +
+                                                 libusb_error_name(rc));
+                const int value = raw->bConfigurationValue;
+                libusb_free_config_descriptor(raw);
+                raw = nullptr;
+                rc = libusb_set_configuration(device, value);
+                if (rc) throw std::runtime_error(std::string("Cannot configure OmniCore USB: ") +
+                                                 libusb_error_name(rc));
+                rc = libusb_get_active_config_descriptor(libusb_get_device(device), &raw);
+            }
+#endif
             if (rc) throw std::runtime_error(libusb_error_name(rc));
             std::unique_ptr<libusb_config_descriptor, decltype(&libusb_free_config_descriptor)> config(
                     raw, libusb_free_config_descriptor);
