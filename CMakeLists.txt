@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
-project(OmniCoreHost VERSION 0.7.1 LANGUAGES C CXX)
+# The version is written once, in och.h, so headers used without CMake still carry it.
+set(OCH_PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/omnicore/och.h")
+file(STRINGS "${OCH_PUBLIC_HEADER}" OCH_VERSION_LINE REGEX "^#define OCH_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]+\"$")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" OCH_VERSION "${OCH_VERSION_LINE}")
+if(NOT OCH_VERSION)
+  message(FATAL_ERROR "Cannot read OCH_VERSION from ${OCH_PUBLIC_HEADER}")
+endif()
+project(OmniCoreHost VERSION ${OCH_VERSION} LANGUAGES C CXX)
+# Re-run configure when the version in och.h changes.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${OCH_PUBLIC_HEADER}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
