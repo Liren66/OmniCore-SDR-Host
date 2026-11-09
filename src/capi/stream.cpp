@@ -4,47 +4,8 @@ using namespace och::core;
 using namespace och::capi;
 
 namespace {
-    void put_meta(och_metadata *out, const och_metadata &m) {
-        const auto n = out->struct_size;
-        memcpy(out, &m, n);
-        out->struct_size = n;
-    }
-
     void stream(och_stream *s, unsigned direction) {
         require(s && s->args.direction == direction, OCH_INVALID, "wrong or null stream direction");
-    }
-
-    och_metadata adjusted(och_stream *s, const och::core::Ring::Block &b) {
-        auto m = b.meta;
-        m.sample_index += s->recv_offset / s->group;
-        if (s->recv_offset) {
-            const bool timed = (m.flags & OCH_META_HAS_TIME) != 0;
-            m.flags = timed ? uint32_t(OCH_META_HAS_TIME | (m.flags & OCH_META_END_OF_BURST))
-                            : uint32_t(OCH_META_TIME_UNKNOWN);
-            m.host_dropped_samples = 0;
-            m.device_dropped_samples = 0;
-            if (timed) m.time_ticks += s->recv_offset / s->group;
-        }
-        return m;
-    }
-
-    int await_rx(och_stream *s, uint32_t timeout) {
-        if (s->reconfiguring) return OCH_TIMEOUT;
-        if (s->ring.read()) return OCH_OK;
-        if (!s->running) {
-            auto e = s->error();
-            if (!e.empty()) throw Failure(OCH_IO, e);
-            return OCH_STOPPED;
-        }
-        const bool ready = s->ring.wait_read(timeout, s->stop_requested, &s->reconfiguring);
-        if (s->reconfiguring) return OCH_TIMEOUT;
-        if (ready) return OCH_OK;
-        if (!s->running) {
-            auto e = s->error();
-            if (!e.empty()) throw Failure(OCH_IO, e);
-            return OCH_STOPPED;
-        }
-        return OCH_TIMEOUT;
     }
 }
 
@@ -146,39 +107,7 @@ int och_recv(och_stream *s, void *output, size_t capacity, size_t *received, och
         require(output && capacity && received, OCH_INVALID, "invalid receive buffer");
         *received = 0;
         out_struct_v(m, meta_v1);
-        std::unique_lock<std::mutex> io(s->io_mutex, std::try_to_lock);
-        if (!io.owns_lock() || s->reconfiguring) return OCH_TIMEOUT;
-        require(!s->lease, OCH_BUSY, "release zero-copy lease before recv");
-        int rc = await_rx(s, timeout);
-        if (rc) return static_cast<och_result>(rc);
-        auto b = s->ring.read();
-        size_t frames = std::min(capacity, (b->size - s->recv_offset) / s->group);
-        auto p = b->data.get() + s->recv_offset;
-        put_meta(m, adjusted(s, *b));
-        if (s->args.format == OCH_SC8)
-            memcpy(output, p, frames * s->group);
-        else if (s->args.format == OCH_PACKED12) {
-            if (s->wire_bytes == 2)
-                och::dsp::unpack8_packed12(p, static_cast<uint8_t *>(output), frames * s->nchan);
-            else
-                memcpy(output, p, frames * s->group);
-        } else if (s->args.format == OCH_SC16) {
-            require(reinterpret_cast<uintptr_t>(output) % alignof(int16_t) == 0, OCH_INVALID, "sc16 buffer alignment");
-            (s->wire_bytes == 2 ? och::dsp::unpack8_sc16 : och::dsp::unpack_sc16)(p, static_cast<int16_t *>(output),
-                                                                                  frames * s->nchan);
-        } else {
-            require(reinterpret_cast<uintptr_t>(output) % alignof(float) == 0, OCH_INVALID, "fc32 buffer alignment");
-            (s->wire_bytes == 2 ? och::dsp::unpack8_fc32 : och::dsp::unpack_fc32)(p, static_cast<float *>(output),
-                                                                                  frames * s->nchan);
-        }
-        s->recv_offset += frames * s->group;
-        s->samples += frames;
-        *received = frames;
-        if (s->recv_offset == b->size) {
-            s->ring.release();
-            s->recv_offset = 0;
-        }
-        return OCH_OK;
+        return s->recv(output, capacity, received, m, timeout);
     });
 }
 
@@ -189,30 +118,14 @@ int och_rx_acquire(och_stream *s, const void **data, size_t *bytes, och_metadata
         *data = nullptr;
         *bytes = 0;
         out_struct_v(m, meta_v1);
-        std::unique_lock<std::mutex> io(s->io_mutex, std::try_to_lock);
-        if (!io.owns_lock() || s->reconfiguring) return OCH_TIMEOUT;
-        require(!s->lease, OCH_BUSY, "only one RX lease allowed");
-        int rc = await_rx(s, timeout);
-        if (rc) return static_cast<och_result>(rc);
-        auto b = s->ring.read();
-        *data = b->data.get() + s->recv_offset;
-        *bytes = b->size - s->recv_offset;
-        put_meta(m, adjusted(s, *b));
-        s->lease = true;
-        return OCH_OK;
+        return s->rx_acquire(data, bytes, m, timeout);
     });
 }
 
 int och_rx_release(och_stream *s) {
     return protect([&] {
         stream(s, OCH_RX);
-        std::lock_guard<std::mutex> io(s->io_mutex);
-        require(s->lease, OCH_INVALID, "no RX lease");
-        auto b = s->ring.read();
-        s->samples += (b->size - s->recv_offset) / s->group;
-        s->ring.release();
-        s->recv_offset = 0;
-        s->lease = false;
+        s->rx_release();
         return OCH_OK;
     });
 }
@@ -233,61 +146,7 @@ namespace {
                 mflags = md->flags;
                 mtime = md->time_ticks;
             }
-            std::unique_lock<std::mutex> io(s->io_mutex, std::try_to_lock);
-            if (!io.owns_lock() || s->reconfiguring) return OCH_TIMEOUT;
-            require(count <= std::numeric_limits<size_t>::max() / (8 * s->nchan), OCH_INVALID, "sample count overflow");
-            require(!s->flushing, OCH_BUSY, "TX flush in progress");
-            if (s->stop_requested) return OCH_STOPPED;
-            size_t width = och_sample_size(static_cast<och_format>(s->args.format));
-            auto p = static_cast<const uint8_t *>(data);
-            if (s->args.format == OCH_SC16 || s->args.format == OCH_FC32)
-                require(reinterpret_cast<uintptr_t>(data) %
-                                        (s->args.format == OCH_SC16 ? alignof(int16_t) : alignof(float)) ==
-                                0,
-                        OCH_INVALID, "TX sample buffer alignment");
-            auto until = now_ns() + uint64_t(timeout) * 1000000;
-            while (*accepted < count) {
-                if (s->reconfiguring) return *accepted ? OCH_OK : OCH_TIMEOUT;
-                if (s->stop_requested) return *accepted ? OCH_OK : OCH_STOPPED;
-                auto b = s->ring.write();
-                if (!b) {
-                    if (s->ever_started && !s->running) throw Failure(OCH_IO, "TX worker stopped: " + s->error());
-                    auto now = now_ns();
-                    if (now >= until) return *accepted ? OCH_OK : OCH_TIMEOUT;
-                    auto remaining = static_cast<uint32_t>(std::max<uint64_t>(1, (until - now) / 1000000));
-                    s->ring.wait_write(remaining, s->stop_requested, &s->reconfiguring);
-                    if (s->reconfiguring) return *accepted ? OCH_OK : OCH_TIMEOUT;
-                    if (s->stop_requested) return *accepted ? OCH_OK : OCH_STOPPED;
-                    continue;
-                }
-                size_t frames = std::min(count - *accepted, s->ring.block_bytes() / s->group);
-                auto src = p + *accepted * width * s->nchan;
-                if (s->args.format == OCH_SC8)
-                    memcpy(b->data.get(), src, frames * s->group);
-                else if (s->args.format == OCH_PACKED12) {
-                    if (s->wire_bytes == 2)
-                        och::dsp::pack8_packed12(src, b->data.get(), frames * s->nchan);
-                    else
-                        memcpy(b->data.get(), src, frames * s->group);
-                } else if (s->args.format == OCH_SC16)
-                    (s->wire_bytes == 2 ? och::dsp::pack8_sc16 : och::dsp::pack_sc16)(
-                            reinterpret_cast<const int16_t *>(src), b->data.get(), frames * s->nchan);
-                else
-                    (s->wire_bytes == 2 ? och::dsp::pack8_fc32 : och::dsp::pack_fc32)(
-                            reinterpret_cast<const float *>(src), b->data.get(), frames * s->nchan);
-                och_metadata tag{};
-                if (*accepted == 0) {
-                    tag.flags = mflags & (OCH_TX_HAS_TIME | OCH_TX_START_OF_BURST);
-                    tag.time_ticks = mtime;
-                }
-                if (*accepted + frames == count) tag.flags |= mflags & OCH_TX_END_OF_BURST;
-                s->ring.publish(frames * s->group, tag);
-                *accepted += frames;
-                s->samples += frames;
-                auto used = s->ring.queued();
-                if (used > s->peak) s->peak = used;
-            }
-            return OCH_OK;
+            return s->send(data, count, mflags, mtime, accepted, timeout);
         });
     }
 }
@@ -322,26 +181,7 @@ int och_get_stats(och_stream *s, och_stats *st) {
     return protect([&] {
         require(s != nullptr, OCH_INVALID, "null stream");
         out_struct(st);
-        *st = {};
-        st->struct_size = sizeof(*st);
-        st->running = s->running;
-        st->usb_bytes = s->usb_bytes;
-        st->samples = s->samples;
-        st->host_dropped_samples = s->host_dropped;
-        st->headers = s->headers;
-        st->resyncs = s->resyncs;
-        st->host_queue_bytes = s->ring.queued();
-        st->host_queue_peak_bytes = s->peak;
-        st->usb_queue_pending = s->pending;
-        st->transfer_errors = s->errors;
-        st->device_overflows = s->dev->overflows;
-        st->device_underflows = s->dev->underflows;
-        st->event_drops = s->dev->event_drops;
-        st->tx_starvation_events = s->starved;
-        auto began = s->started_ns.load();
-        auto end = s->running ? now_ns() : s->ended_ns.load();
-        st->elapsed_ns = began && end >= began ? end - began : 0;
-        st->tx_padding_samples = s->padding;
+        s->fill_stats(st);
         return OCH_OK;
     });
 }

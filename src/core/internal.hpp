@@ -314,4 +314,22 @@ struct och_stream {
     void tx_close(Slot *, uint8_t extra);
 
     size_t frame_groups() const { return wire_bytes == 2 ? 2046 : 1364; }
+
+    // Application-thread side (stream_io.cpp), called by the C API after argument checks.
+    // Return OCH_OK / OCH_TIMEOUT / OCH_STOPPED, or throw Failure.
+    int recv(void *output, size_t capacity, size_t *received, och_metadata *, uint32_t timeout_ms);
+
+    int rx_acquire(const void **data, size_t *bytes, och_metadata *, uint32_t timeout_ms);
+
+    void rx_release();
+
+    // flags/time come from och_tx_metadata (0 for och_send).
+    int send(const void *data, size_t count, uint32_t flags, uint64_t time, size_t *accepted, uint32_t timeout_ms);
+
+    void fill_stats(och_stats *);
+
+    int await_rx(uint32_t timeout_ms);
+
+    // Metadata of the current RX block as seen from recv_offset (a read that resumes mid-block).
+    och_metadata adjusted(const och::core::Ring::Block &) const;
 };

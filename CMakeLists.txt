@@ -37,7 +37,7 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(FATAL_ERROR "OmniCore Host currently supports Windows x64 only")
     endif ()
 
-    add_library(omnicore SHARED src/capi/device.cpp src/capi/stream.cpp src/capi/rf.cpp src/capi/board.cpp src/capi/firmware.cpp src/capi/timebase.cpp src/capi/sync.cpp src/core/device.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp)
+    add_library(omnicore SHARED src/capi/device.cpp src/capi/stream.cpp src/capi/rf.cpp src/capi/board.cpp src/capi/firmware.cpp src/capi/timebase.cpp src/capi/sync.cpp src/core/device.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp)
     target_compile_definitions(omnicore PRIVATE OCH_BUILD)
     target_include_directories(omnicore PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
     target_link_libraries(omnicore PRIVATE och_dsp Threads::Threads)
