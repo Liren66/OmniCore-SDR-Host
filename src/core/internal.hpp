@@ -217,6 +217,15 @@ struct och_device {
     och_time_status get_time();
 };
 
+namespace och::core {
+    // Stream state taken before a coordinated reconfiguration changes anything.
+    struct ResumePlan {
+        bool resume = false;       // running when the reconfiguration began: restart it afterwards
+        bool stopped = false;      // och_stop was already requested: keep it stopped
+        bool ever_started = false; // keeps the och_stop / och_send semantics of a once-started stream
+    };
+} // namespace och::core
+
 struct och_stream {
     struct Slot {
         OVERLAPPED ov{};
@@ -292,6 +301,25 @@ struct och_stream {
     void halt();
 
     void prepare_restart(bool receive_gap);
+
+    // Coordinated reconfiguration (och_device::reconfigure), in call order. The caller holds
+    // state_mutex and, through IoPause, this stream's io_mutex.
+    och::core::ResumePlan snapshot_for_reconfigure() const;
+
+    // halt() and return the USB bytes it cancelled.
+    uint64_t halt_for_reconfigure();
+
+    // Account the queued samples that cannot survive and reset for a restart; returns that count.
+    uint64_t discard_for_reconfigure(const och::core::ResumePlan &);
+
+    // TX only: queue zero blocks so a resumed TX does not underflow at start; returns their samples.
+    uint64_t prefill_zero(unsigned blocks);
+
+    // Failure path: stop, count unread RX samples as lost and mark the stream unusable.
+    void fail_reconfigure();
+
+    // RX samples still in the ring or the partial output block, not yet returned to the application.
+    uint64_t rx_unread_samples() const;
 
     void fail(const std::string &);
 

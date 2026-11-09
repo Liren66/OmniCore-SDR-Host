@@ -421,6 +421,9 @@ void och_stream::start() {
     }
 }
 void och_stream::flush(uint32_t timeout) {
+    // Held for the whole drain: a concurrent och_send fails try_lock and returns OCH_TIMEOUT.
+    std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
+    require(io.owns_lock(), OCH_BUSY, "TX IO in progress");
     require(!reconfiguring, OCH_TIMEOUT, "TX flush interrupted by reconfiguration");
     require(args.direction == OCH_TX && started, OCH_INVALID, "flush requires a started TX stream");
     require(running && !stop_requested, OCH_IO, "TX worker stopped before flush: " + error());
@@ -506,4 +509,73 @@ void och_stream::prepare_restart(bool receive_gap) {
     flushing = false;
     ever_started = false;
     stop_requested = false;
+}
+
+ResumePlan och_stream::snapshot_for_reconfigure() const {
+    ResumePlan plan;
+    plan.resume = started && running && !stop_requested;
+    plan.stopped = stop_requested;
+    plan.ever_started = ever_started;
+    return plan;
+}
+
+uint64_t och_stream::halt_for_reconfigure() {
+    const auto before = cancelled_bytes.load();
+    halt();
+    return cancelled_bytes.load() - before;
+}
+
+uint64_t och_stream::rx_unread_samples() const { return (ring.queued() - recv_offset + rx_filled) / group; }
+
+uint64_t och_stream::discard_for_reconfigure(const ResumePlan &plan) {
+    uint64_t discarded = 0;
+    if (args.direction == OCH_RX) {
+        discarded = rx_unread_samples();
+        host_dropped += discarded;
+        dropped_pending += discarded;
+    } else {
+        // tx_offset is already copied out of the first ring block. Pending
+        // USB transfers are uncertain delivery, not replayable samples.
+        discarded = (ring.queued() - tx_offset + assembling.load()) / group;
+    }
+    prepare_restart(plan.resume || plan.ever_started);
+    if (plan.resume) {
+        std::lock_guard<std::mutex> lock(failure_mutex);
+        failure.clear();
+    }
+    // prepare_restart() cleared stop_requested and ever_started: a stream that
+    // was already stopped before the reconfiguration stays stopped.
+    if (plan.stopped && !plan.resume) {
+        stop_requested = true;
+        ever_started = plan.ever_started;
+        SetEvent(stop_event.h);
+    }
+    return discarded;
+}
+
+uint64_t och_stream::prefill_zero(unsigned blocks) {
+    for (unsigned i = 0; i < blocks; ++i) {
+        auto *b = ring.write();
+        require(b != nullptr, OCH_IO, "TX restart prefill capacity");
+        memset(b->data.get(), 0, args.transfer_bytes);
+        ring.publish(args.transfer_bytes, {});
+    }
+    const uint64_t zero_samples = uint64_t(blocks) * args.transfer_bytes / group;
+    padding += zero_samples;
+    return zero_samples;
+}
+
+void och_stream::fail_reconfigure() {
+    halt();
+    // No stale data may look like a successful capture after failure.
+    if (args.direction == OCH_RX) {
+        const auto lost = rx_unread_samples();
+        host_dropped += lost;
+        dropped_pending += lost;
+    }
+    ring.reset();
+    recv_offset = rx_filled = tx_offset = 0;
+    assembling = 0;
+    std::lock_guard<std::mutex> lock(failure_mutex);
+    failure = "reconfiguration failed; configure and recreate streams";
 }

@@ -94,8 +94,6 @@ int och_stop(och_stream *s, uint32_t timeout) {
 int och_flush(och_stream *s, uint32_t timeout) {
     return protect([&] {
         stream(s, OCH_TX);
-        std::unique_lock<std::mutex> io(s->io_mutex, std::try_to_lock);
-        require(io.owns_lock(), OCH_BUSY, "TX IO in progress");
         s->flush(timeout);
         return OCH_OK;
     });
