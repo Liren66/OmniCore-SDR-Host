@@ -381,7 +381,7 @@ namespace och::transport {
                         throw std::runtime_error(
                                 std::string("Cannot open OmniCore USB: ") + libusb_error_name(rc) +
                                 (rc == LIBUSB_ERROR_ACCESS
-                                         ? "; install packaging/60-omnicore.rules and replug the device"
+                                         ? "; install packaging/linux/60-omnicore.rules and replug the device"
                                          : ""));
                     break;
                 }

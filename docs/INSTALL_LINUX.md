@@ -48,7 +48,7 @@ README、SDK 与文档同安装在 `/opt/omnicore/0.7.1/`。运行库依赖系�
 若 `och info` 报 `LIBUSB_ERROR_ACCESS`，安装仅匹配 `1a86:5537` 的规则：
 
 ```bash
-sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/60-omnicore.rules
+sudo install -m 0644 packaging/linux/60-omnicore.rules /etc/udev/rules.d/60-omnicore.rules
 sudo udevadm control --reload-rules
 sudo usermod -aG plugdev "$USER"
 ```

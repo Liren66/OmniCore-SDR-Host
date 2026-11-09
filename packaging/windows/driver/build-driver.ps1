@@ -1,6 +1,6 @@
 param([string]$CompilerRoot='C:\msys64\mingw64\bin')
 $ErrorActionPreference='Stop'
-$project=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$project=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
 $wdi=Join-Path $project 'third_party\driver\libwdi-1.5.1'
 $usb=Join-Path $project 'third_party\driver\libusbK-3.1.0.0\libusbK-3.1.0.0-bin\bin'
 $env:PATH=$CompilerRoot+';'+$env:PATH

@@ -81,7 +81,7 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_target_properties(och PROPERTIES INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
     else ()
         set_target_properties(och PROPERTIES INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
-        install(FILES packaging/60-omnicore.rules DESTINATION ${CMAKE_INSTALL_DATADIR}/omnicore)
+        install(FILES packaging/linux/60-omnicore.rules DESTINATION ${CMAKE_INSTALL_DATADIR}/omnicore)
     endif ()
 
     if (MINGW)

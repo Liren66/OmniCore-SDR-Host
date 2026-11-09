@@ -35,7 +35,7 @@ Installer build tool (not a runtime dependency)
   Inno Setup 6.2.2, https://github.com/jrsoftware/issrc/releases/tag/is-6_2_2
   Copyright Jordan Russell and Martijn Laan. The official installer was signature-verified, and its
   compiler was extracted into the project without installing system associations or changing PATH.
-  The tool's license is retained in tools/installer/inno-6.2.2/app/license.txt in the source project.
+  The tool's license is retained in third_party/inno-6.2.2/app/license.txt in the source project.
   innoextract 1.9 (Zlib license), https://github.com/dscharrer/innoextract/releases/tag/1.9,
   was used for release validation only and is not required to rebuild the installer.
 

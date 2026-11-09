@@ -5,13 +5,13 @@ param(
     [string]$InnoCompiler=''
 )
 $ErrorActionPreference='Stop'
-$project=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$project=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $stage=[IO.Path]::GetFullPath($StageDir)
 if(-not (Test-Path -LiteralPath $stage -PathType Container)){throw 'StageDir does not exist'}
 if($Version -notmatch '^\d+\.\d+\.\d+$'){throw 'Version must be major.minor.patch'}
 if(!$OutputDir){$OutputDir=Join-Path $project 'dist'}
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
-if(!$InnoCompiler){$InnoCompiler=Join-Path $project 'tools\installer\inno-6.2.2\app\ISCC.exe'}
+if(!$InnoCompiler){$InnoCompiler=Join-Path $project 'third_party\inno-6.2.2\app\ISCC.exe'}
 if(-not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)){throw 'Inno Setup compiler not found'}
 # CMake install merges into an existing directory. Refuse stale SDK/test/debug
 # payloads instead of silently including them in Inno's recursive file entry.
@@ -39,11 +39,11 @@ if($LASTEXITCODE -ne 0){throw 'Staged och.exe cannot run'}
 $runtimeVersion=$runtimeVersion|ConvertFrom-Json
 if($runtimeVersion.version -ne $Version){throw "Stage version $($runtimeVersion.version) does not match package version $Version"}
 $driver=Join-Path $project 'third_party\driver'
-$tools=Join-Path $project 'tools\installer'
-foreach($f in @('och-driver.exe','libwdi.dll')){Copy-Item -LiteralPath (Join-Path $tools $f) -Destination (Join-Path $stage 'bin') -Force}
+$assistant=Join-Path $PSScriptRoot 'driver'
+foreach($f in @('och-driver.exe','libwdi.dll')){Copy-Item -LiteralPath (Join-Path $assistant $f) -Destination (Join-Path $stage 'bin') -Force}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'och-shell.cmd') -Destination (Join-Path $stage 'bin') -Force
 Copy-Item -LiteralPath (Join-Path $driver 'libusbK-3.1.0.0\libusbK-3.1.0.0-bin\bin\dll\amd64\libusbK.dll') -Destination (Join-Path $stage 'bin') -Force
-& (Join-Path $tools 'build-msvc-import.ps1') -DllPath (Join-Path $stage 'bin\omnicore.dll') -OutputDir (Join-Path $stage 'lib')
+& (Join-Path $PSScriptRoot 'build-msvc-import.ps1') -DllPath (Join-Path $stage 'bin\omnicore.dll') -OutputDir (Join-Path $stage 'lib')
 if($LASTEXITCODE -ne 0){throw 'MSVC import-library generation failed'}
 foreach($d in @('docs','licenses\libusbK','licenses\libwdi','licenses\mingw','licenses\sources','licenses\driver-build')){New-Item -ItemType Directory -Force (Join-Path $stage $d)|Out-Null}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'INSTALL_WINDOWS.txt') -Destination (Join-Path $stage 'docs') -Force
@@ -52,7 +52,8 @@ Copy-Item -LiteralPath (Join-Path $driver 'libwdi-1.5.1\COPYING'),(Join-Path $dr
 Copy-Item -LiteralPath (Join-Path $driver 'downloads\libwdi-v1.5.1.zip'),(Join-Path $driver 'downloads\libusbK-3.1.0.0-src.7z') -Destination (Join-Path $stage 'licenses\sources') -Force
 Copy-Item -LiteralPath (Join-Path $driver 'NOTICES.txt'),(Join-Path $driver 'SOURCES.json') -Destination (Join-Path $stage 'licenses') -Force
 Copy-Item -Path (Join-Path $driver 'runtime_licenses\*') -Destination (Join-Path $stage 'licenses\mingw') -Recurse -Force
-foreach($f in @('och_driver.cpp','och_driver.rc','och_driver.manifest','build-driver.ps1','build-msvc-import.ps1')){Copy-Item -LiteralPath (Join-Path $tools $f) -Destination (Join-Path $stage 'licenses\driver-build') -Force}
+foreach($f in @('och_driver.cpp','och_driver.rc','och_driver.manifest','build-driver.ps1')){Copy-Item -LiteralPath (Join-Path $assistant $f) -Destination (Join-Path $stage 'licenses\driver-build') -Force}
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'build-msvc-import.ps1') -Destination (Join-Path $stage 'licenses\driver-build') -Force
 
 # Record the exact payload and reject unexpected external runtime dependencies before packaging.
 $objdump='C:\msys64\mingw64\bin\objdump.exe'

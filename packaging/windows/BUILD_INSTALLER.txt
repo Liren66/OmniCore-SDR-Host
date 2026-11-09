@@ -16,7 +16,7 @@ Application stage
   It also runs only the offline `och version --json` command to verify the version.
 
 Build the installer
-  powershell -NoProfile -File packaging/build-package.ps1 -StageDir build/stage
+  powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/stage
   Optional: -Version 0.7.1 -OutputDir dist -InnoCompiler C:/path/to/ISCC.exe
 
   Output:
@@ -30,16 +30,19 @@ Build the installer
   Building the installer never installs a driver or programs any device.
 
 Rebuild the driver assistant, only when its source/dependencies change
-  powershell -NoProfile -File tools/installer/build-driver.ps1
+  powershell -NoProfile -File packaging/windows/driver/build-driver.ps1
   Optional: -CompilerRoot C:/msys64/mingw64/bin
-  This produces tools/installer/och-driver.exe and libwdi.dll without installation.
+  This produces packaging/windows/driver/och-driver.exe and libwdi.dll without installation.
   Its generated intermediate files may be removed after a successful build.
 
 Required driver files in the source project
-  tools/installer/
-    och_driver.cpp, och_driver.rc, och_driver.manifest
-    build-driver.ps1, build-msvc-import.ps1
+  packaging/windows/
+    build-package.ps1, build-msvc-import.ps1, omnicore-host.iss
+  packaging/windows/driver/
+    och_driver.cpp, och_driver.rc, och_driver.manifest, build-driver.ps1
     och-driver.exe, libwdi.dll
+  third_party/inno-6.2.2/app/
+    ISCC.exe and the rest of the Inno Setup compiler
   third_party/driver/
     NOTICES.txt, SOURCES.json, runtime_licenses/
     downloads/libwdi-v1.5.1.zip
