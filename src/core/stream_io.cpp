@@ -14,7 +14,7 @@ namespace {
     }
 } // namespace
 
-och_metadata och_stream::adjusted(const Ring::Block &b) const {
+och_metadata Stream::adjusted(const Ring::Block &b) const {
     auto m = b.meta;
     m.sample_index += recv_offset / group;
     if (recv_offset) {
@@ -28,7 +28,7 @@ och_metadata och_stream::adjusted(const Ring::Block &b) const {
     return m;
 }
 
-int och_stream::await_rx(uint32_t timeout) {
+int Stream::await_rx(uint32_t timeout) {
     if (reconfiguring) return OCH_TIMEOUT;
     if (ring.read()) return OCH_OK;
     if (!running) {
@@ -47,7 +47,7 @@ int och_stream::await_rx(uint32_t timeout) {
     return OCH_TIMEOUT;
 }
 
-int och_stream::recv(void *output, size_t capacity, size_t *received, och_metadata *m, uint32_t timeout) {
+int Stream::recv(void *output, size_t capacity, size_t *received, och_metadata *m, uint32_t timeout) {
     std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
     if (!io.owns_lock() || reconfiguring) return OCH_TIMEOUT;
     require(!lease, OCH_BUSY, "release zero-copy lease before recv");
@@ -83,7 +83,7 @@ int och_stream::recv(void *output, size_t capacity, size_t *received, och_metada
     return OCH_OK;
 }
 
-int och_stream::rx_acquire(const void **data, size_t *bytes, och_metadata *m, uint32_t timeout) {
+int Stream::rx_acquire(const void **data, size_t *bytes, och_metadata *m, uint32_t timeout) {
     std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
     if (!io.owns_lock() || reconfiguring) return OCH_TIMEOUT;
     require(!lease, OCH_BUSY, "only one RX lease allowed");
@@ -97,7 +97,7 @@ int och_stream::rx_acquire(const void **data, size_t *bytes, och_metadata *m, ui
     return OCH_OK;
 }
 
-void och_stream::rx_release() {
+void Stream::rx_release() {
     std::lock_guard<std::mutex> io(io_mutex);
     require(lease, OCH_INVALID, "no RX lease");
     auto b = ring.read();
@@ -107,8 +107,7 @@ void och_stream::rx_release() {
     lease = false;
 }
 
-int och_stream::send(const void *data, size_t count, uint32_t mflags, uint64_t mtime, size_t *accepted,
-                     uint32_t timeout) {
+int Stream::send(const void *data, size_t count, uint32_t mflags, uint64_t mtime, size_t *accepted, uint32_t timeout) {
     std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
     if (!io.owns_lock() || reconfiguring) return OCH_TIMEOUT;
     require(count <= std::numeric_limits<size_t>::max() / (8 * nchan), OCH_INVALID, "sample count overflow");
@@ -164,7 +163,7 @@ int och_stream::send(const void *data, size_t count, uint32_t mflags, uint64_t m
     return OCH_OK;
 }
 
-void och_stream::fill_stats(och_stats *st) {
+void Stream::fill_stats(och_stats *st) {
     *st = {};
     st->struct_size = sizeof(*st);
     st->running = running;

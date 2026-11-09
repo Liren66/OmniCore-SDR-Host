@@ -45,8 +45,9 @@ int och_create_stream(och_device *d, const och_stream_args *a, och_stream **out)
         require(slot == nullptr, OCH_BUSY, "only one stream per direction");
         require((a->direction == OCH_RX ? d->config.rx_mask : d->config.tx_mask) != 0, OCH_INVALID,
                 "stream direction has no enabled channels");
-        slot = new och_stream(d, *a);
-        *out = slot;
+        auto *handle = new och_stream(d, *a);
+        slot = handle;
+        *out = handle;
         return OCH_OK;
     });
 }

@@ -51,14 +51,14 @@ void och::core::fill_info(och_device_info &info, const DeviceInfo &d) {
     info.rx_channels = info.tx_channels = 2;
     info.max_sample_rate = 61440000;
 }
-och_device::~och_device() {
+Device::~Device() {
     control_stop = true;
 #ifndef _WIN32
     usb.stop_control();
 #endif
     if (control_thread.joinable()) control_thread.join();
 }
-void och_device::open(const DeviceInfo &d) {
+void Device::open(const DeviceInfo &d) {
     fill_info(info, d);
     std::wstring name = L"Local\\OmniCoreHost_" + wide(info.serial);
     owner.h = CreateMutexW(nullptr, FALSE, name.c_str());
@@ -93,8 +93,8 @@ void och_device::open(const DeviceInfo &d) {
     och_default_config(&config);
     reset_transport();
 }
-void och_device::emit(uint32_t type, const std::string &message, uint64_t ep, uint64_t hw_time, uint32_t code,
-                      uint32_t block, uint32_t count) {
+void Device::emit(uint32_t type, const std::string &message, uint64_t ep, uint64_t hw_time, uint32_t code,
+                  uint32_t block, uint32_t count) {
     och_event e{};
     e.struct_size = sizeof e;
     e.type = type;
@@ -114,7 +114,7 @@ void och_device::emit(uint32_t type, const std::string &message, uint64_t ep, ui
     events.push_back(e);
     events_cv.notify_one();
 }
-void och_device::line(const std::string &s) {
+void Device::line(const std::string &s) {
     if (s.rfind("EVT ", 0) == 0) {
         if (och::core::timed_event(*this, s)) return;
         if (s.find("type=rx_overflow") != std::string::npos && s.find("action=waiting_rx_resync") != std::string::npos)
@@ -166,7 +166,7 @@ void och_device::line(const std::string &s) {
         reply += '\n';
     }
 }
-void och_device::control_loop() {
+void Device::control_loop() {
     std::string partial;
     partial.reserve(4096);
     try {
@@ -204,7 +204,7 @@ void och_device::control_loop() {
         emit(OCH_EVENT_TRANSPORT, std::string("control disconnected: ") + e.what());
     }
 }
-std::string och_device::command(const std::string &cmd, uint32_t timeout) {
+std::string Device::command(const std::string &cmd, uint32_t timeout) {
     auto first = cmd.find_first_not_of(" \t");
     require(first != std::string::npos && cmd[first] != '@' &&
                     std::none_of(cmd.begin(), cmd.end(),
@@ -256,7 +256,7 @@ std::string och_device::command(const std::string &cmd, uint32_t timeout) {
         throw;
     }
 }
-void och_device::reset_transport() {
+void Device::reset_transport() {
     require(!rx_on && !tx_on, OCH_BUSY, "transport reset requires both directions stopped");
     WINUSB_SETUP_PACKET setup{};
     setup.RequestType = 0xc0;

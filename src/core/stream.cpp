@@ -3,7 +3,7 @@
 using namespace och::core;
 using namespace och::transport;
 
-och_stream::och_stream(och_device *d, const och_stream_args &a)
+Stream::Stream(Device *d, const och_stream_args &a)
     : dev(d), args(a), nchan(channels(a.direction == OCH_RX ? d->config.rx_mask : d->config.tx_mask)),
       wire_bytes(iq_bits(d->config) == 8 ? 2 : 3), group(nchan * wire_bytes),
       ring(std::max<size_t>(2, a.host_buffer_bytes / a.transfer_bytes), a.transfer_bytes),
@@ -15,13 +15,13 @@ och_stream::och_stream(och_device *d, const och_stream_args &a)
     slots.reserve(nslots);
     for (unsigned i = 0; i < nslots; ++i) slots.push_back(std::make_unique<Slot>(dev->usb, xfer_bytes));
 }
-och_stream::~och_stream() {
+Stream::~Stream() {
     stop_requested = true;
     SetEvent(stop_event.h);
     ring.wake();
     if (worker.joinable()) worker.join();
 }
-void och_stream::fail(const std::string &s) {
+void Stream::fail(const std::string &s) {
     {
         std::lock_guard<std::mutex> lock(failure_mutex);
         failure = s;
@@ -29,17 +29,17 @@ void och_stream::fail(const std::string &s) {
     ++errors;
     dev->emit(OCH_EVENT_TRANSPORT, s);
 }
-std::string och_stream::error() {
+std::string Stream::error() {
     std::lock_guard<std::mutex> lock(failure_mutex);
     return failure;
 }
-void och_stream::frame_sink(void *self, const och::dsp::FrameHeader &h, const uint8_t *p, size_t n) {
-    static_cast<och_stream *>(self)->rx_frame(h, p, n);
+void Stream::frame_sink(void *self, const och::dsp::FrameHeader &h, const uint8_t *p, size_t n) {
+    static_cast<Stream *>(self)->rx_frame(h, p, n);
 }
 // One framed block: whole samples starting at h.time. A new segment (and epoch)
 // starts at SOB, GAP, LATE or any time discontinuity; GAP gives the exact
 // number of samples the FPGA dropped (difference of timestamps).
-void och_stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size_t n) {
+void Stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size_t n) {
     using namespace och::dsp;
     const bool continuous =
             have_time && h.time == next_time && !(h.flags & (frame_rx_sob | frame_rx_gap | frame_rx_late));
@@ -133,7 +133,7 @@ void och_stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size
 }
 // TX block builder. The open block lives directly in the USB slot at
 // blk_start; slot->used only advances over finished 16 KiB blocks.
-void och_stream::tx_open(Slot *s, uint32_t f, uint64_t t) {
+void Stream::tx_open(Slot *s, uint32_t f, uint64_t t) {
     blk_open = true;
     blk_start = s->used;
     blk_used = 0;
@@ -146,7 +146,7 @@ void och_stream::tx_open(Slot *s, uint32_t f, uint64_t t) {
     }
     tx_first = false;
 }
-void och_stream::tx_close(Slot *s, uint8_t extra) {
+void Stream::tx_close(Slot *s, uint8_t extra) {
     using namespace och::dsp;
     uint8_t *b = s->bytes.get() + blk_start;
     memset(b + frame_header_bytes + blk_used, 0, frame_payload_bytes - blk_used);
@@ -161,7 +161,7 @@ void och_stream::tx_close(Slot *s, uint8_t extra) {
     blk_open = false;
     blk_used = 0;
 }
-bool och_stream::fill_tx(Slot *s) {
+bool Stream::fill_tx(Slot *s) {
     using namespace och::dsp;
     for (;;) {
         if (!blk_open && s->used >= args.transfer_bytes) {
@@ -215,7 +215,7 @@ bool och_stream::fill_tx(Slot *s) {
         if (blk_used == frame_payload_bytes) tx_close(s, 0);
     }
 }
-void och_stream::publish_rx() {
+void Stream::publish_rx() {
     if (!rx_filled) return;
     ring.publish(rx_filled, rx_meta);
     rx_filled = 0;
@@ -223,7 +223,7 @@ void och_stream::publish_rx() {
     auto prev = peak.load();
     if (bytes > prev) peak = bytes;
 }
-bool och_stream::submit(Slot *s) {
+bool Stream::submit(Slot *s) {
     auto &u = dev->usb;
     UCHAR ep = args.direction == OCH_RX ? 0x81 : 0x01;
     if (args.direction == OCH_RX) s->used = xfer_bytes;
@@ -240,7 +240,7 @@ bool och_stream::submit(Slot *s) {
     assembling = 0;
     return true;
 }
-void och_stream::cancel_all() {
+void Stream::cancel_all() {
     auto &u = dev->usb;
     UCHAR ep = args.direction == OCH_RX ? 0x81 : 0x01;
     if (!active.empty()) {
@@ -262,7 +262,7 @@ void och_stream::cancel_all() {
     UCHAR off = FALSE;
     u.api.setPolicy(u.h, ep, RAW_IO, sizeof off, &off);
 }
-void och_stream::run() {
+void Stream::run() {
     auto &u = dev->usb;
     UCHAR ep = args.direction == OCH_RX ? 0x81 : 0x01;
     och::core::FixedQueue<Slot *, 128> free;
@@ -319,7 +319,7 @@ void och_stream::run() {
             pending = active.size();
             usb_bytes += n;
             if (args.direction == OCH_RX) {
-                fparser.feed(s->bytes.get(), n, &och_stream::frame_sink, this);
+                fparser.feed(s->bytes.get(), n, &Stream::frame_sink, this);
                 headers = fparser.blocks();
                 resyncs = fparser.resyncs();
             }
@@ -335,7 +335,7 @@ void och_stream::run() {
     stop_requested = true;
     ring.wake();
 }
-void och_stream::start() {
+void Stream::start() {
     require(!ever_started && !stop_requested, OCH_BUSY,
             "stream is single-use; destroy and create a new stream after stop");
     require(dev->configured, OCH_INVALID, "configure the device before starting streams");
@@ -420,7 +420,7 @@ void och_stream::start() {
         throw;
     }
 }
-void och_stream::flush(uint32_t timeout) {
+void Stream::flush(uint32_t timeout) {
     // Held for the whole drain: a concurrent och_send fails try_lock and returns OCH_TIMEOUT.
     std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
     require(io.owns_lock(), OCH_BUSY, "TX IO in progress");
@@ -444,7 +444,7 @@ void och_stream::flush(uint32_t timeout) {
     }
     flushing = false;
 }
-void och_stream::stop(uint32_t timeout) {
+void Stream::stop(uint32_t timeout) {
     if (!ever_started) {
         stop_requested = true;
         ring.wake();
@@ -468,7 +468,7 @@ void och_stream::stop(uint32_t timeout) {
     if (!issue.empty()) throw Failure(OCH_IO, "stop completed with an error: " + issue);
 }
 
-void och_stream::halt() {
+void Stream::halt() {
     started = false;
     stop_requested = true;
     SetEvent(stop_event.h);
@@ -480,7 +480,7 @@ void och_stream::halt() {
 
 // Both the USB worker and the application IO endpoint are quiescent. Large
 // ring/USB allocations and the public stream pointer deliberately survive.
-void och_stream::prepare_restart(bool receive_gap) {
+void Stream::prepare_restart(bool receive_gap) {
     epoch_base += fr_epochs;
     fparser.reset();
     fr_epochs = 0;
@@ -511,7 +511,7 @@ void och_stream::prepare_restart(bool receive_gap) {
     stop_requested = false;
 }
 
-ResumePlan och_stream::snapshot_for_reconfigure() const {
+ResumePlan Stream::snapshot_for_reconfigure() const {
     ResumePlan plan;
     plan.resume = started && running && !stop_requested;
     plan.stopped = stop_requested;
@@ -519,15 +519,15 @@ ResumePlan och_stream::snapshot_for_reconfigure() const {
     return plan;
 }
 
-uint64_t och_stream::halt_for_reconfigure() {
+uint64_t Stream::halt_for_reconfigure() {
     const auto before = cancelled_bytes.load();
     halt();
     return cancelled_bytes.load() - before;
 }
 
-uint64_t och_stream::rx_unread_samples() const { return (ring.queued() - recv_offset + rx_filled) / group; }
+uint64_t Stream::rx_unread_samples() const { return (ring.queued() - recv_offset + rx_filled) / group; }
 
-uint64_t och_stream::discard_for_reconfigure(const ResumePlan &plan) {
+uint64_t Stream::discard_for_reconfigure(const ResumePlan &plan) {
     uint64_t discarded = 0;
     if (args.direction == OCH_RX) {
         discarded = rx_unread_samples();
@@ -553,7 +553,7 @@ uint64_t och_stream::discard_for_reconfigure(const ResumePlan &plan) {
     return discarded;
 }
 
-uint64_t och_stream::prefill_zero(unsigned blocks) {
+uint64_t Stream::prefill_zero(unsigned blocks) {
     for (unsigned i = 0; i < blocks; ++i) {
         auto *b = ring.write();
         require(b != nullptr, OCH_IO, "TX restart prefill capacity");
@@ -565,7 +565,7 @@ uint64_t och_stream::prefill_zero(unsigned blocks) {
     return zero_samples;
 }
 
-void och_stream::fail_reconfigure() {
+void Stream::fail_reconfigure() {
     halt();
     // No stale data may look like a successful capture after failure.
     if (args.direction == OCH_RX) {

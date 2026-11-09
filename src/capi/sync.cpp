@@ -77,7 +77,11 @@ int och_multi_sync(och_device *const *devs, size_t n, const och_multi_sync_args 
         if (r)
             for (size_t i = 0; i < n; ++i)
                 require(r[i].struct_size == sizeof(*r), OCH_INVALID, "och_multi_sync_result struct_size mismatch");
-        multi_sync(devs, n, *a, r);
+        // An array of handles is not an array of core pointers: convert it. multi_sync checks
+        // devs and n first, so a null array or a bad count is still rejected with the same error.
+        std::vector<Device *> group;
+        if (devs && n <= 64) group.assign(devs, devs + n);
+        multi_sync(devs ? group.data() : nullptr, n, *a, r);
         return OCH_OK;
     });
 }

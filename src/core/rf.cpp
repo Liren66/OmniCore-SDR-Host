@@ -141,7 +141,7 @@ namespace {
         require(a.rx_hz[5] == b.rx_hz[5] && a.tx_hz[5] == b.tx_hz[5], OCH_PROTOCOL,
                 "FIR changed sample rate unexpectedly; configure again before streaming");
     }
-    och_rx_correction_config read_rx_correction(och_device &d) {
+    och_rx_correction_config read_rx_correction(Device &d) {
         och_rx_correction_config c{};
         c.struct_size = sizeof c;
         c.dc_enabled = u32(field(d.command("rx_dc_correction?"), "rx_dc_correction"));
@@ -149,7 +149,7 @@ namespace {
         require(c.dc_enabled <= 1 && c.iq_enabled <= 1, OCH_PROTOCOL, "SDK RX correction states must be 0 or 1");
         return c;
     }
-    och_lo_source_config read_lo_source(och_device &d) {
+    och_lo_source_config read_lo_source(Device &d) {
         och_lo_source_config c{};
         c.struct_size = sizeof c;
         for (unsigned dir = 0; dir < 2; ++dir) {
@@ -165,7 +165,7 @@ namespace {
         }
         return c;
     }
-    och_reference_status read_reference_status(och_device &d) {
+    och_reference_status read_reference_status(Device &d) {
         const auto text = d.command("adf4002_status?");
         och_reference_status c{};
         c.struct_size = sizeof c;
@@ -205,7 +205,7 @@ namespace {
     bool reference_healthy(const och_reference_status &c) {
         return c.initialized && c.source_known && c.gpio_verified && !c.last_error;
     }
-    och_pps_status read_pps_status(och_device &d) {
+    och_pps_status read_pps_status(Device &d) {
         const auto text = d.command("pps_status?");
         och_pps_status c{};
         c.struct_size = sizeof c;
@@ -266,7 +266,7 @@ namespace {
         }
         return c;
     }
-    och_vcxo_status read_vcxo_status(och_device &d) {
+    och_vcxo_status read_vcxo_status(Device &d) {
         const auto text = d.command("vcxo_status?");
         och_vcxo_status c{};
         c.struct_size = sizeof c;
@@ -314,7 +314,7 @@ namespace {
     }
     // The SDK finishes an external-reference request in its main loop, after the
     // CH32 confirms PA4 high-Z (3 s firmware timeout). Poll until it is settled.
-    och_vcxo_status settle_vcxo(och_device &d) {
+    och_vcxo_status settle_vcxo(Device &d) {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         for (;;) {
             const auto s = read_vcxo_status(d);
@@ -330,7 +330,7 @@ namespace {
         }
     }
 }
-bool och_device::supports_capability(const char *key) {
+bool Device::supports_capability(const char *key) {
     if (capabilities.empty()) capabilities = command("system_info?");
     bool supported = false;
     try {
@@ -338,15 +338,15 @@ bool och_device::supports_capability(const char *key) {
     } catch (const Failure &) {}
     return supported;
 }
-void och_device::require_capability(const char *key) {
+void Device::require_capability(const char *key) {
     require(supports_capability(key), OCH_UNSUPPORTED,
             std::string("SDK capability ") + key + "=1 required; load the updated firmware/AD9361_TEST.elf");
 }
-och_pps_status och_device::get_pps_status() {
+och_pps_status Device::get_pps_status() {
     require_capability("pps_monitor");
     return read_pps_status(*this);
 }
-void och_device::set_pps_enabled(unsigned enabled) {
+void Device::set_pps_enabled(unsigned enabled) {
     require(enabled <= 1, OCH_INVALID, "PPS enabled must be 0 or 1");
     const auto before = get_pps_status();
     if (before.enabled == enabled) return;
@@ -358,11 +358,11 @@ void och_device::set_pps_enabled(unsigned enabled) {
     // the SDK hands over without touching streams or the RF configuration.
     if (supports_capability("vcxo")) (void) settle_vcxo(*this);
 }
-och_vcxo_status och_device::get_vcxo_status() {
+och_vcxo_status Device::get_vcxo_status() {
     require_capability("vcxo");
     return read_vcxo_status(*this);
 }
-och_rx_rssi och_device::get_rx_rssi() {
+och_rx_rssi Device::get_rx_rssi() {
     och_rx_rssi c{};
     c.struct_size = sizeof c;
     if (supports_capability("rssi")) {
@@ -398,19 +398,19 @@ och_rx_rssi och_device::get_rx_rssi() {
     }
     return c;
 }
-void och_device::set_rx_rssi_enabled(unsigned enabled) {
+void Device::set_rx_rssi_enabled(unsigned enabled) {
     require(enabled <= 1, OCH_INVALID, "RSSI enabled must be 0 or 1");
     require_capability("rssi");
     const auto reply = command("rssi_enable=" + std::to_string(enabled));
     require(u32(field(reply, "rssi_enable")) == enabled, OCH_PROTOCOL, "SDK RSSI enable readback mismatch");
 }
-och_lo_source_config och_device::get_lo_source() {
+och_lo_source_config Device::get_lo_source() {
     require_capability("external_lo");
     const auto c = read_lo_source(*this);
     lo_sources = int(c.rx_source) | int(c.tx_source) << 1;
     return c;
 }
-void och_device::set_lo_source(bool receive, unsigned source) {
+void Device::set_lo_source(bool receive, unsigned source) {
     require(source <= 1, OCH_INVALID, "LO source must be 0 (internal) or 1 (external)");
     const auto before = get_lo_source();
     if ((receive ? before.rx_source : before.tx_source) == source) return;
@@ -446,7 +446,7 @@ void och_device::set_lo_source(bool receive, unsigned source) {
         configured = was;
     });
 }
-och_reference_status och_device::get_reference_status() {
+och_reference_status Device::get_reference_status() {
     require_capability("adf4002");
     auto status = read_reference_status(*this);
     status.lock_known = 0;
@@ -470,7 +470,7 @@ och_reference_status och_device::get_reference_status() {
     } catch (const Failure &) {}
     return status;
 }
-void och_device::set_reference_source(unsigned source) {
+void Device::set_reference_source(unsigned source) {
     require(source <= 1, OCH_INVALID, "reference source must be 0 (internal) or 1 (external 10 MHz)");
     require_capability("ref_source");
     const auto before = read_reference_status(*this);
@@ -487,7 +487,7 @@ void och_device::set_reference_source(unsigned source) {
         configured = was;
     });
 }
-och_reference_test_result och_device::test_reference() {
+och_reference_test_result Device::test_reference() {
     require_capability("adf4002");
     const auto before = read_reference_status(*this);
     require(reference_healthy(before), OCH_INVALID,
@@ -511,11 +511,11 @@ och_reference_test_result och_device::test_reference() {
     });
     return result;
 }
-och_rx_correction_config och_device::get_rx_correction() {
+och_rx_correction_config Device::get_rx_correction() {
     require_capability("rx_correction");
     return read_rx_correction(*this);
 }
-void och_device::set_rx_correction(bool dc, unsigned enabled) {
+void Device::set_rx_correction(bool dc, unsigned enabled) {
     require(enabled <= 1, OCH_INVALID, "RX correction enabled must be 0 or 1");
     // Preflight only reads control state: unsupported firmware and a no-op
     // leave active streams, their queues and the configuration cache intact.
@@ -534,7 +534,7 @@ void och_device::set_rx_correction(bool dc, unsigned enabled) {
         configured = was;
     });
 }
-och_clock_config och_device::get_clock() {
+och_clock_config Device::get_clock() {
     auto text = command("clock_chain?");
     och_clock_config c{};
     c.struct_size = sizeof c;
@@ -543,7 +543,7 @@ och_clock_config och_device::get_clock() {
     clocks(field(text, "tx"), c.tx_hz);
     return c;
 }
-och_fir_config och_device::get_fir(unsigned direction) {
+och_fir_config Device::get_fir(unsigned direction) {
     require(direction <= OCH_TX, OCH_INVALID, "invalid FIR direction");
     require_capability("fir_upload");
     std::string prefix = direction == OCH_RX ? "rx" : "tx";
@@ -581,7 +581,7 @@ och_fir_config och_device::get_fir(unsigned direction) {
     require(crc(c.coefficients, c.tap_count) == c.crc32, OCH_PROTOCOL, "FIR readback CRC mismatch");
     return c;
 }
-void och_device::set_fir(const och_fir_config &c) {
+void Device::set_fir(const och_fir_config &c) {
     valid(c);
     if (!reconfiguring_control) require_capability("fir_upload");
     if ((rx || tx) && !reconfiguring_control) {
@@ -621,7 +621,7 @@ void och_device::set_fir(const och_fir_config &c) {
         std::rethrow_exception(error);
     }
 }
-void och_device::enable_fir(unsigned r, unsigned t) {
+void Device::enable_fir(unsigned r, unsigned t) {
     require(r <= 1 && t <= 1, OCH_INVALID, "FIR states must be 0 or 1");
     if (!reconfiguring_control) require_capability("fir_upload");
     if ((rx || tx) && !reconfiguring_control) {
@@ -639,7 +639,7 @@ void och_device::enable_fir(unsigned r, unsigned t) {
     unchanged_rate(before, get_clock());
     configured = was;
 }
-void och_device::set_clock(const och_clock_config &c) {
+void Device::set_clock(const och_clock_config &c) {
     require(c.struct_size == sizeof c, OCH_INVALID, "clock config ABI mismatch");
     for (unsigned i = 0; i < 6; ++i) require(c.rx_hz[i] && c.tx_hz[i], OCH_INVALID, "clock rates must be positive");
     require(c.rx_hz[5] == c.tx_hz[5] && c.rx_hz[5] <= 61440000 && c.rx_hz[0] == c.tx_hz[0], OCH_INVALID,
@@ -676,7 +676,7 @@ void och_device::set_clock(const och_clock_config &c) {
         std::rethrow_exception(error);
     }
 }
-void och_device::set_sample_rate(uint32_t rate) {
+void Device::set_sample_rate(uint32_t rate) {
     require(rate > 0 && rate <= 61440000, OCH_INVALID, "sample rate must be 1..61440000 Hz");
     if (configured && (config.sample_rate == rate || requested_sample_rate == rate)) return;
     if (!reconfiguring_control) require_capability("clock_config");
@@ -697,7 +697,7 @@ void och_device::set_sample_rate(uint32_t rate) {
 // round-trips, typically ~11 Hz away. One SDK attempt then suffices. If the
 // SDK still rejects it (model out of step with firmware), search the device
 // 1 Hz at a time as before.
-uint32_t och_device::apply_sample_rate(uint32_t rate) {
+uint32_t Device::apply_sample_rate(uint32_t rate) {
     constexpr uint32_t max_rate = 61440000, max_plan_offset = 4096, max_probe_offset = 64;
     const auto attempt = [&](uint32_t hz) {
         command("clock_sample_rate=" + std::to_string(hz), 15000);

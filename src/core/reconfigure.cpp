@@ -9,7 +9,7 @@ namespace {
     // so in between a new IO call fails try_lock and also returns OCH_TIMEOUT.
     class IoPause {
     public:
-        IoPause(och_stream *r, och_stream *t) : rx(r), tx(t) {
+        IoPause(Stream *r, Stream *t) : rx(r), tx(t) {
             for (auto *s: {rx, tx})
                 if (s) {
                     s->reconfiguring = true;
@@ -46,15 +46,15 @@ namespace {
         }
 
     private:
-        och_stream *rx;
-        och_stream *tx;
+        Stream *rx;
+        Stream *tx;
         std::unique_lock<std::mutex> rx_lock, tx_lock;
     };
 } // namespace
 
 // Caller owns state_mutex. IO never takes state_mutex, so long recv/send waits
 // can be interrupted before acquiring their gates without lock inversion.
-void och_device::reconfigure(const std::function<void()> &apply) {
+void Device::reconfigure(const std::function<void()> &apply) {
     if (!rx && !tx) {
         apply();
         return;

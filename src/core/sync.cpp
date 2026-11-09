@@ -39,13 +39,13 @@ namespace {
 
     // Locks one device for one control transaction.
     template<class F>
-    auto with(och_device *d, F f) {
+    auto with(Device *d, F f) {
         std::lock_guard<std::mutex> lock(d->state_mutex);
         return f(*d);
     }
 }
 
-och_sync_status och::core::read_sync_status(och_device &d) {
+och_sync_status och::core::read_sync_status(Device &d) {
     och_sync_status s{};
     s.struct_size = sizeof s;
     s.mcs_step = -1;
@@ -74,7 +74,7 @@ och_sync_status och::core::read_sync_status(och_device &d) {
     return s;
 }
 
-void och::core::apply_sync_config(och_device &d, const och_sync_config &c) {
+void och::core::apply_sync_config(Device &d, const och_sync_config &c) {
     d.require_capability("sync");
     require(c.trig_width <= 65535, OCH_INVALID, "trig_width must be 0..65535 cycles");
     require(c.trig_period == 0 || c.trig_period >= 1000, OCH_INVALID, "trig_period must be 0 or >= 1000 cycles");
@@ -91,7 +91,7 @@ void och::core::apply_sync_config(och_device &d, const och_sync_config &c) {
     if (c.trig_period) d.command("trig_period=" + std::to_string(c.trig_period));
 }
 
-void och::core::sync_trigger(och_device &d, uint32_t mode) {
+void och::core::sync_trigger(Device &d, uint32_t mode) {
     d.require_capability("sync");
     require(mode <= OCH_SYNC_TRIGGER_DISARM, OCH_INVALID, "trigger mode must be 0..2");
     d.command(mode == OCH_SYNC_TRIGGER_NOW      ? "trig_pulse!"
@@ -101,11 +101,11 @@ void och::core::sync_trigger(och_device &d, uint32_t mode) {
 
 namespace {
     struct Group {
-        och_device *const *dev;
+        Device *const *dev;
         size_t n;
         std::string cmd(size_t i, const std::string &c, uint32_t timeout = 5000) {
             try {
-                return with(dev[i], [&](och_device &d) { return d.command(c, timeout); });
+                return with(dev[i], [&](Device &d) { return d.command(c, timeout); });
             } catch (const Failure &e) {
                 throw Failure(e.code, board_name(i) + ": " + c + ": " + e.what());
             }
@@ -114,10 +114,10 @@ namespace {
             for (size_t i = 0; i < n; ++i) cmd(i, c);
         }
         och_sync_status status(size_t i) {
-            return with(dev[i], [](och_device &d) { return read_sync_status(d); });
+            return with(dev[i], [](Device &d) { return read_sync_status(d); });
         }
         och_time_status time(size_t i) {
-            return with(dev[i], [](och_device &d) { return d.get_time(); });
+            return with(dev[i], [](Device &d) { return d.get_time(); });
         }
     };
 
@@ -132,7 +132,7 @@ namespace {
     }
 }
 
-void och::core::multi_sync(och_device *const *devices, size_t n, const och_multi_sync_args &a,
+void och::core::multi_sync(Device *const *devices, size_t n, const och_multi_sync_args &a,
                            och_multi_sync_result *results) {
     require(devices && n >= 1 && n <= 64, OCH_INVALID, "1..64 devices required");
     require(a.mode <= OCH_SYNC_COMMON, OCH_INVALID, "mode must be OCH_SYNC_CHAIN or OCH_SYNC_COMMON");
@@ -140,7 +140,7 @@ void och::core::multi_sync(och_device *const *devices, size_t n, const och_multi
     for (size_t i = 0; i < n; ++i) {
         require(devices[i] != nullptr, OCH_INVALID, "null device");
         for (size_t j = 0; j < i; ++j) require(devices[i] != devices[j], OCH_INVALID, "device listed twice");
-        with(devices[i], [&](och_device &d) {
+        with(devices[i], [&](Device &d) {
             try {
                 d.require_capability("sync");
                 d.require_capability("hw_time");
@@ -160,7 +160,7 @@ void och::core::multi_sync(och_device *const *devices, size_t n, const och_multi
     // 1. Reference sources and outputs.
     for (size_t i = 0; i < n; ++i) {
         const unsigned ref = chain ? (i ? 1u : (a.master_external_ref ? 1u : 0u)) : 1u;
-        with(devices[i], [&](och_device &d) {
+        with(devices[i], [&](Device &d) {
             d.set_reference_source(ref);
             return 0;
         });
@@ -170,7 +170,7 @@ void och::core::multi_sync(och_device *const *devices, size_t n, const och_multi
         c.trig_out = chain ? (i == 0) : a.mcs; // COMMON: own TRIG -> own J1 for MCS
         c.trig_width = 80;
         c.loopback = a.loopback;
-        with(devices[i], [&](och_device &d) {
+        with(devices[i], [&](Device &d) {
             apply_sync_config(d, c);
             return 0;
         });

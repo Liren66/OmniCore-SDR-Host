@@ -13,6 +13,10 @@
 #include <cmath>
 
 namespace och::core {
+    // Implementation classes behind the C handles och_device / och_stream (defined below).
+    struct Device;
+    struct Stream;
+
     struct Failure : std::runtime_error {
         int code;
 
@@ -82,21 +86,20 @@ namespace och::core {
     void firmware_update(const char *serial, const char *path, och_firmware_progress, void *user);
 
     // EVT lines from the SDK time module; true when consumed (timebase.cpp).
-    bool timed_event(och_device &, const std::string &line);
+    bool timed_event(Device &, const std::string &line);
 
     // Multi-board sync (sync.cpp). Callers hold the device's state_mutex except
     // for multi_sync, which takes each device's lock per transaction.
-    och_sync_status read_sync_status(och_device &);
+    och_sync_status read_sync_status(Device &);
 
-    void apply_sync_config(och_device &, const och_sync_config &);
+    void apply_sync_config(Device &, const och_sync_config &);
 
-    void sync_trigger(och_device &, uint32_t mode);
+    void sync_trigger(Device &, uint32_t mode);
 
-    void multi_sync(och_device *const *devices, size_t count, const och_multi_sync_args &,
-                    och_multi_sync_result *results);
+    void multi_sync(Device *const *devices, size_t count, const och_multi_sync_args &, och_multi_sync_result *results);
 }
 
-struct och_device {
+struct och::core::Device {
     och::transport::Usb usb;
     och::transport::Handle owner;
     bool owns_mutex = false;
@@ -108,7 +111,7 @@ struct och_device {
     // state_mutex serializes control transactions; IO gates protect buffers
     // while a transaction reuses the existing public stream handles.
     bool reconfiguring_control = false;
-    och_stream *rx = nullptr, *tx = nullptr;
+    Stream *rx = nullptr, *tx = nullptr;
     bool rx_on = false, tx_on = false;
     std::atomic<bool> control_stop{false};
     std::thread control_thread;
@@ -124,7 +127,7 @@ struct och_device {
     std::atomic<uint64_t> event_seq{0}, event_drops{0}, overflows{0}, underflows{0};
     och::core::PowerLogParser power_log;
 
-    ~och_device();
+    ~Device();
 
     void open(const och::transport::DeviceInfo &);
 
@@ -226,7 +229,7 @@ namespace och::core {
     };
 } // namespace och::core
 
-struct och_stream {
+struct och::core::Stream {
     struct Slot {
         OVERLAPPED ov{};
         och::transport::Handle event;
@@ -241,7 +244,7 @@ struct och_stream {
         }
     };
 
-    och_device *dev;
+    Device *dev;
     och_stream_args args;
     unsigned nchan, wire_bytes, group;
     och::core::Ring ring;
@@ -286,9 +289,9 @@ struct och_stream {
     // TX consumer partial input block.
     size_t tx_offset = 0;
 
-    och_stream(och_device *, const och_stream_args &);
+    Stream(Device *, const och_stream_args &);
 
-    ~och_stream();
+    ~Stream();
 
     void start();
 
@@ -302,7 +305,7 @@ struct och_stream {
 
     void prepare_restart(bool receive_gap);
 
-    // Coordinated reconfiguration (och_device::reconfigure), in call order. The caller holds
+    // Coordinated reconfiguration (Device::reconfigure), in call order. The caller holds
     // state_mutex and, through IoPause, this stream's io_mutex.
     och::core::ResumePlan snapshot_for_reconfigure() const;
 
@@ -360,4 +363,12 @@ struct och_stream {
 
     // Metadata of the current RX block as seen from recv_offset (a read that resumes mid-block).
     och_metadata adjusted(const och::core::Ring::Block &) const;
+};
+
+// The public opaque handles (och.h). They add nothing: core code works on Device / Stream and
+// only src/capi/ uses these names. Every Stream is created as an och_stream.
+struct och_device final : och::core::Device {};
+
+struct och_stream final : och::core::Stream {
+    using Stream::Stream;
 };

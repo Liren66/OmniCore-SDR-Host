@@ -62,7 +62,7 @@ namespace {
             if ((hz > edge ? hz - edge : edge - hz) < 1000000) return true;
         return false;
     }
-    void set_iq_bits(och_device &d, unsigned bits) {
+    void set_iq_bits(Device &d, unsigned bits) {
         d.command("iq_format=" + std::to_string(bits));
         const auto reply = d.command("iq_format?");
         std::map<std::string, std::string> fields;
@@ -83,7 +83,7 @@ namespace {
     }
 }
 
-void och_device::configure(const och_config &requested) {
+void Device::configure(const och_config &requested) {
     validate(requested);
     // A rate already mapped to its nearest accepted clock plan is unchanged.
     och_config c = requested;
@@ -119,7 +119,7 @@ void och_device::configure(const och_config &requested) {
     reconfigure([&] { apply_config(c); });
 }
 
-void och_device::retune(const och_config &c) {
+void Device::retune(const och_config &c) {
     const auto before = config;
     const auto began = now_ns();
     configured = false;
@@ -143,7 +143,7 @@ void och_device::retune(const och_config &c) {
          rx ? rx->epoch_base : 0);
 }
 
-bool och_device::tune_lo(const och_config &c, const och_config &before, bool full) {
+bool Device::tune_lo(const och_config &c, const och_config &before, bool full) {
     const bool rx_tuned = full || c.rx_frequency != before.rx_frequency;
     if (rx_tuned) command("rx_lo_freq=" + fixed(c.rx_frequency / 1e6));
     if (full || c.tx_frequency != before.tx_frequency) command("tx_lo_freq=" + fixed(c.tx_frequency / 1e6));
@@ -151,7 +151,7 @@ bool och_device::tune_lo(const och_config &c, const och_config &before, bool ful
                                  near_band_edge(c.rx_frequency) || near_band_edge(before.rx_frequency)));
 }
 
-void och_device::tune_gain(const och_config &c, const och_config &before, bool full, bool gain_table_changed) {
+void Device::tune_gain(const och_config &c, const och_config &before, bool full, bool gain_table_changed) {
     for (unsigned i = 0; i < 2; ++i) {
         const auto ch = std::to_string(i + 1);
         if (full || c.rx_agc != before.rx_agc) command("rx" + ch + "_gc_mode=" + std::to_string(c.rx_agc));
@@ -163,7 +163,7 @@ void och_device::tune_gain(const och_config &c, const och_config &before, bool f
     }
 }
 
-void och_device::apply_config(const och_config &c) {
+void Device::apply_config(const och_config &c) {
     const auto before = config;
     const bool full = !configured;
     configured = false;

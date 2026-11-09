@@ -28,7 +28,7 @@ namespace {
     }
 }
 
-och_power_status och_device::get_power_status(uint32_t timeout_ms) {
+och_power_status Device::get_power_status(uint32_t timeout_ms) {
     require(timeout_ms <= 2000, OCH_INVALID, "power status timeout must be 0..2000 ms");
     const bool present = usb.has(0x83);
     // Bridge 1.0.1+: EP3 OUT takes "typec?" and the reply arrives on EP83.

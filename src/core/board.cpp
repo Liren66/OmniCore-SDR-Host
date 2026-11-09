@@ -42,7 +42,7 @@ namespace {
         return static_cast<int32_t>(value);
     }
 
-    och_rgb_status read_rgb(och_device &device) {
+    och_rgb_status read_rgb(Device &device) {
         const auto reply = device.command("rgb_status?");
         och_rgb_status status{};
         status.struct_size = sizeof status;
@@ -69,7 +69,7 @@ namespace {
         return status;
     }
 
-    och_fan_status read_fan(och_device &device) {
+    och_fan_status read_fan(Device &device) {
         const auto reply = device.command("fan_status?");
         och_fan_status status{};
         status.struct_size = sizeof status;
@@ -103,24 +103,24 @@ namespace {
     }
 }
 
-och_rgb_status och_device::get_rgb_status() {
+och_rgb_status Device::get_rgb_status() {
     require_capability("board_rgb");
     return read_rgb(*this);
 }
 
-void och_device::set_rgb_enabled(unsigned enabled) {
+void Device::set_rgb_enabled(unsigned enabled) {
     require(enabled <= 1, OCH_INVALID, "RGB enabled must be 0 or 1");
     if (get_rgb_status().enabled == enabled) return;
     command("rgb_enable=" + std::to_string(enabled));
     require(read_rgb(*this).enabled == enabled, OCH_PROTOCOL, "RGB enable readback mismatch");
 }
 
-och_fan_status och_device::get_fan_status() {
+och_fan_status Device::get_fan_status() {
     require_capability("fan_control");
     return read_fan(*this);
 }
 
-void och_device::set_fan_enabled(unsigned enabled) {
+void Device::set_fan_enabled(unsigned enabled) {
     require(enabled <= 1, OCH_INVALID, "fan enabled must be 0 or 1");
     if (get_fan_status().enabled == enabled) return;
     // Board services never stop RF, reset transport or invalidate an RX lease.
@@ -128,7 +128,7 @@ void och_device::set_fan_enabled(unsigned enabled) {
     require(read_fan(*this).enabled == enabled, OCH_PROTOCOL, "fan enable readback mismatch");
 }
 
-och_core_temperature och_device::get_core_temperature() {
+och_core_temperature Device::get_core_temperature() {
     require_capability("core_temp");
     const auto reply = command("core_temp?");
     och_core_temperature status{};

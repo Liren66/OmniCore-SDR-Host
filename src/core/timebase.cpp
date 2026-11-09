@@ -32,7 +32,7 @@ namespace {
     }
 }
 
-och_time_status och_device::get_time() {
+och_time_status Device::get_time() {
     och_time_status t{};
     t.struct_size = sizeof t;
     if (!supports_capability("hw_time")) return t;
@@ -58,7 +58,7 @@ och_time_status och_device::get_time() {
 // the first event as above, then at most one line per 250 ms with
 // "count=<n> first_block=<b> first_time=<ticks>" appended (n events, block and
 // time of the last one). Lines without count stand for one event.
-bool och::core::timed_event(och_device &d, const std::string &s) {
+bool och::core::timed_event(Device &d, const std::string &s) {
     // EVT tseq=<n> type=sync_in src=sync count=<total> new=<n> interval=<cycles>
     if (s.find(" src=sync") != std::string::npos && s.find("type=sync_in") != std::string::npos) {
         uint32_t fresh = 1;
