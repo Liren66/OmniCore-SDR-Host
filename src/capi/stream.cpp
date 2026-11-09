@@ -57,7 +57,7 @@ int och_destroy_stream(och_stream *s) {
         require(s != nullptr, OCH_INVALID, "null stream");
         auto d = s->dev;
         std::unique_lock<std::mutex> lock(d->state_mutex);
-        require(!s->lease, OCH_BUSY, "release RX lease before destroying stream");
+        require(!s->reader.lease, OCH_BUSY, "release RX lease before destroying stream");
         std::string issue;
         try {
             s->stop(0);

@@ -111,7 +111,7 @@ void Device::configure(const och_config &requested) {
     }
     // LO/gain/attenuation changes keep streams running. A TX LO change with
     // a TX stream still stops it: a large step runs TX quadrature calibration.
-    if (configured && (rx || tx) && (!rx || !rx->lease) && tuning_only(c, config) &&
+    if (configured && (rx || tx) && (!rx || !rx->reader.lease) && tuning_only(c, config) &&
         (!tx || c.tx_frequency == config.tx_frequency)) {
         retune(c);
         return;
@@ -136,11 +136,11 @@ void Device::retune(const och_config &c) {
     config = c;
     config.sample_rate = before.sample_rate;
     configured = true;
-    if (rx) rx->retuned = true;
+    if (rx) rx->rx_state.retuned = true;
     emit(OCH_EVENT_RECONFIGURED,
          "retune complete streams_continued=1 rx_boundary=approximate elapsed_us=" +
                  std::to_string((now_ns() - began) / 1000),
-         rx ? rx->epoch_base : 0);
+         rx ? rx->rx_state.epoch_base : 0);
 }
 
 bool Device::tune_lo(const och_config &c, const och_config &before, bool full) {

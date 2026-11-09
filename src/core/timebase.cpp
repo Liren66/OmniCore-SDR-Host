@@ -65,7 +65,7 @@ bool och::core::timed_event(Device &d, const std::string &s) {
         try {
             fresh = uint32_t(std::max<uint64_t>(1, std::min<uint64_t>(u64(field(s, "new")), UINT32_MAX)));
         } catch (...) {}
-        d.emit(OCH_EVENT_SYNC_IN, s, d.rx ? d.rx->epoch : 0, 0, 0, 0, fresh);
+        d.emit(OCH_EVENT_SYNC_IN, s, d.rx ? d.rx->rx_state.epoch : 0, 0, 0, 0, fresh);
         return true;
     }
     if (s.find(" src=fpga_time") == std::string::npos && s.find("type=time_invalidated") == std::string::npos)
@@ -105,7 +105,7 @@ bool och::core::timed_event(Device &d, const std::string &s) {
     if (s.find(" count=") != std::string::npos) try {
             count = uint32_t(std::max<uint64_t>(1, std::min<uint64_t>(u64(field(s, "count")), UINT32_MAX)));
         } catch (...) {}
-    if (type == OCH_EVENT_TX_UNDERFLOW) d.underflows += count;
-    d.emit(type, s, d.rx ? d.rx->epoch : 0, t, code, block, count);
+    if (type == OCH_EVENT_TX_UNDERFLOW) d.stats.underflows += count;
+    d.emit(type, s, d.rx ? d.rx->rx_state.epoch : 0, t, code, block, count);
     return true;
 }

@@ -60,7 +60,7 @@ void Device::reconfigure(const std::function<void()> &apply) {
         return;
     }
     IoPause pause(rx, tx);
-    require(!rx || !rx->lease, OCH_BUSY, "release RX lease before changing configuration");
+    require(!rx || !rx->reader.lease, OCH_BUSY, "release RX lease before changing configuration");
     const ResumePlan r = rx ? rx->snapshot_for_reconfigure() : ResumePlan{};
     const ResumePlan t = tx ? tx->snapshot_for_reconfigure() : ResumePlan{};
     uint64_t r_discarded = 0, t_discarded = 0, t_inflight = 0;
@@ -99,7 +99,7 @@ void Device::reconfigure(const std::function<void()> &apply) {
                      std::to_string(t_discarded) + " tx_cancelled_bytes=" + std::to_string(t_inflight) +
                      " tx_delivery=unknown tx_padding_samples=" + std::to_string(zero_samples) +
                      " elapsed_us=" + std::to_string((now_ns() - began) / 1000),
-             rx ? rx->epoch_base : 0);
+             rx ? rx->rx_state.epoch_base : 0);
     } catch (...) {
         const auto original = std::current_exception();
         // A failed update or restart never restarts TX with uncertain settings.

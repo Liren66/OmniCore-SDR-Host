@@ -124,7 +124,11 @@ struct och::core::Device {
     std::mutex events_mutex;
     std::condition_variable events_cv;
     std::deque<och_event> events;
-    std::atomic<uint64_t> event_seq{0}, event_drops{0}, overflows{0}, underflows{0};
+    std::atomic<uint64_t> event_seq{0}, event_drops{0};
+    // Device FIFO faults from EVT lines (control thread); read by och_get_stats.
+    struct DeviceStats {
+        std::atomic<uint64_t> overflows{0}, underflows{0};
+    } stats;
     och::core::PowerLogParser power_log;
 
     ~Device();
@@ -244,50 +248,94 @@ struct och::core::Stream {
         }
     };
 
+    // Threads: control = start/stop/halt/prepare_restart and reconfiguration, under the device's
+    // state_mutex; worker = run() and what it calls (rx_frame, publish_rx, fill_tx, submit, ...);
+    // application = recv / rx_acquire / rx_release / send / flush, under io_mutex.
+
+    // Fixed at construction, then read-only.
     Device *dev;
     och_stream_args args;
     unsigned nchan, wire_bytes, group;
-    och::core::Ring ring;
-    // Framed transport: 16-byte header per 16 KiB block (the only transport).
-    och::dsp::FrameParser fparser;
     // Timed framed RX: one 16 KiB device block per USB transfer, so a finite
     // burst's last block (and its END_OF_BURST) completes without a short packet.
     size_t xfer_bytes = 0;
-    bool have_time = false;
-    uint64_t next_time = 0, cur_time = 0, fr_epochs = 0;
-    int64_t gap_samples = 0;
-    bool blk_open = false, tx_first = true;
-    size_t blk_start = 0, blk_used = 0;
-    uint8_t blk_flags = 0;
-    uint64_t blk_time = 0;
-    uint16_t tx_seq = 0;
-    std::vector<std::unique_ptr<Slot>> slots;
-    och::core::FixedQueue<Slot *, 128> active;
+
+    // Host queue between worker and application; it synchronises itself. Control resets it
+    // only while the worker is stopped and application IO is paused.
+    och::core::Ring ring;
+
+    // Lifecycle. Written by control (and running / ended_ns by the worker as it exits);
+    // atomics read by all three. failure is guarded by failure_mutex: the worker sets it
+    // through fail(), anyone reads it through error().
     och::transport::Handle stop_event;
     std::thread worker;
     std::atomic<bool> stop_requested{false}, running{false}, queued{false}, started{false}, flushing{false};
     std::atomic<bool> ever_started{false};
-    bool lease = false;
-    size_t recv_offset = 0;
-    std::mutex io_mutex;
-    std::atomic<bool> reconfiguring{false};
+    std::atomic<uint64_t> started_ns{0}, ended_ns{0};
     std::mutex failure_mutex;
     std::string failure;
-    std::atomic<uint64_t> usb_bytes{0}, samples{0}, host_dropped{0}, headers{0}, resyncs{0}, peak{0}, pending{0},
-            errors{0}, starved{0}, padding{0};
-    std::atomic<uint64_t> cancelled_bytes{0};
+
+    // USB transfer slots: the worker's, while it runs; control resets them after halt().
+    // pending / assembling are atomic because flush() and fill_stats() read them.
+    std::vector<std::unique_ptr<Slot>> slots;
+    och::core::FixedQueue<Slot *, 128> active;
+    std::atomic<uint64_t> pending{0};
     std::atomic<size_t> assembling{0};
-    std::atomic<uint64_t> started_ns{0}, ended_ns{0};
-    uint64_t epoch = 0, epoch_base = 0, index = 0, dropped_pending = 0, last_drop_notice = 0;
-    uint32_t flags_pending = 0;
-    bool reconfigured_rx = false;
-    // Set after a running-stream retune; the next RX block starts a new segment.
-    std::atomic<bool> retuned{false};
-    // RX producer partial output block, always one epoch per block.
-    size_t rx_filled = 0;
-    och_metadata rx_meta{};
-    // TX consumer partial input block.
-    size_t tx_offset = 0;
+    std::atomic<uint64_t> cancelled_bytes{0};
+
+    // IO gate. io_mutex: held by each application IO call and by IoPause during a
+    // reconfiguration; reconfiguring is true whenever IoPause holds it (see reconfigure.cpp).
+    std::mutex io_mutex;
+    std::atomic<bool> reconfiguring{false};
+
+    // RX framing, worker side (rx_frame / publish_rx); moves into RxAssembler in 2.6a.
+    // Worker only while running; control resets it in prepare_restart() while stopped.
+    // Exceptions: retuned is set by control (running retune) and consumed by the worker;
+    // epoch_base and dropped_pending are also used by control while the worker is stopped;
+    // epoch is read by the control thread in timebase.cpp without synchronisation, a known
+    // race (see REFACTOR_PLAN.md reading notes).
+    struct RxState {
+        explicit RxState(size_t frame_bytes) : fparser(frame_bytes) {}
+        // Framed transport: 16-byte header per 16 KiB block (the only transport).
+        och::dsp::FrameParser fparser;
+        bool have_time = false;
+        uint64_t next_time = 0, cur_time = 0, fr_epochs = 0;
+        int64_t gap_samples = 0;
+        uint64_t epoch = 0, epoch_base = 0, index = 0, dropped_pending = 0, last_drop_notice = 0;
+        uint32_t flags_pending = 0;
+        bool reconfigured_rx = false;
+        // Set after a running-stream retune; the next RX block starts a new segment.
+        std::atomic<bool> retuned{false};
+        // RX producer partial output block, always one epoch per block.
+        size_t rx_filled = 0;
+        och_metadata rx_meta{};
+    } rx_state;
+
+    // RX read position, application side: under io_mutex. Not part of the framer.
+    // lease is also read under state_mutex alone (configure, och_destroy_stream).
+    struct RxRead {
+        size_t recv_offset = 0;
+        bool lease = false;
+    } reader;
+
+    // TX block assembly, worker side (fill_tx / tx_open / tx_close); moves into TxAssembler
+    // in 2.6a. Worker only while running; control resets it while stopped.
+    struct TxState {
+        bool blk_open = false, tx_first = true;
+        size_t blk_start = 0, blk_used = 0;
+        uint8_t blk_flags = 0;
+        uint64_t blk_time = 0;
+        uint16_t tx_seq = 0;
+        // TX consumer partial input block.
+        size_t tx_offset = 0;
+    } tx_state;
+
+    // Counters for och_get_stats. Atomic: written by the worker, the application (samples,
+    // peak) or control (host_dropped, padding), read by fill_stats().
+    struct StreamStats {
+        std::atomic<uint64_t> usb_bytes{0}, samples{0}, host_dropped{0}, headers{0}, resyncs{0}, peak{0}, errors{0},
+                starved{0}, padding{0};
+    } stats;
 
     Stream(Device *, const och_stream_args &);
 

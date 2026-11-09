@@ -118,9 +118,9 @@ void Device::line(const std::string &s) {
     if (s.rfind("EVT ", 0) == 0) {
         if (och::core::timed_event(*this, s)) return;
         if (s.find("type=rx_overflow") != std::string::npos && s.find("action=waiting_rx_resync") != std::string::npos)
-            ++overflows;
+            ++stats.overflows;
         if (s.find("type=tx_underflow") != std::string::npos && s.find("action=clearing_continue") != std::string::npos)
-            ++underflows;
+            ++stats.underflows;
         emit(OCH_EVENT_DEVICE, s);
         return;
     }

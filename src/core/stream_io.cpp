@@ -16,14 +16,14 @@ namespace {
 
 och_metadata Stream::adjusted(const Ring::Block &b) const {
     auto m = b.meta;
-    m.sample_index += recv_offset / group;
-    if (recv_offset) {
+    m.sample_index += reader.recv_offset / group;
+    if (reader.recv_offset) {
         const bool timed = (m.flags & OCH_META_HAS_TIME) != 0;
         m.flags = timed ? uint32_t(OCH_META_HAS_TIME | (m.flags & OCH_META_END_OF_BURST))
                         : uint32_t(OCH_META_TIME_UNKNOWN);
         m.host_dropped_samples = 0;
         m.device_dropped_samples = 0;
-        if (timed) m.time_ticks += recv_offset / group;
+        if (timed) m.time_ticks += reader.recv_offset / group;
     }
     return m;
 }
@@ -50,12 +50,12 @@ int Stream::await_rx(uint32_t timeout) {
 int Stream::recv(void *output, size_t capacity, size_t *received, och_metadata *m, uint32_t timeout) {
     std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
     if (!io.owns_lock() || reconfiguring) return OCH_TIMEOUT;
-    require(!lease, OCH_BUSY, "release zero-copy lease before recv");
+    require(!reader.lease, OCH_BUSY, "release zero-copy lease before recv");
     int rc = await_rx(timeout);
     if (rc) return static_cast<och_result>(rc);
     auto b = ring.read();
-    size_t frames = std::min(capacity, (b->size - recv_offset) / group);
-    auto p = b->data.get() + recv_offset;
+    size_t frames = std::min(capacity, (b->size - reader.recv_offset) / group);
+    auto p = b->data.get() + reader.recv_offset;
     put_meta(m, adjusted(*b));
     if (args.format == OCH_SC8)
         memcpy(output, p, frames * group);
@@ -73,12 +73,12 @@ int Stream::recv(void *output, size_t capacity, size_t *received, och_metadata *
         (wire_bytes == 2 ? och::dsp::unpack8_fc32 : och::dsp::unpack_fc32)(p, static_cast<float *>(output),
                                                                            frames * nchan);
     }
-    recv_offset += frames * group;
-    samples += frames;
+    reader.recv_offset += frames * group;
+    stats.samples += frames;
     *received = frames;
-    if (recv_offset == b->size) {
+    if (reader.recv_offset == b->size) {
         ring.release();
-        recv_offset = 0;
+        reader.recv_offset = 0;
     }
     return OCH_OK;
 }
@@ -86,25 +86,25 @@ int Stream::recv(void *output, size_t capacity, size_t *received, och_metadata *
 int Stream::rx_acquire(const void **data, size_t *bytes, och_metadata *m, uint32_t timeout) {
     std::unique_lock<std::mutex> io(io_mutex, std::try_to_lock);
     if (!io.owns_lock() || reconfiguring) return OCH_TIMEOUT;
-    require(!lease, OCH_BUSY, "only one RX lease allowed");
+    require(!reader.lease, OCH_BUSY, "only one RX lease allowed");
     int rc = await_rx(timeout);
     if (rc) return static_cast<och_result>(rc);
     auto b = ring.read();
-    *data = b->data.get() + recv_offset;
-    *bytes = b->size - recv_offset;
+    *data = b->data.get() + reader.recv_offset;
+    *bytes = b->size - reader.recv_offset;
     put_meta(m, adjusted(*b));
-    lease = true;
+    reader.lease = true;
     return OCH_OK;
 }
 
 void Stream::rx_release() {
     std::lock_guard<std::mutex> io(io_mutex);
-    require(lease, OCH_INVALID, "no RX lease");
+    require(reader.lease, OCH_INVALID, "no RX lease");
     auto b = ring.read();
-    samples += (b->size - recv_offset) / group;
+    stats.samples += (b->size - reader.recv_offset) / group;
     ring.release();
-    recv_offset = 0;
-    lease = false;
+    reader.recv_offset = 0;
+    reader.lease = false;
 }
 
 int Stream::send(const void *data, size_t count, uint32_t mflags, uint64_t mtime, size_t *accepted, uint32_t timeout) {
@@ -156,9 +156,9 @@ int Stream::send(const void *data, size_t count, uint32_t mflags, uint64_t mtime
         if (*accepted + frames == count) tag.flags |= mflags & OCH_TX_END_OF_BURST;
         ring.publish(frames * group, tag);
         *accepted += frames;
-        samples += frames;
+        stats.samples += frames;
         auto used = ring.queued();
-        if (used > peak) peak = used;
+        if (used > stats.peak) stats.peak = used;
     }
     return OCH_OK;
 }
@@ -167,21 +167,21 @@ void Stream::fill_stats(och_stats *st) {
     *st = {};
     st->struct_size = sizeof(*st);
     st->running = running;
-    st->usb_bytes = usb_bytes;
-    st->samples = samples;
-    st->host_dropped_samples = host_dropped;
-    st->headers = headers;
-    st->resyncs = resyncs;
+    st->usb_bytes = stats.usb_bytes;
+    st->samples = stats.samples;
+    st->host_dropped_samples = stats.host_dropped;
+    st->headers = stats.headers;
+    st->resyncs = stats.resyncs;
     st->host_queue_bytes = ring.queued();
-    st->host_queue_peak_bytes = peak;
+    st->host_queue_peak_bytes = stats.peak;
     st->usb_queue_pending = pending;
-    st->transfer_errors = errors;
-    st->device_overflows = dev->overflows;
-    st->device_underflows = dev->underflows;
+    st->transfer_errors = stats.errors;
+    st->device_overflows = dev->stats.overflows;
+    st->device_underflows = dev->stats.underflows;
     st->event_drops = dev->event_drops;
-    st->tx_starvation_events = starved;
+    st->tx_starvation_events = stats.starved;
     auto began = started_ns.load();
     auto end = running ? now_ns() : ended_ns.load();
     st->elapsed_ns = began && end >= began ? end - began : 0;
-    st->tx_padding_samples = padding;
+    st->tx_padding_samples = stats.padding;
 }
