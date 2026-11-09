@@ -132,22 +132,6 @@ namespace {
     }
 }
 
-void och_default_multi_sync_args(och_multi_sync_args *a) {
-    if (!a) return;
-    *a = {};
-    a->struct_size = sizeof *a;
-    a->mode = OCH_SYNC_CHAIN;
-    a->mcs = 1;
-    a->lock_timeout_ms = 15000;
-}
-
-void och_default_sync_config(och_sync_config *c) {
-    if (!c) return;
-    *c = {};
-    c->struct_size = sizeof *c;
-    c->trig_width = 80;
-}
-
 void och::core::multi_sync(och_device *const *devices, size_t n, const och_multi_sync_args &a,
                            och_multi_sync_result *results) {
     require(devices && n >= 1 && n <= 64, OCH_INVALID, "1..64 devices required");

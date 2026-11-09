@@ -397,6 +397,7 @@ OmniCoreHost/
 ├── apps/
 │   └── och/            och 命令行
 ├── src/
+│   ├── capi/           公共 C 接口入口（extern "C"，按模块分文件）
 │   ├── core/           设备、配置事务、流线程、射频与板控
 │   ├── dsp/            IQ 编解码
 │   ├── protocol/       16 KiB 成帧块解析与生成

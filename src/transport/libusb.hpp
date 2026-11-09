@@ -31,15 +31,15 @@ struct WINUSB_SETUP_PACKET {
 };
 
 constexpr ULONG RAW_IO = 1, ALLOW_PARTIAL_READS = 2, AUTO_FLUSH = 3, IGNORE_SHORT_PACKETS = 4,
-                SHORT_PACKET_TERMINATE = 5, PIPE_TRANSFER_TIMEOUT = 6, MAXIMUM_TRANSFER_SIZE = 7;
+        SHORT_PACKET_TERMINATE = 5, PIPE_TRANSFER_TIMEOUT = 6, MAXIMUM_TRANSFER_SIZE = 7;
 
 namespace och::transport {
     inline std::wstring wide(const std::string &s) {
-        return std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.from_bytes(s);
+        return std::wstring_convert<std::codecvt_utf8<wchar_t> >{}.from_bytes(s);
     }
 
     inline std::string utf8(const std::wstring &s) {
-        return std::wstring_convert<std::codecvt_utf8<wchar_t>>{}.to_bytes(s);
+        return std::wstring_convert<std::codecvt_utf8<wchar_t> >{}.to_bytes(s);
     }
 
     // libusb failures occupy a separate range from internal completion errors.
@@ -49,8 +49,8 @@ namespace och::transport {
         if (e >= 10000)
             return wide(std::string(libusb_error_name(10000 - int(e))) +
                         (e == usb_error(LIBUSB_ERROR_NO_MEM)
-                                 ? "; USB queue allocation failed: check usbcore.usbfs_memory_mb"
-                                 : ""));
+                             ? "; USB queue allocation failed: check usbcore.usbfs_memory_mb"
+                             : ""));
         if (e == ERROR_SEM_TIMEOUT) return L"USB transfer timed out";
         if (e == ERROR_OPERATION_ABORTED) return L"USB transfer cancelled";
         if (e == ERROR_IO_INCOMPLETE) return L"USB transfer is pending";
@@ -66,7 +66,8 @@ namespace och::transport {
 
         Handle() = default;
 
-        explicit Handle(HANDLE v) : h(v) {}
+        explicit Handle(HANDLE v) : h(v) {
+        }
 
         ~Handle() { CloseHandle(h); }
 
@@ -104,6 +105,7 @@ namespace och::transport {
         Usb *owner = nullptr;
         HANDLE event = nullptr;
         bool completed = false;
+
         ~LinuxTransfer() {
             if (native) libusb_free_transfer(native);
         }
@@ -352,8 +354,8 @@ namespace och::transport {
             if (!libusb_open(d, &h)) {
                 unsigned char text[256]{};
                 int n = desc.iSerialNumber
-                                ? libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, text, sizeof text)
-                                : 0;
+                            ? libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, text, sizeof text)
+                            : 0;
                 if (n > 0) serial = wide(std::string(reinterpret_cast<char *>(text), n));
                 libusb_close(h);
             }
@@ -379,10 +381,10 @@ namespace och::transport {
                     rc = libusb_open(list.p[i], &device);
                     if (rc)
                         throw std::runtime_error(
-                                std::string("Cannot open OmniCore USB: ") + libusb_error_name(rc) +
-                                (rc == LIBUSB_ERROR_ACCESS
-                                         ? "; install packaging/linux/60-omnicore.rules and replug the device"
-                                         : ""));
+                            std::string("Cannot open OmniCore USB: ") + libusb_error_name(rc) +
+                            (rc == LIBUSB_ERROR_ACCESS
+                                 ? "; install packaging/linux/60-omnicore.rules and replug the device"
+                                 : ""));
                     break;
                 }
             if (!device) throw std::runtime_error("USB device disappeared; enumerate again");
@@ -392,20 +394,22 @@ namespace och::transport {
             if (rc == LIBUSB_ERROR_NOT_FOUND) {
                 // macOS leaves a device with no kernel driver unconfigured; select its first configuration.
                 rc = libusb_get_config_descriptor(libusb_get_device(device), 0, &raw);
-                if (rc) throw std::runtime_error(std::string("Cannot read OmniCore USB configuration: ") +
-                                                 libusb_error_name(rc));
+                if (rc)
+                    throw std::runtime_error(std::string("Cannot read OmniCore USB configuration: ") +
+                                             libusb_error_name(rc));
                 const int value = raw->bConfigurationValue;
                 libusb_free_config_descriptor(raw);
                 raw = nullptr;
                 rc = libusb_set_configuration(device, value);
-                if (rc) throw std::runtime_error(std::string("Cannot configure OmniCore USB: ") +
-                                                 libusb_error_name(rc));
+                if (rc)
+                    throw std::runtime_error(std::string("Cannot configure OmniCore USB: ") +
+                                             libusb_error_name(rc));
                 rc = libusb_get_active_config_descriptor(libusb_get_device(device), &raw);
             }
 #endif
             if (rc) throw std::runtime_error(libusb_error_name(rc));
             std::unique_ptr<libusb_config_descriptor, decltype(&libusb_free_config_descriptor)> config(
-                    raw, libusb_free_config_descriptor);
+                raw, libusb_free_config_descriptor);
             int selected = -1;
             for (unsigned i = 0; i < raw->bNumInterfaces; ++i) {
                 const auto &interface = raw->interface[i];
