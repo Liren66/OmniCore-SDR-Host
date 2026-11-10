@@ -166,6 +166,23 @@ struct och::core::Device {
 
     void reset_transport();
 
+    // Stream slots rx/tx: changed only under state_mutex; destroy order is stop, clear slot, free.
+    // Handle is the type the stream is allocated as (och_stream in src/capi/), so new and delete
+    // both see the real type. Definitions follow Stream below.
+    template<class Handle>
+    Handle *create_stream(const och_stream_args &);
+
+    template<class Handle>
+    void destroy_stream(Handle *);
+
+    // Device state a new stream needs (configured, sc8 needs 8-bit IQ, one stream per direction,
+    // direction has channels). Caller holds state_mutex.
+    void check_stream_slot(const och_stream_args &);
+
+    // Lease check, stop and slot clear before the stream is freed. Caller holds state_mutex.
+    // Returns the stop failure text, empty on success.
+    std::string detach_stream(Stream &);
+
     void configure(const och_config &);
 
     void apply_config(const och_config &);
@@ -332,7 +349,7 @@ struct och::core::Stream {
     } rx_state;
 
     // RX read position, application side: under io_mutex. Not part of the framer.
-    // lease is also read under state_mutex alone (configure, och_destroy_stream).
+    // lease is also read under state_mutex alone (configure, Device::destroy_stream).
     struct RxRead {
         size_t recv_offset = 0;
         bool lease = false;
@@ -432,6 +449,23 @@ struct och::core::Stream {
     // Metadata of the current RX block as seen from recv_offset (a read that resumes mid-block).
     och_metadata adjusted(const och::core::Ring::Block &) const;
 };
+
+template<class Handle>
+Handle *och::core::Device::create_stream(const och_stream_args &a) {
+    std::lock_guard<std::mutex> lock(state_mutex);
+    check_stream_slot(a);
+    auto *handle = new Handle(this, a);
+    (a.direction == OCH_RX ? rx : tx) = handle;
+    return handle;
+}
+
+template<class Handle>
+void och::core::Device::destroy_stream(Handle *s) {
+    std::lock_guard<std::mutex> lock(state_mutex);
+    const std::string issue = detach_stream(*s);
+    delete s;
+    if (!issue.empty()) throw Failure(OCH_IO, issue);
+}
 
 // The public opaque handles (och.h). They add nothing: core code works on Device / Stream and
 // only src/capi/ uses these names. Every Stream is created as an och_stream.

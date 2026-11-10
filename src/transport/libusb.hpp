@@ -57,10 +57,6 @@ namespace och::transport {
         return wide("error " + std::to_string(e));
     }
 
-    inline double nowSec() {
-        return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-    }
-
     struct Handle {
         HANDLE h = nullptr;
 
@@ -77,7 +73,7 @@ namespace och::transport {
     };
 
     struct DeviceInfo {
-        std::wstring path, label, instance;
+        std::wstring path, instance;
     };
 
     struct UsbApi {
@@ -116,7 +112,6 @@ namespace och::transport {
         WINUSB_INTERFACE_HANDLE h = nullptr;
         HANDLE file = nullptr;
         std::map<UCHAR, WINUSB_PIPE_INFORMATION> pipes;
-        std::wstring summary;
         libusb_context *context = nullptr;
         libusb_device_handle *device = nullptr;
         int interface_number = -1;
@@ -365,7 +360,7 @@ namespace och::transport {
                 serial = L"usb-" + std::to_wstring(libusb_get_bus_number(d));
                 for (int j = 0; j < n; ++j) serial += L"-" + std::to_wstring(ports[j]);
             }
-            found.push_back({device_path(d), L"OmniCoreSDR | " + serial, serial});
+            found.push_back({device_path(d), serial});
         }
         return found;
     }
@@ -450,7 +445,6 @@ namespace och::transport {
                     libusb_handle_events_timeout_completed(context, &timeout, nullptr);
                 }
             });
-            summary = L"libusb-1.0 asynchronous | Interface " + std::to_wstring(selected);
         } catch (...) {
             close();
             throw;

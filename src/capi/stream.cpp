@@ -37,17 +37,7 @@ int och_create_stream(och_device *d, const och_stream_args *a, och_stream **out)
         require(a->usb_queue_depth >= 2 && a->usb_queue_depth <= 128, OCH_INVALID, "USB queue depth must be 2..128");
         require(a->host_buffer_bytes >= a->transfer_bytes * 4ULL && a->host_buffer_bytes <= 512U * 1024 * 1024,
                 OCH_INVALID, "host buffer must hold at least four blocks and at most 512 MiB");
-        std::lock_guard<std::mutex> lock(d->state_mutex);
-        require(d->configured, OCH_INVALID, "configure before creating streams");
-        require(a->format != OCH_SC8 || iq_bits(d->config) == 8, OCH_INVALID,
-                "sc8 application format requires 8-bit USB IQ mode");
-        auto &slot = a->direction == OCH_RX ? d->rx : d->tx;
-        require(slot == nullptr, OCH_BUSY, "only one stream per direction");
-        require((a->direction == OCH_RX ? d->config.rx_mask : d->config.tx_mask) != 0, OCH_INVALID,
-                "stream direction has no enabled channels");
-        auto *handle = new och_stream(d, *a);
-        slot = handle;
-        *out = handle;
+        *out = d->create_stream<och_stream>(*a);
         return OCH_OK;
     });
 }
@@ -55,21 +45,7 @@ int och_create_stream(och_device *d, const och_stream_args *a, och_stream **out)
 int och_destroy_stream(och_stream *s) {
     return protect([&] {
         require(s != nullptr, OCH_INVALID, "null stream");
-        auto d = s->dev;
-        std::unique_lock<std::mutex> lock(d->state_mutex);
-        require(!s->reader.lease, OCH_BUSY, "release RX lease before destroying stream");
-        std::string issue;
-        try {
-            s->stop(0);
-        } catch (const std::exception &e) {
-            issue = e.what();
-        }
-        if (s->args.direction == OCH_RX)
-            d->rx = nullptr;
-        else
-            d->tx = nullptr;
-        delete s;
-        if (!issue.empty()) throw Failure(OCH_IO, issue);
+        s->dev->destroy_stream(s);
         return OCH_OK;
     });
 }

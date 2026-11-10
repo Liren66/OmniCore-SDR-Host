@@ -61,17 +61,6 @@ namespace och::transport {
         return L"[" + std::to_wstring(e) + L"] " + s;
     }
 
-    inline double nowSec() {
-        static const double inv = []() {
-            LARGE_INTEGER f;
-            QueryPerformanceFrequency(&f);
-            return 1.0 / double(f.QuadPart);
-        }();
-        LARGE_INTEGER c;
-        QueryPerformanceCounter(&c);
-        return double(c.QuadPart) * inv;
-    }
-
     struct Handle {
         HANDLE h = INVALID_HANDLE_VALUE;
 
@@ -89,7 +78,7 @@ namespace och::transport {
     };
 
     struct DeviceInfo {
-        std::wstring path, label, instance;
+        std::wstring path, instance;
     };
 
     inline std::wstring devProperty(HDEVINFO set, SP_DEVINFO_DATA &d, DWORD prop) {
@@ -175,12 +164,7 @@ namespace och::transport {
                 auto service = devProperty(set, d, SPDRP_SERVICE);
                 if (_wcsicmp(service.c_str(), L"libusbK") != 0) continue;
                 if (!instances.insert(inst).second) continue;
-                auto name = devProperty(set, d, SPDRP_FRIENDLYNAME);
-                if (name.empty()) name = devProperty(set, d, SPDRP_DEVICEDESC);
-                std::wstring serial = inst;
-                size_t p = serial.find_last_of(L'\\');
-                if (p != std::wstring::npos) serial = serial.substr(p + 1);
-                out.push_back({detail->DevicePath, name + L"  |  " + serial, inst});
+                out.push_back({detail->DevicePath, inst});
             }
             SetupDiDestroyDeviceInfoList(set);
         }
@@ -205,13 +189,11 @@ namespace och::transport {
 
     struct Usb {
         UsbApi api;
-        bool ep1NormalSticky = false;
         HMODULE library = nullptr;
 
         HANDLE file = INVALID_HANDLE_VALUE;
         WINUSB_INTERFACE_HANDLE h = nullptr;
         std::map<UCHAR, WINUSB_PIPE_INFORMATION> pipes;
-        std::wstring summary;
         ~Usb() { close(); }
 
         Usb() = default;
@@ -235,7 +217,6 @@ namespace och::transport {
             library = nullptr;
             api = UsbApi{};
             pipes.clear();
-            ep1NormalSticky = false;
         }
 
         template<class T>
@@ -291,11 +272,6 @@ namespace och::transport {
                     if (api.queryPipe(h, 0, i, &pi) && pi.PipeType == UsbdPipeTypeBulk) pipes[pi.PipeId] = pi;
                 }
                 if (!pipes.count(0x81) || !pipes.count(0x01)) throw std::runtime_error("EP1 IN/OUT not found");
-                summary = L"libusbK (TX parallel) | Interface " + std::to_wstring(d.bInterfaceNumber) + L" | " +
-                          (pipes[0x81].MaximumPacketSize == 1024
-                                   ? L"SuperSpeed"
-                                   : (pipes[0x81].MaximumPacketSize == 512 ? L"High-Speed" : L"Full-Speed")) +
-                          L" | Bulk pipes: " + std::to_wstring(pipes.size());
             } catch (...) {
                 close();
                 throw;
@@ -328,30 +304,6 @@ namespace och::transport {
         void timeout(UCHAR ep, ULONG v) {
             if (!api.setPolicy(h, ep, PIPE_TRANSFER_TIMEOUT, sizeof v, &v))
                 throw std::runtime_error(utf8(L"Pipe timeout " + syserr(GetLastError())));
-        }
-    };
-
-    struct MappedFile {
-        Handle file, map;
-        const uint8_t *data = nullptr;
-        uint64_t size = 0;
-
-        explicit MappedFile(const std::wstring &path) {
-            file.h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                 FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (file.h == INVALID_HANDLE_VALUE) throw std::runtime_error(utf8(syserr(GetLastError())));
-            LARGE_INTEGER n;
-            if (!GetFileSizeEx(file.h, &n) || n.QuadPart <= 0)
-                throw std::runtime_error("File is empty or inaccessible");
-            size = uint64_t(n.QuadPart);
-            map.h = CreateFileMappingW(file.h, nullptr, PAGE_READONLY, 0, 0, nullptr);
-            if (!map.h) throw std::runtime_error(utf8(syserr(GetLastError())));
-            data = (const uint8_t *) MapViewOfFile(map.h, FILE_MAP_READ, 0, 0, 0);
-            if (!data) throw std::runtime_error(utf8(syserr(GetLastError())));
-        }
-
-        ~MappedFile() {
-            if (data) UnmapViewOfFile(data);
         }
     };
 } // namespace och::transport

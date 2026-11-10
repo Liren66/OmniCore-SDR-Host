@@ -88,7 +88,6 @@ inline DWORD WaitForMultipleObjects(DWORD n, const HANDLE *handles, BOOL all, DW
     return WAIT_FAILED;
 }
 
-inline void Sleep(DWORD ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 // flock also releases ownership after a crash. Do not unlink the lock inode:
 // waiters and new openers must always contend on the same file.
 inline HANDLE CreateMutexW(void *, BOOL, const wchar_t *name) {

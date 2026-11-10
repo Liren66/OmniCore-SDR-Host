@@ -379,7 +379,7 @@ void Stream::start() {
     try {
         worker = std::thread([this] { run(); });
         auto deadline = now_ns() + 5000000000ULL;
-        while (!queued && running && now_ns() < deadline) Sleep(1);
+        while (!queued && running && now_ns() < deadline) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         require(queued && running, OCH_IO, "USB queue startup failed: " + error());
         if (args.direction == OCH_RX) {
             dev->command("usb_data_en=1 " + std::to_string(dev->tx_on ? 1 : 0));
@@ -412,7 +412,7 @@ void Stream::start() {
                         break;
                     }
                 }
-                Sleep(5);
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
             require(filled, OCH_TIMEOUT, "TX prefill did not reach FPGA threshold: " + error());
             dev->command("tx_enable=1");
@@ -455,7 +455,7 @@ void Stream::flush(uint32_t timeout) {
             require(!reconfiguring, OCH_TIMEOUT, "TX flush interrupted by reconfiguration");
             require(running && !stop_requested, OCH_IO, "TX worker stopped: " + error());
             require(now_ns() < until, OCH_TIMEOUT, "TX flush timed out");
-            Sleep(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         require(!reconfiguring, OCH_TIMEOUT, "TX flush interrupted by reconfiguration");
         require(running && !stop_requested, OCH_IO, "TX flush was interrupted: " + error());

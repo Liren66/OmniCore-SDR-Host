@@ -107,6 +107,28 @@ void Device::emit(uint32_t type, const std::string &message, uint64_t ep, uint64
     copy_text(e.message, sizeof e.message, message);
     events.push(e);
 }
+void Device::check_stream_slot(const och_stream_args &a) {
+    require(configured, OCH_INVALID, "configure before creating streams");
+    require(a.format != OCH_SC8 || iq_bits(config) == 8, OCH_INVALID,
+            "sc8 application format requires 8-bit USB IQ mode");
+    require((a.direction == OCH_RX ? rx : tx) == nullptr, OCH_BUSY, "only one stream per direction");
+    require((a.direction == OCH_RX ? config.rx_mask : config.tx_mask) != 0, OCH_INVALID,
+            "stream direction has no enabled channels");
+}
+std::string Device::detach_stream(Stream &s) {
+    require(!s.reader.lease, OCH_BUSY, "release RX lease before destroying stream");
+    std::string issue;
+    try {
+        s.stop(0);
+    } catch (const std::exception &e) {
+        issue = e.what();
+    }
+    if (s.args.direction == OCH_RX)
+        rx = nullptr;
+    else
+        tx = nullptr;
+    return issue;
+}
 void EventQueue::push(och_event e) {
     std::lock_guard<std::mutex> lock(mutex);
     e.sequence = ++seq;
