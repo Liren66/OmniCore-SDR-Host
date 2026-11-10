@@ -71,6 +71,19 @@ namespace och::transport {
 #endif
         }
 
+        void reset_sample_pipes() override {
+#ifndef _WIN32
+            // Synchronize endpoint halt/sequence state after firmware cleanup and
+            // cancellation before submitting another stream through usbfs/xHCI.
+            for (const Pipe p: {Pipe::sample_out, Pipe::sample_in}) {
+                const int rc = libusb_clear_halt(usb.device, endpoint(p));
+                if (rc != 0) throw Error(std::string("EP1 reset failed: ") + libusb_error_name(rc));
+            }
+#endif
+            usb.policy(endpoint(Pipe::sample_in), RAW_IO, FALSE);
+            usb.policy(endpoint(Pipe::sample_in), ALLOW_PARTIAL_READS, TRUE);
+        }
+
     private:
         // Line-oriented IN pipes are read without RAW_IO, accepting short reads. Set on first
         // use; each flag belongs to the one context that reads its pipe (control thread for

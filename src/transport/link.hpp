@@ -92,5 +92,10 @@ namespace och::transport {
 
         // Ends a pending read_control() and refuses further ones. Any thread; cannot be undone.
         virtual void shutdown_control() noexcept = 0;
+
+        // Host side of the cleanup between streams, after the device has cleared its buffers:
+        // returns both sample pipes to a clean state in which Pipe::sample_in can be drained
+        // with transfer(). Only while no sample transfer is in flight. Throws Error.
+        virtual void reset_sample_pipes() = 0;
     };
 } // namespace och::transport

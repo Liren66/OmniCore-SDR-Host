@@ -143,16 +143,11 @@ void Device::reset_transport() {
     } catch (const Error &) {
         throw Failure(OCH_IO, "CH32 stream cleanup failed");
     }
-#ifndef _WIN32
-    // Synchronize endpoint halt/sequence state after firmware cleanup and
-    // cancellation before submitting another stream through usbfs/xHCI.
-    for (unsigned char ep: {0x01, 0x81}) {
-        const int rc = libusb_clear_halt(usb.device, ep);
-        require(rc == 0, OCH_IO, std::string("EP1 reset failed: ") + libusb_error_name(rc));
+    try {
+        link->reset_sample_pipes();
+    } catch (const Error &e) {
+        throw Failure(OCH_IO, e.what());
     }
-#endif
-    usb.policy(0x81, RAW_IO, FALSE);
-    usb.policy(0x81, ALLOW_PARTIAL_READS, TRUE);
     std::vector<uint8_t> junk(16384);
     size_t drained = 0;
     for (unsigned i = 0; i < 128; ++i) {
