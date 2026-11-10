@@ -54,9 +54,12 @@ int Stream::recv(void *output, size_t capacity, size_t *received, och_metadata *
     int rc = await_rx(timeout);
     if (rc) return static_cast<och_result>(rc);
     auto b = ring.read();
-    size_t frames = std::min(capacity, (b->size - reader.recv_offset) / group);
+    const size_t remaining = (b->size - reader.recv_offset) / group;
+    const size_t frames = std::min(capacity, remaining);
     auto p = b->data.get() + reader.recv_offset;
-    put_meta(m, adjusted(*b));
+    auto meta = adjusted(*b);
+    if (frames < remaining) meta.flags &= ~uint32_t(OCH_META_END_OF_BURST);
+    put_meta(m, meta);
     if (args.format == OCH_SC8)
         memcpy(output, p, frames * group);
     else if (args.format == OCH_PACKED12) {

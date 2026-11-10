@@ -123,15 +123,16 @@ void Stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size_t n
             rx_state.flags_pending = 0;
             rx_state.dropped_pending = 0;
         }
-        size_t take = std::min(n, args.transfer_bytes - rx_state.rx_filled);
-        take -= take % group;
+        // n and rx_filled are whole sample groups, and so is the room left in the block.
+        const size_t take = std::min(n, ring_block_bytes() - rx_state.rx_filled);
         memcpy(b->data.get() + rx_state.rx_filled, p, take);
         rx_state.rx_filled += take;
         p += take;
         n -= take;
         rx_state.index += take / group;
         rx_state.cur_time += take / group;
-        if (rx_state.rx_filled == args.transfer_bytes) publish_rx();
+        // Publish the final burst block below with EOB, even when it is full.
+        if (rx_state.rx_filled == ring_block_bytes() && (n || !eob)) publish_rx();
     }
     if (eob && rx_state.rx_filled) {
         rx_state.rx_meta.flags |= OCH_META_END_OF_BURST;
@@ -180,13 +181,9 @@ bool Stream::fill_tx(Slot *s) {
         }
         auto b = ring.read();
         if (!b) {
-            if (flushing && tx_state.blk_open) {
-                tx_close(s, frame_tx_eob);
-                assembling = 0;
-                return true;
-            }
-            if (flushing && s->used) {
-                assembling = 0;
+            if (flushing && (tx_state.blk_open || s->used)) {
+                if (tx_state.blk_open) tx_close(s, frame_tx_eob);
+                assembling = s->used;
                 return true;
             }
             assembling = s->used + (tx_state.blk_open ? tx_state.blk_used : 0);
@@ -216,13 +213,16 @@ bool Stream::fill_tx(Slot *s) {
         const bool done = tx_state.tx_offset == b->size;
         const bool eob = done && (b->meta.flags & OCH_TX_END_OF_BURST);
         if (done) {
+            // Account for the bytes in the slot before removing them from the ring.
+            // submit() keeps them accounted for until pending includes this slot.
+            assembling = s->used + tx_state.blk_used;
             ring.release();
             tx_state.tx_offset = 0;
         }
         if (eob) {
             tx_close(s, frame_tx_eob);
             tx_state.tx_first = false;
-            assembling = 0;
+            assembling = s->used;
             return true;
         }
         if (tx_state.blk_used == frame_payload_bytes) tx_close(s, 0);
@@ -249,7 +249,6 @@ bool Stream::submit(Slot *s) {
 void Stream::cancel_all() {
     const uint64_t unconfirmed = queue->stop();
     if (args.direction == OCH_TX) cancelled_bytes += unconfirmed;
-    pending = 0;
 }
 
 void Stream::run() {
@@ -286,8 +285,8 @@ void Stream::run() {
             require(n <= s->used, OCH_IO, "driver reported invalid USB completion length");
             if (args.direction == OCH_TX)
                 require(n == s->used, OCH_IO, "short TX completion; byte order cannot be retried safely");
-            pending = pending - 1;
             stats.usb_bytes += n;
+            pending = pending - 1;
             if (args.direction == OCH_RX) {
                 rx_state.fparser.feed(s->data, n, &Stream::frame_sink, this);
                 stats.headers = rx_state.fparser.blocks();
@@ -303,6 +302,8 @@ void Stream::run() {
     ended_ns = now_ns();
     running = false;
     stop_requested = true;
+    // A flush observing no pending transfers must also see that the stream stopped.
+    pending = 0;
     ring.wake();
 }
 
@@ -522,10 +523,10 @@ uint64_t Stream::prefill_zero(unsigned blocks) {
     for (unsigned i = 0; i < blocks; ++i) {
         auto *b = ring.write();
         require(b != nullptr, OCH_IO, "TX restart prefill capacity");
-        memset(b->data.get(), 0, args.transfer_bytes);
-        ring.publish(args.transfer_bytes, {});
+        memset(b->data.get(), 0, ring_block_bytes());
+        ring.publish(ring_block_bytes(), {});
     }
-    const uint64_t zero_samples = uint64_t(blocks) * args.transfer_bytes / group;
+    const uint64_t zero_samples = uint64_t(blocks) * ring_block_bytes() / group;
     stats.padding += zero_samples;
     return zero_samples;
 }

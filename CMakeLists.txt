@@ -108,6 +108,18 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         enable_testing()
         add_test(NAME core_is_portable COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCorePortable.cmake)
+
+        # Offline tests: no device needed.
+        add_executable(frame_parser_test tests/frame_parser_test.cpp)
+        target_link_libraries(frame_parser_test PRIVATE och_dsp)
+        add_test(NAME frame_parser COMMAND frame_parser_test)
+
+        add_library(och_fake STATIC src/transport/fake/fake_link.cpp)
+        target_link_libraries(och_fake PUBLIC och_core)
+        add_executable(fake_link_test tests/fake_link_test.cpp)
+        target_link_libraries(fake_link_test PRIVATE och_fake)
+        add_test(NAME fake_link COMMAND fake_link_test)
+        set_tests_properties(fake_link PROPERTIES TIMEOUT 120)
     endif ()
 
     # Install the library and headers for use by other projects.

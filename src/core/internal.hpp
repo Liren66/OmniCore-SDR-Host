@@ -369,7 +369,9 @@ struct och::core::Stream {
     // USB transfers of this direction: the worker's, while it runs; control resets the queue
     // after halt(). queue->wake() is how every thread asks the worker to leave its wait.
     // pending (transfers in flight) is written by the worker only; pending / assembling are
-    // atomic because flush() and fill_stats() read them.
+    // atomic because flush() and fill_stats() read them. TX flush reads ring.queued(),
+    // assembling and pending in that order. The worker accounts for bytes at the
+    // next stage before removing them from the previous one.
     std::unique_ptr<och::transport::SampleQueue> queue;
     std::atomic<uint64_t> pending{0};
     std::atomic<size_t> assembling{0};
@@ -404,10 +406,10 @@ struct och::core::Stream {
     } rx_state;
 
     // RX read position, application side: under io_mutex. Not part of the framer.
-    // lease is also read under state_mutex alone (configure, Device::destroy_stream).
+    // lease is atomic because configure also checks it outside io_mutex for fast retunes.
     struct RxRead {
         size_t recv_offset = 0;
-        bool lease = false;
+        std::atomic<bool> lease{false};
     } reader;
 
     // TX block assembly, worker side (fill_tx / tx_open / tx_close); moves into TxAssembler
@@ -485,6 +487,10 @@ struct och::core::Stream {
     void tx_close(Slot *, uint8_t extra);
 
     size_t frame_groups() const { return wire_bytes == 2 ? 2046 : 1364; }
+
+    // Bytes of one host ring block that hold samples: transfer_bytes rounded down to whole
+    // sample groups. 16384 is not a multiple of the 3- and 6-byte groups of 12-bit IQ.
+    size_t ring_block_bytes() const { return args.transfer_bytes - args.transfer_bytes % group; }
 
     // Application-thread side (stream_io.cpp), called by the C API after argument checks.
     // Return OCH_OK / OCH_TIMEOUT / OCH_STOPPED, or throw Failure.

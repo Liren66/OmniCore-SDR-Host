@@ -147,8 +147,11 @@ void Device::retune(const och_config &c) {
         reconfigure([&] { std::rethrow_exception(failure); });
         throw;
     }
-    config = c;
-    config.sample_rate = before.sample_rate;
+    // The RX worker reads sample_rate while streaming. Update only the tuning fields.
+    config.rx_frequency = c.rx_frequency;
+    config.tx_frequency = c.tx_frequency;
+    std::copy_n(c.rx_gain, 2, config.rx_gain);
+    std::copy_n(c.tx_attenuation, 2, config.tx_attenuation);
     configured = true;
     if (rx) rx->rx_state.retuned = true;
     emit(OCH_EVENT_RECONFIGURED,
