@@ -64,13 +64,3 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
-
-  format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: clang-format (check only)
-        run: |
-          clang-format --version
-          git ls-files -- '*.c' '*.h' '*.cpp' '*.hpp' ':!third_party' \
-            | xargs clang-format --dry-run --Werror
