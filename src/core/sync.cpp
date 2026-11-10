@@ -113,11 +113,21 @@ namespace {
         void all(const std::string &c) {
             for (size_t i = 0; i < n; ++i) cmd(i, c);
         }
+        // Status polls name the board too: a board that drops out is found by whichever
+        // command or poll comes next.
+        template<class F>
+        auto poll(size_t i, F f) {
+            try {
+                return with(dev[i], f);
+            } catch (const Failure &e) {
+                throw Failure(e.code, board_name(i) + ": " + e.what());
+            }
+        }
         och_sync_status status(size_t i) {
-            return with(dev[i], [](Device &d) { return read_sync_status(d); });
+            return poll(i, [](Device &d) { return read_sync_status(d); });
         }
         och_time_status time(size_t i) {
-            return with(dev[i], [](Device &d) { return d.get_time(); });
+            return poll(i, [](Device &d) { return d.get_time(); });
         }
     };
 

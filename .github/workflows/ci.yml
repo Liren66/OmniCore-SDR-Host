@@ -21,7 +21,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install libusb (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev pkg-config
@@ -42,10 +42,12 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          # MSYS2 is retiring MINGW64 in favour of UCRT64; stay on it while tools/build.ps1 does.
+          suppress-deprecation-warnings: msystem-mingw64
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
