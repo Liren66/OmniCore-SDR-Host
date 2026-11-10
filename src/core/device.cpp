@@ -105,14 +105,24 @@ void Device::emit(uint32_t type, const std::string &message, uint64_t ep, uint64
     e.block = block;
     e.count = count ? count : 1;
     copy_text(e.message, sizeof e.message, message);
-    std::lock_guard<std::mutex> lock(events_mutex);
-    e.sequence = ++event_seq;
-    if (events.size() == 256) {
-        events.pop_front();
-        ++event_drops;
+    events.push(e);
+}
+void EventQueue::push(och_event e) {
+    std::lock_guard<std::mutex> lock(mutex);
+    e.sequence = ++seq;
+    if (queue.size() == capacity) {
+        queue.pop_front();
+        ++dropped;
     }
-    events.push_back(e);
-    events_cv.notify_one();
+    queue.push_back(e);
+    cv.notify_one();
+}
+bool EventQueue::pop(och_event &out, uint32_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(mutex);
+    if (!cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] { return !queue.empty(); })) return false;
+    out = queue.front();
+    queue.pop_front();
+    return true;
 }
 void Device::line(const std::string &s) {
     if (s.rfind("EVT ", 0) == 0) {

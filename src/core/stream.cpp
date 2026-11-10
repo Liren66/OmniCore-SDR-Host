@@ -46,9 +46,8 @@ void Stream::frame_sink(void *self, const och::dsp::FrameHeader &h, const uint8_
 // number of samples the FPGA dropped (difference of timestamps).
 void Stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size_t n) {
     using namespace och::dsp;
-    const bool continuous =
-            rx_state.have_time && h.time == rx_state.next_time && !(
-                h.flags & (frame_rx_sob | frame_rx_gap | frame_rx_late));
+    const bool continuous = rx_state.have_time && h.time == rx_state.next_time &&
+                            !(h.flags & (frame_rx_sob | frame_rx_gap | frame_rx_late));
     if (!continuous) {
         publish_rx();
         ++rx_state.fr_epochs;
@@ -58,9 +57,8 @@ void Stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size_t n
         rx_state.gap_samples = 0;
         if (h.flags & frame_rx_gap) {
             rx_state.flags_pending |= OCH_META_DISCONTINUITY | OCH_META_DEVICE_OVERFLOW;
-            rx_state.gap_samples = rx_state.have_time && h.time >= rx_state.next_time
-                                       ? int64_t(h.time - rx_state.next_time)
-                                       : -1;
+            rx_state.gap_samples =
+                    rx_state.have_time && h.time >= rx_state.next_time ? int64_t(h.time - rx_state.next_time) : -1;
             ++dev->stats.overflows;
         } else if (rx_state.have_time)
             rx_state.flags_pending |= OCH_META_DISCONTINUITY;
@@ -119,9 +117,8 @@ void Stream::rx_frame(const och::dsp::FrameHeader &h, const uint8_t *p, size_t n
             rx_state.rx_meta.epoch = rx_state.epoch;
             rx_state.rx_meta.sample_index = rx_state.index;
             rx_state.rx_meta.host_dropped_samples = rx_state.dropped_pending;
-            rx_state.rx_meta.device_dropped_samples = (rx_state.flags_pending & OCH_META_DEVICE_OVERFLOW)
-                                                          ? rx_state.gap_samples
-                                                          : 0;
+            rx_state.rx_meta.device_dropped_samples =
+                    (rx_state.flags_pending & OCH_META_DEVICE_OVERFLOW) ? rx_state.gap_samples : 0;
             rx_state.rx_meta.time_ticks = rx_state.cur_time;
             rx_state.rx_meta.tick_rate = dev->config.sample_rate;
             rx_state.rx_meta.host_monotonic_ns = now_ns();
@@ -208,8 +205,8 @@ bool Stream::fill_tx(Slot *s) {
                 return true;
             }
             tx_open(s, tx_state.tx_offset == 0 ? b->meta.flags : 0, b->meta.time_ticks);
-        } else if (tx_state.tx_offset == 0 && !tx_state.blk_used && (
-                       b->meta.flags & (OCH_TX_START_OF_BURST | OCH_TX_HAS_TIME))) {
+        } else if (tx_state.tx_offset == 0 && !tx_state.blk_used &&
+                   (b->meta.flags & (OCH_TX_START_OF_BURST | OCH_TX_HAS_TIME))) {
             tx_state.blk_open = false;
             tx_open(s, b->meta.flags, b->meta.time_ticks);
         }
@@ -249,8 +246,8 @@ bool Stream::submit(Slot *s) {
     if (args.direction == OCH_RX) s->used = xfer_bytes;
     ResetEvent(s->ov.hEvent);
     BOOL ok = args.direction == OCH_RX
-                  ? u.api.read(u.h, ep, s->bytes.get(), static_cast<ULONG>(s->used), nullptr, &s->ov)
-                  : u.api.write(u.h, ep, s->bytes.get(), static_cast<ULONG>(s->used), nullptr, &s->ov);
+                      ? u.api.read(u.h, ep, s->bytes.get(), static_cast<ULONG>(s->used), nullptr, &s->ov)
+                      : u.api.write(u.h, ep, s->bytes.get(), static_cast<ULONG>(s->used), nullptr, &s->ov);
     if (!ok && GetLastError() != ERROR_IO_PENDING)
         throw Failure(OCH_IO, "USB streaming submission failed: " + utf8(syserr(GetLastError())));
     if (ok) SetEvent(s->ov.hEvent);
@@ -428,8 +425,7 @@ void Stream::start() {
                 dev->command("usb_data_en=0 " + std::to_string(dev->tx_on ? 1 : 0));
             else
                 dev->command("tx_enable=0");
-        } catch (...) {
-        }
+        } catch (...) {}
         if (args.direction == OCH_RX)
             dev->rx_on = false;
         else

@@ -178,7 +178,7 @@ void Stream::fill_stats(och_stats *st) {
     st->transfer_errors = stats.errors;
     st->device_overflows = dev->stats.overflows;
     st->device_underflows = dev->stats.underflows;
-    st->event_drops = dev->event_drops;
+    st->event_drops = dev->events.drops();
     st->tx_starvation_events = stats.starved;
     auto began = started_ns.load();
     auto end = running ? now_ns() : ended_ns.load();

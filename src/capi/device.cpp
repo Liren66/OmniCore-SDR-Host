@@ -119,13 +119,11 @@ int och_poll_event(och_device *d, och_event *e, uint32_t timeout) {
     return protect([&] {
         device(d);
         out_struct_v(e, event_v1, event_v2);
-        std::unique_lock<std::mutex> lock(d->events_mutex);
-        if (!d->events_cv.wait_for(lock, std::chrono::milliseconds(timeout), [&] { return !d->events.empty(); }))
-            return OCH_TIMEOUT;
-        const auto n = e->struct_size;
-        memcpy(e, &d->events.front(), n);
+        och_event next;
+        if (!d->events.pop(next, timeout)) return OCH_TIMEOUT;
+        const auto n = e->struct_size; // v1 callers get the leading v1 part only
+        memcpy(e, &next, n);
         e->struct_size = n;
-        d->events.pop_front();
         return OCH_OK;
     });
 }

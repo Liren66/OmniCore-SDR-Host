@@ -97,6 +97,29 @@ namespace och::core {
     void sync_trigger(Device &, uint32_t mode);
 
     void multi_sync(Device *const *devices, size_t count, const och_multi_sync_args &, och_multi_sync_result *results);
+
+    // Bounded device event queue. push() runs on any thread (control, USB worker,
+    // configuration); pop() is och_poll_event on the application thread. The newest
+    // `capacity` events are kept: a push into a full queue drops the oldest one.
+    class EventQueue {
+    public:
+        static constexpr size_t capacity = 256;
+
+        // Assigns the sequence number and wakes one waiting pop(), under the lock.
+        void push(och_event e);
+
+        // Waits up to timeout_ms for an event; false on timeout.
+        bool pop(och_event &out, uint32_t timeout_ms);
+
+        // Events dropped because the queue was full (och_stats.event_drops).
+        uint64_t drops() const { return dropped; }
+
+    private:
+        std::mutex mutex;
+        std::condition_variable cv;
+        std::deque<och_event> queue;
+        std::atomic<uint64_t> seq{0}, dropped{0};
+    };
 }
 
 struct och::core::Device {
@@ -121,10 +144,7 @@ struct och::core::Device {
     bool reply_started = false, reply_done = false, control_failed = false;
     int reply_result = 0;
     std::string reply, control_error;
-    std::mutex events_mutex;
-    std::condition_variable events_cv;
-    std::deque<och_event> events;
-    std::atomic<uint64_t> event_seq{0}, event_drops{0};
+    EventQueue events;
     // Device FIFO faults from EVT lines (control thread); read by och_get_stats.
     struct DeviceStats {
         std::atomic<uint64_t> overflows{0}, underflows{0};
