@@ -65,11 +65,11 @@ sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-d
 bash tools/build-linux.sh
 sudo cmake --install build/linux --prefix /opt/omnicore/0.7.1
 sudo ln -sfn /opt/omnicore/0.7.1/bin/och /usr/local/bin/och
-sudo install -m 0644 packaging/60-omnicore.rules /etc/udev/rules.d/
+sudo install -m 0644 packaging/linux/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
 
-运行无需 sudo。USB 权限、目录布局与性能参数见 [Linux 配置](#linux-配置)；完整说明见 [Windows 安装](docs/INSTALL_WINDOWS.txt) / [Linux 安装](docs/INSTALL_LINUX.md)。
+运行无需 sudo。USB 权限、目录布局与性能参数见 [Linux 配置](#linux-配置)；完整说明见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt) / [Linux 安装](docs/INSTALL_LINUX.md)。
 
 ### 2. 连接设备
 
@@ -200,7 +200,7 @@ Linux 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，
 | 项目 | 配置 |
 |---|---|
 | 依赖 | `build-essential cmake ninja-build pkg-config libusb-1.0-0-dev`；运行时只需 `libusb-1.0-0` |
-| USB 权限 | 安装 `packaging/60-omnicore.rules`（只匹配 `1a86:5537`）。桌面会话经 uaccess 授权；SSH 用户执行 `sudo usermod -aG plugdev "$USER"` 后重新登录，并重新插拔设备 |
+| USB 权限 | 安装 `packaging/linux/60-omnicore.rules`（只匹配 `1a86:5537`）。桌面会话经 uaccess 授权；SSH 用户执行 `sudo usermod -aG plugdev "$USER"` 后重新登录，并重新插拔设备 |
 | 安装布局 | 推荐 `/opt/omnicore/<版本>`，再把 `bin/och` 软链接到 `/usr/local/bin`。程序使用相对 RPATH，无需 `LD_LIBRARY_PATH`；需保持 `bin/` 与 `lib/` 的相对位置 |
 | 发布归档 | 解压 `OmniCoreHost-<版本>-linux-x86_64.tar.gz` 后整体复制到安装目录；udev 规则同时位于 `share/omnicore/60-omnicore.rules` |
 | USB 队列 | 默认每方向 32 × 196608 B，在系统默认 `usbfs_memory_mb=16` 下即可满速。仅在增大 `--queue` / `--block` 后出现 `LIBUSB_ERROR_NO_MEM` 时才需调高该内核参数，程序不会自动修改 |
@@ -363,6 +363,13 @@ RX 元数据的 `time_ticks` 是每批第一个样点的时间；突发完成、
 
 示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp)。接口与生命周期详见 [API 参考](docs/api.md)。
 
+从源码构建时示例默认一起编译（`-DOCH_BUILD_EXAMPLES=OFF` 可关闭），可执行文件在构建目录的 `examples/` 下（Windows 与 `omnicore.dll` 同目录）。已安装的 OCH 也可以单独编译示例：
+
+```bash
+cmake -S <安装目录>/examples -B build-examples -DCMAKE_PREFIX_PATH=<安装目录>
+cmake --build build-examples
+```
+
 ## 从源码构建与打包
 
 需要 CMake 3.20+、Ninja 与 C++17 x64 工具链（Windows 使用 MSYS2 MinGW-w64，默认 `C:\msys64\mingw64\bin`）。
@@ -372,7 +379,7 @@ RX 元数据的 `time_ticks` 是每批第一个样点的时间；突发完成、
 powershell -File tools/build.ps1 -Configuration Release
 
 # 生成安装包 dist/OmniCoreHost-<版本>-win64-setup.exe 及 .sha256
-powershell -NoProfile -File packaging/build-package.ps1 -StageDir build/stage
+powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/stage
 ```
 
 ```bash
@@ -380,25 +387,30 @@ powershell -NoProfile -File packaging/build-package.ps1 -StageDir build/stage
 bash tools/build-linux.sh
 ```
 
-打包脚本会校验 stage 内容与版本号，加入驱动助手、libusbK 与许可证，生成 MSVC 导入库（需 VS Build Tools 的 `lib.exe`），并写入 `PAYLOAD_SHA256.txt`。Inno Setup 6.2.2 已随工程提供，详见 [安装包构建说明](packaging/BUILD_INSTALLER.txt)。
+打包脚本会校验 stage 内容与版本号，加入驱动助手、libusbK 与许可证，生成 MSVC 导入库（需 VS Build Tools 的 `lib.exe`），并写入 `PAYLOAD_SHA256.txt`。Inno Setup 6.2.2 已随工程提供，详见 [安装包构建说明](packaging/windows/BUILD_INSTALLER.txt)。
 
 ## 工程目录
 
 ```text
 OmniCoreHost/
 ├── include/omnicore/   公共 C ABI (och.h) 与 C++ 包装 (och.hpp)
+├── apps/
+│   └── och/            och 命令行
 ├── src/
+│   ├── capi/           公共 C 接口入口（extern "C"，按模块分文件）
 │   ├── core/           设备、配置事务、流线程、射频与板控
-│   ├── dsp/            IQ 编解码、16 KiB 成帧块解析与生成
-│   ├── transport/      libusbK (Windows) / libusb (Linux) 传输层
-│   └── cli/            och 命令行
+│   ├── dsp/            IQ 编解码
+│   ├── protocol/       16 KiB 成帧块解析与生成
+│   └── transport/      libusbK (Windows) / libusb (Linux) 传输层
 ├── examples/           C++ 示例与 FTR 示例
 ├── tests/              成帧解析单元测试、硬件时间戳板上测试
 ├── docs/               使用与开发文档、插图
 ├── cmake/              CMake 包配置模板
-├── tools/              构建脚本、吞吐扫描（bench_sweep.py）、驱动助手源码
-├── packaging/          安装包脚本、udev 规则
-└── third_party/        libusbK / libwdi 及其许可证
+├── tools/              构建脚本、吞吐扫描（bench_sweep.py）
+├── packaging/
+│   ├── windows/        Inno 安装包脚本、MSVC 导入库生成、驱动助手源码（driver/）
+│   └── linux/          udev 规则
+└── third_party/        libusbK / libwdi 及其许可证、Inno Setup 编译器
 ```
 
 ## 文档索引
@@ -407,7 +419,7 @@ OmniCoreHost/
 |---|---|---|
 | [命令行参考](docs/cli.md) | [API 参考](docs/api.md) | [FIR 与时钟](docs/fir.md) |
 | [命令目录](docs/commands.md) | [架构与性能](docs/architecture.md) | [参考时钟与外部 LO](docs/reference-lo.md) |
-| [Windows 安装](docs/INSTALL_WINDOWS.txt) | [设备协议](docs/protocol.md) | [PPS 监控](docs/pps.md) |
+| [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt) | [设备协议](docs/protocol.md) | [PPS 监控](docs/pps.md) |
 | [Linux 安装](docs/INSTALL_LINUX.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
 | [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
 | [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | [多板同步](docs/multi-board-sync.md) |

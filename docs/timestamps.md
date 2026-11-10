@@ -66,7 +66,7 @@ och_send_burst(tx, samples, n, &md, &accepted, 1000);  // 在样点时间 T 开�
 ## 测试
 
 ```bash
-g++ -std=c++17 -I src tests/frame_parser_test.cpp src/dsp/frame.cpp && ./a.out
+g++ -std=c++17 -I src tests/frame_parser_test.cpp src/protocol/frame.cpp && ./a.out
 g++ -std=c++17 -I include tests/hw_timestamp_test.cpp -L<build> -lomnicore -o hw_timestamp_test
 ```
 

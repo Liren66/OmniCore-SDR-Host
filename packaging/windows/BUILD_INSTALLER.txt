@@ -1,0 +1,96 @@
+OmniCore Host 0.7.1 Windows x64 installer build
+
+Build requirements
+  Windows x64; CMake 3.20+, Ninja, MSYS2 MinGW-w64 GCC; Microsoft x64 lib.exe
+  (Visual Studio C++ Build Tools) for the native MSVC import library.
+  The bundled Inno Setup 6.2.2 compiler needs no system installation.
+  No PS SDK, CH32 project, FPGA project, hardware connection or test tree is required.
+
+Application stage
+  Build the OCH source with tools/build.ps1. Its CMake install stage contains:
+    bin/och.exe, bin/omnicore.dll
+    include/omnicore/, lib/, docs/, examples/, README.md, LICENSE
+  Prepare an empty staging directory before CMake install. Installing over an old
+  stage does not remove obsolete files. build-package.ps1 rejects unexpected root
+  entries, SDK firmware, test/debug directories, debug files and extra executables.
+  It also runs only the offline `och version --json` command to verify the version.
+
+Build the installer
+  powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/stage
+  Optional: -Version 0.7.1 -OutputDir dist -InnoCompiler C:/path/to/ISCC.exe
+
+  Output:
+    dist/OmniCoreHost-0.7.1-win64-setup.exe
+    dist/OmniCoreHost-0.7.1-win64-setup.exe.sha256
+
+  The script adds the driver assistant, offline libwdi driver payload, libusbK.dll,
+  licenses and corresponding source archives. It generates a native Microsoft x64
+  omnicore.lib from the final DLL export table, rejects unbundled compiler runtimes
+  when objdump is available, and writes PAYLOAD_SHA256.txt for every payload file.
+  Building the installer never installs a driver or programs any device.
+
+Rebuild the driver assistant, only when its source/dependencies change
+  powershell -NoProfile -File packaging/windows/driver/build-driver.ps1
+  Optional: -CompilerRoot C:/msys64/mingw64/bin
+  This produces packaging/windows/driver/och-driver.exe and libwdi.dll without installation.
+  Its generated intermediate files may be removed after a successful build.
+
+Required driver files in the source project
+  packaging/windows/
+    build-package.ps1, build-msvc-import.ps1, omnicore-host.iss
+  packaging/windows/driver/
+    och_driver.cpp, och_driver.rc, och_driver.manifest, build-driver.ps1
+    och-driver.exe, libwdi.dll
+  third_party/inno-6.2.2/app/
+    ISCC.exe and the rest of the Inno Setup compiler
+  third_party/driver/
+    NOTICES.txt, SOURCES.json, runtime_licenses/
+    downloads/libwdi-v1.5.1.zip
+    downloads/libusbK-3.1.0.0-src.7z
+    libusbK-3.1.0.0-src/license/
+    libwdi-1.5.1/COPYING, COPYING-LGPL and libwdi source tree
+    libusbK-3.1.0.0/libusbK-3.1.0.0-bin/bin/
+      dll/amd64/libusbK.dll, dll/amd64/libusb0.dll
+      dll/x86/libusbK.dll, dll/x86/libusb0.dll
+      sys/amd64/libusbK.sys, sys/amd64/WdfCoInstaller01009.dll
+  The two x86 DLLs are required by libwdi's x64 INF payload; they are not redundant.
+  Full upstream source archives remain for license/source distribution, even though
+  only a small subset of the expanded libusbK tree is needed to build this helper.
+
+Runtime and driver behavior
+  User machines need neither Visual Studio nor MinGW to run OCH.
+  libusbK and libwdi are loaded from beside their executable/DLL using safe Windows
+  loading rules. The host core does not depend on an installer-helper API.
+  The helper process commands are:
+    och-driver help
+    och-driver check
+    och-driver install
+    och-driver extract NEW_DIRECTORY
+  Exit codes: 0 success/already installed; 2 device absent; 3 matching device needs
+  libusbK; 4 failure; 5 elevation cancelled/failed. Extract never signs or installs.
+  Install matches only non-composite USB VID 1A86 / PID 5537, skips existing libusbK,
+  and requests normal elevation only when a connected matching device needs it.
+
+Setup and uninstall
+  Setup requests standard administrator UAC. Its driver task is selected by default.
+  An absent SDR does not prevent software installation; the helper can run later.
+  Other driver failures are reported and produce a nonzero setup exit code.
+  Uninstall removes application files and that install directory's PATH entry.
+  It preserves shared kernel drivers, DriverStore packages and driver certificates.
+  The package contains no PS firmware or SDK files and performs no board flashing.
+
+C and C++ consumers
+  find_package(OmniCoreHost 0.2 CONFIG REQUIRED)
+  target_link_libraries(myapp PRIVATE OmniCore::omnicore)
+  Include <omnicore/och.h> for C or <omnicore/och.hpp> for C++17.
+  Build x64. Keep omnicore.dll and libusbK.dll beside your application, or configure
+  the installed bin directory with safe Windows DLL loading APIs.
+  CMake selects native omnicore.lib for MSVC and libomnicore.dll.a for MinGW.
+
+Provenance and limitations
+  Third-party source URLs and original archive hashes are in SOURCES.json. The
+  original build-tool downloads need not remain after their tools are extracted.
+  Inno Setup's license remains beside its compiler. The kernel driver is an
+  unmodified official signed binary. OCH executables/setup have no publisher code
+  signature. A rebuilt package is not evidence of clean-machine installation;
+  first-time Windows driver installation still requires separate acceptance.

@@ -31,7 +31,7 @@ if(MSVC)
   if(NOT EXISTS "${_och_msvc_implib}")
     set(OmniCoreHost_FOUND FALSE)
     set(OmniCoreHost_NOT_FOUND_MESSAGE
-      "MSVC import library is missing: ${_och_msvc_implib}. Run tools/installer/build-msvc-import.ps1 before packaging, or use lib /machine:x64 /def:omnicore.def /out:omnicore.lib.")
+      "MSVC import library is missing: ${_och_msvc_implib}. Run packaging/windows/build-msvc-import.ps1 before packaging, or use lib /machine:x64 /def:omnicore.def /out:omnicore.lib.")
     return()
   endif()
   set_property(TARGET OmniCore::omnicore PROPERTY IMPORTED_IMPLIB "${_och_msvc_implib}")

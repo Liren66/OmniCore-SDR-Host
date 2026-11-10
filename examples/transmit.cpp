@@ -7,14 +7,17 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     try {
         och::device dev(argc > 1 ? argv[1] : "");
         auto config = och::default_config();
-        config.sample_rate = 30720000; config.rx_mask = 0; config.tx_mask = 1;
+        config.sample_rate = 30720000;
+        config.rx_mask = 0;
+        config.tx_mask = 1;
         config.tx_attenuation[0] = 10;
         dev.configure(config);
-        auto args = och::stream_args(OCH_TX); args.format = OCH_SC16;
+        auto args = och::stream_args(OCH_TX);
+        args.format = OCH_SC16;
         och::stream tx(dev, args);
         // 25 cycles in 768 samples gives exactly 1MHz at 30.72MSPS.
         // The repeat buffer contains whole periods, preserving phase at wrap.
@@ -46,7 +49,8 @@ int main(int argc, char** argv) {
         tx.stop();
         std::cout << "TX finished; transport padding=" << tx.stats().tx_padding_samples << " samples/channel\n";
         return 0;
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << '\n'; return 1;
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << '\n';
+        return 1;
     }
 }
