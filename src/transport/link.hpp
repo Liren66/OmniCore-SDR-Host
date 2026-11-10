@@ -2,8 +2,42 @@
 // types appear here. The interface grows as core call sites move onto it (TRANSPORT_PLAN.md).
 #pragma once
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace och::transport {
+    // One connected device as found by enumerate(). Text is UTF-8.
+    struct DeviceId {
+        std::string path;   // backend-specific address; valid until the device is replugged
+        std::string serial; // USB serial number, or a port-based name when the device has none
+    };
+
+    // Connected OmniCoreSDR devices this backend can open.
+    std::vector<DeviceId> enumerate();
+
+    // Backend name for och_device_info.driver.
+    const char *driver_name();
+
+    // Error text for "no device", with the platform's hint on what to check.
+    const char *not_found_message();
+
+    // Cross-process ownership of one device, by serial number. Released on destruction, and by
+    // the operating system if the process dies.
+    class DeviceLock {
+    public:
+        enum class Result {
+            acquired,
+            busy,        // another process holds it
+            unavailable, // the lock itself could not be created
+        };
+
+        Result acquire(const std::string &serial);
+
+    private:
+        std::shared_ptr<void> held;
+    };
+
     // The device's bulk pipes by role. Endpoint numbers stay inside the backends.
     enum class Pipe : uint8_t {
         sample_out,  // IQ to the device

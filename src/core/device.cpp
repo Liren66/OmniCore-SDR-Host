@@ -33,22 +33,13 @@ namespace {
         return text.substr(i, j - i);
     }
 }
-std::string och::core::serial_of(const DeviceInfo &d) {
-    auto s = d.instance;
-    auto i = s.find_last_of(L'\\');
-    return utf8(i == std::wstring::npos ? s : s.substr(i + 1));
-}
-void och::core::fill_info(och_device_info &info, const DeviceInfo &d) {
+void och::core::fill_info(och_device_info &info, const DeviceId &d) {
     info = {};
     info.struct_size = sizeof(info);
     info.abi_version = OCH_ABI_VERSION;
-    copy_text(info.serial, sizeof info.serial, serial_of(d));
+    copy_text(info.serial, sizeof info.serial, d.serial);
     copy_text(info.name, sizeof info.name, "OmniCoreSDR");
-#ifdef _WIN32
-    copy_text(info.driver, sizeof info.driver, "libusbK");
-#else
-    copy_text(info.driver, sizeof info.driver, "libusb-1.0");
-#endif
+    copy_text(info.driver, sizeof info.driver, driver_name());
     info.rx_channels = info.tx_channels = 2;
     info.max_sample_rate = 61440000;
 }
@@ -59,14 +50,12 @@ Device::~Device() {
 #endif
     if (control_thread.joinable()) control_thread.join();
 }
-void Device::open(const DeviceInfo &d) {
+void Device::open(const DeviceId &d) {
     fill_info(info, d);
-    std::wstring name = L"Local\\OmniCoreHost_" + wide(info.serial);
-    owner.h = CreateMutexW(nullptr, FALSE, name.c_str());
-    auto existed = GetLastError() == ERROR_ALREADY_EXISTS;
-    require(owner.h != nullptr, OCH_IO, "device mutex unavailable");
-    require(!existed, OCH_BUSY, "device already owned by another OmniCore Host process");
-    usb.open(d.path);
+    const auto lock = owner.acquire(info.serial);
+    require(lock != DeviceLock::Result::unavailable, OCH_IO, "device mutex unavailable");
+    require(lock != DeviceLock::Result::busy, OCH_BUSY, "device already owned by another OmniCore Host process");
+    open_usb(usb, d);
     attach(std::make_unique<UsbLink>(usb));
 }
 void Device::attach(std::unique_ptr<Link> opened) {

@@ -24,7 +24,7 @@ void och_default_config(och_config *c) {
 int och_list(och_device_info *output, size_t capacity, size_t *count) {
     return protect([&] {
         require(count && (!capacity || output), OCH_INVALID, "invalid device list output");
-        auto all = och::transport::scanDevices(0x1a86, 0x5537);
+        auto all = och::transport::enumerate();
         *count = all.size();
         for (size_t i = 0; i < std::min(capacity, all.size()); ++i) out_struct(&output[i]);
         for (size_t i = 0; i < std::min(capacity, all.size()); ++i) fill_info(output[i], all[i]);
@@ -36,15 +36,11 @@ int och_open(const char *serial, och_device **out) {
     return protect([&] {
         require(out != nullptr, OCH_INVALID, "null device output");
         *out = nullptr;
-        auto all = och::transport::scanDevices(0x1a86, 0x5537);
-        std::vector<och::transport::DeviceInfo> match;
+        auto all = och::transport::enumerate();
+        std::vector<och::transport::DeviceId> match;
         for (auto &d: all)
-            if (!serial || !*serial || serial_of(d) == serial) match.push_back(d);
-#ifdef _WIN32
-        require(!match.empty(), OCH_NOT_FOUND, "OmniCoreSDR with libusbK not found; run och-driver check");
-#else
-        require(!match.empty(), OCH_NOT_FOUND, "OmniCoreSDR USB device not found (VID 1a86, PID 5537)");
-#endif
+            if (!serial || !*serial || d.serial == serial) match.push_back(d);
+        require(!match.empty(), OCH_NOT_FOUND, och::transport::not_found_message());
         require(match.size() == 1, OCH_INVALID, "multiple devices; specify a serial number");
         auto d = std::make_unique<och_device>();
         d->open(match.front());

@@ -68,9 +68,7 @@ namespace och::core {
         void clear() { first = count = 0; }
     };
 
-    std::string serial_of(const och::transport::DeviceInfo &);
-
-    void fill_info(och_device_info &, const och::transport::DeviceInfo &);
+    void fill_info(och_device_info &, const och::transport::DeviceId &);
 
     // CH32 bridge firmware (firmware.cpp). firmware_probe is false for bridge
     // firmware without the OCFW requests (legacy).
@@ -128,8 +126,7 @@ struct och::core::Device {
     // link is declared after it so that it is destroyed first.
     och::transport::Usb usb;
     std::unique_ptr<och::transport::Link> link;
-    och::transport::Handle owner;
-    bool owns_mutex = false;
+    och::transport::DeviceLock owner;
     och_device_info info{};
     och_config config{};
     bool configured = false, transport_dirty = false;
@@ -158,7 +155,7 @@ struct och::core::Device {
     ~Device();
 
     // Takes the cross-process device lock, opens the USB device and attaches its link.
-    void open(const och::transport::DeviceInfo &);
+    void open(const och::transport::DeviceId &);
 
     // Handshake on an opened link: bridge firmware, bus speed, SDK protocol, transport reset.
     void attach(std::unique_ptr<och::transport::Link>);

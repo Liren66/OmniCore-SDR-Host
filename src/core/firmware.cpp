@@ -3,6 +3,7 @@
 // bootloader. Device side and wire format: OmniCore-SDR-Firmware,
 // OmniCore-SDR-Bridge/Common/ocfw.h (keep the constants below in sync).
 #include "internal.hpp"
+#include "../transport/usb_link.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -131,33 +132,29 @@ namespace {
         return img;
     }
 
-    std::vector<DeviceInfo> matching(const std::string &serial) {
-        std::vector<DeviceInfo> out;
-        for (auto &d: scanDevices(0x1a86, 0x5537))
-            if (serial.empty() || serial_of(d) == serial) out.push_back(d);
+    std::vector<DeviceId> matching(const std::string &serial) {
+        std::vector<DeviceId> out;
+        for (auto &d: enumerate())
+            if (serial.empty() || d.serial == serial) out.push_back(d);
         return out;
     }
     // One device for the whole operation, held like och_open holds it.
     struct Session {
         std::string serial;
-        Handle owner;
+        DeviceLock owner;
         Usb usb;
         Info info{};
         bool known = false;
         explicit Session(const char *wanted) {
             auto found = matching(wanted ? wanted : "");
-#ifdef _WIN32
-            require(!found.empty(), OCH_NOT_FOUND, "OmniCoreSDR with libusbK not found; run och-driver check");
-#else
-            require(!found.empty(), OCH_NOT_FOUND, "OmniCoreSDR USB device not found (VID 1a86, PID 5537)");
-#endif
+            require(!found.empty(), OCH_NOT_FOUND, not_found_message());
             require(found.size() == 1, OCH_INVALID, "multiple devices; specify a serial number");
-            serial = serial_of(found.front());
-            owner.h = CreateMutexW(nullptr, FALSE, (L"Local\\OmniCoreHost_" + wide(serial)).c_str());
-            const bool existed = GetLastError() == ERROR_ALREADY_EXISTS;
-            require(owner.h != nullptr, OCH_IO, "device mutex unavailable");
-            require(!existed, OCH_BUSY, "device is open in an OmniCore Host process; close it first");
-            usb.open(found.front().path);
+            serial = found.front().serial;
+            const auto lock = owner.acquire(serial);
+            require(lock != DeviceLock::Result::unavailable, OCH_IO, "device mutex unavailable");
+            require(lock != DeviceLock::Result::busy, OCH_BUSY,
+                    "device is open in an OmniCore Host process; close it first");
+            open_usb(usb, found.front());
             known = read_info(usb, info);
         }
         // After a reset: wait for the same serial to come back in the given mode.
@@ -170,7 +167,7 @@ namespace {
                 auto found = matching(serial);
                 if (found.size() == 1) {
                     try {
-                        usb.open(found.front().path);
+                        open_usb(usb, found.front());
                         known = read_info(usb, info);
                         if (known && info.mode == mode) return;
                     } catch (const std::exception &) {}

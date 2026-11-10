@@ -24,6 +24,9 @@ namespace och::transport {
         return 0;
     }
 
+    // Opens the Usb a Device or firmware session still holds directly.
+    inline void open_usb(Usb &usb, const DeviceId &id) { usb.open(wide(id.path)); }
+
     // Does not own the Usb: the Device still holds it for the call sites not yet moved.
     class UsbLink final : public Link {
     public:
