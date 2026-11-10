@@ -32,7 +32,7 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
-#elif defined(__linux__) && !defined(OCH_CLI_TEST)
+#elif (defined(__unix__) || defined(__APPLE__)) && !defined(OCH_CLI_TEST)
 #include <unistd.h>
 #include <sys/ioctl.h>
 #endif
@@ -97,7 +97,7 @@ namespace {
             CONSOLE_SCREEN_BUFFER_INFO info{};
             if (enabled_ && GetConsoleScreenBufferInfo(GetStdHandle(STD_ERROR_HANDLE), &info))
                 columns_ = static_cast<size_t>(std::max(20, int(info.srWindow.Right - info.srWindow.Left)));
-#elif defined(__linux__) && !defined(OCH_CLI_TEST)
+#elif (defined(__unix__) || defined(__APPLE__)) && !defined(OCH_CLI_TEST)
             const char *term = std::getenv("TERM");
             enabled_ = !json_mode && isatty(STDOUT_FILENO) && isatty(STDERR_FILENO) && term &&
                        std::strcmp(term, "dumb") != 0;
@@ -132,7 +132,7 @@ namespace {
         ~terminal_progress() { clear(); }
     };
     // Colour and Unicode require an interactive VT terminal. Redirected output
-    // stays plain ASCII on both platforms.
+    // stays plain ASCII on every platform.
     presentation::style terminal_style(bool stdout_handle, bool no_color) {
         presentation::style st;
 #if defined(_WIN32) && !defined(OCH_CLI_TEST)
@@ -143,7 +143,7 @@ namespace {
                         SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
         st.unicode = vt;
         st.color = vt && !no_color;
-#elif defined(__linux__) && !defined(OCH_CLI_TEST)
+#elif (defined(__unix__) || defined(__APPLE__)) && !defined(OCH_CLI_TEST)
         const char *term = std::getenv("TERM");
         const bool vt = isatty(stdout_handle ? STDOUT_FILENO : STDERR_FILENO) && term && std::strcmp(term, "dumb") != 0;
         const char *locale = std::setlocale(LC_CTYPE, nullptr);
@@ -1498,6 +1498,8 @@ namespace {
                 presentation::field("Public C/C++ ABI", OCH_ABI_VERSION, std::cout);
 #ifdef _WIN32
                 presentation::field("Platform", "Windows x64, libusbK", std::cout);
+#elif defined(__APPLE__)
+                presentation::field("Platform", "macOS, libusb-1.0", std::cout);
 #else
                 presentation::field("Platform", "Linux, libusb-1.0", std::cout);
 #endif
@@ -1828,7 +1830,7 @@ int main(int argc, char **argv) {
     SetConsoleOutputCP(CP_UTF8);
 #endif
     std::setlocale(LC_NUMERIC, "C");
-#if defined(__linux__) && !defined(OCH_CLI_TEST)
+#if (defined(__unix__) || defined(__APPLE__)) && !defined(OCH_CLI_TEST)
     std::setlocale(LC_CTYPE, "");
 #endif
     std::signal(SIGINT, signal_handler);

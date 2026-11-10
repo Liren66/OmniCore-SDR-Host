@@ -539,8 +539,15 @@ namespace och_cli::presentation {
         if (list.empty()) {
             out << '\n';
             status(level::warn, "No OmniCoreSDR device found.", out);
+#if defined(_WIN32)
             note("Check the USB data cable and that the device uses the libusbK driver.", out);
             note("Run och-driver check for driver diagnostics.", out);
+#elif defined(__APPLE__)
+            note("Check the USB data cable. macOS needs no driver for this device.", out);
+#else
+            note("Check the USB data cable.", out);
+            note("If och info reports an access error, install packaging/linux/60-omnicore.rules and replug.", out);
+#endif
             return;
         }
         out << '\n';

@@ -77,6 +77,8 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
             list(APPEND CMAKE_PREFIX_PATH /opt/homebrew /usr/local)
         endif ()
         if (APPLE)
+            # Idle-sleep assertion while streaming (src/transport/posix/libusb_link.cpp).
+            target_link_libraries(och_core PUBLIC "-framework IOKit" "-framework CoreFoundation")
             # libc++ gives some of its templates default visibility; export the C API only.
             target_link_options(omnicore PRIVATE "LINKER:-exported_symbol,_och_*")
         endif ()

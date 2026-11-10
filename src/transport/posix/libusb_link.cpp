@@ -19,6 +19,10 @@
 #include <sys/time.h>
 #include <thread>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <IOKit/pwr_mgt/IOPMLib.h>
+#include <pthread/qos.h>
+#endif
 
 namespace och::transport {
     namespace {
@@ -43,9 +47,63 @@ namespace och::transport {
         }
 
         std::string error_text(int rc) {
-            return std::string(libusb_error_name(rc)) +
-                   (rc == LIBUSB_ERROR_NO_MEM ? "; USB queue allocation failed: check usbcore.usbfs_memory_mb" : "");
+            std::string text = libusb_error_name(rc);
+#ifdef __linux__
+            if (rc == LIBUSB_ERROR_NO_MEM) text += "; USB queue allocation failed: check usbcore.usbfs_memory_mb";
+#endif
+            return text;
         }
+
+        // What to check when the device cannot be opened for lack of access.
+        const char *access_hint() {
+#ifdef __linux__
+            return "; install packaging/linux/60-omnicore.rules and replug the device";
+#else
+            return "; close other programs that use the device";
+#endif
+        }
+
+        // Called on the threads that carry samples: the stream worker and the libusb event thread.
+        void prefer_sample_thread() {
+#ifdef __APPLE__
+            // The default QoS lets macOS move a busy thread to the efficiency cores.
+            pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
+        }
+
+        // Keeps the computer from idle sleep while a stream runs. macOS only; best effort.
+        class StayAwake {
+        public:
+            StayAwake() = default;
+
+            ~StayAwake() { release(); }
+
+            StayAwake(const StayAwake &) = delete;
+
+            StayAwake &operator=(const StayAwake &) = delete;
+
+            void hold() {
+#ifdef __APPLE__
+                if (!held)
+                    held = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep,
+                                                       kIOPMAssertionLevelOn, CFSTR("OmniCoreSDR IQ streaming"),
+                                                       &assertion) == kIOReturnSuccess;
+#endif
+            }
+
+            void release() {
+#ifdef __APPLE__
+                if (held) IOPMAssertionRelease(assertion);
+                held = false;
+#endif
+            }
+
+        private:
+#ifdef __APPLE__
+            IOPMAssertionID assertion = 0;
+            bool held = false;
+#endif
+        };
 
         const char *const cancelled_text = "USB transfer cancelled";
 
@@ -157,7 +215,10 @@ namespace och::transport {
 
             // libusb already delivers partial reads, with no auto flush, no short
             // packet padding, and all submitted transfers in endpoint order.
-            void start() override {}
+            void start() override {
+                prefer_sample_thread();
+                awake.hold();
+            }
 
             void submit(Transfer &t) override {
                 auto &s = static_cast<Slot &>(t);
@@ -204,6 +265,7 @@ namespace och::transport {
                     return true;
                 });
                 first = count = 0;
+                awake.release();
                 return unconfirmed;
             }
 
@@ -246,6 +308,7 @@ namespace och::transport {
             std::vector<Slot *> in_flight;
             size_t first = 0, count = 0;
             bool woken = false;
+            StayAwake awake; // between start() and stop(), on the stream worker
         };
 
         class LibusbLink final : public Link {
@@ -363,11 +426,9 @@ namespace och::transport {
                         if (device_path(list.p[i]) == path) {
                             rc = libusb_open(list.p[i], &device);
                             if (rc)
-                                throw std::runtime_error(
-                                        std::string("Cannot open OmniCore USB: ") + libusb_error_name(rc) +
-                                        (rc == LIBUSB_ERROR_ACCESS
-                                                 ? "; install packaging/linux/60-omnicore.rules and replug the device"
-                                                 : ""));
+                                throw std::runtime_error(std::string("Cannot open OmniCore USB: ") +
+                                                         libusb_error_name(rc) +
+                                                         (rc == LIBUSB_ERROR_ACCESS ? access_hint() : ""));
                             break;
                         }
                 }
@@ -420,6 +481,7 @@ namespace och::transport {
                     throw std::runtime_error(std::string("Cannot claim OmniCore interface: ") + libusb_error_name(rc));
                 interface_number = selected;
                 events = std::thread([this] {
+                    prefer_sample_thread();
                     while (!stopping) {
                         timeval timeout{0, 50000};
                         libusb_handle_events_timeout_completed(context, &timeout, nullptr);
