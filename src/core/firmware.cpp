@@ -66,24 +66,14 @@ namespace {
     }
     void pause(unsigned ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
-    bool control(Usb &u, UCHAR type, UCHAR request, uint16_t value, uint16_t index, void *data, uint16_t length,
-                 ULONG *done = nullptr) {
-        WINUSB_SETUP_PACKET s{};
-        s.RequestType = type;
-        s.Request = request;
-        s.Value = value;
-        s.Index = index;
-        s.Length = length;
-        ULONG n = 0;
-        const bool ok = u.api.control(u.h, s, static_cast<PUCHAR>(data), length, &n, nullptr) != FALSE;
-        if (done) *done = n;
-        return ok;
-    }
     // Legacy bridge firmware STALLs the request: false, not an error.
-    bool read_info(Usb &u, Info &i) {
-        ULONG n = 0;
+    bool read_info(Link &link, Info &i) {
         i = {};
-        return control(u, 0xC0, REQ_INFO, 0, 0, &i, sizeof i, &n) && n == sizeof i && i.magic == INFO_MAGIC;
+        try {
+            return link.vendor_in(REQ_INFO, 0, 0, &i, sizeof i) == sizeof i && i.magic == INFO_MAGIC;
+        } catch (const Error &) {
+            return false;
+        }
     }
     void fill(och_firmware_info &out, const Info *i, const std::string &serial) {
         out = {};
@@ -143,6 +133,7 @@ namespace {
         std::string serial;
         DeviceLock owner;
         Usb usb;
+        UsbLink link{usb};
         Info info{};
         bool known = false;
         explicit Session(const char *wanted) {
@@ -155,7 +146,7 @@ namespace {
             require(lock != DeviceLock::Result::busy, OCH_BUSY,
                     "device is open in an OmniCore Host process; close it first");
             open_usb(usb, found.front());
-            known = read_info(usb, info);
+            known = read_info(link, info);
         }
         // After a reset: wait for the same serial to come back in the given mode.
         void reconnect(uint8_t mode, unsigned timeout_ms, const char *what) {
@@ -168,7 +159,7 @@ namespace {
                 if (found.size() == 1) {
                     try {
                         open_usb(usb, found.front());
-                        known = read_info(usb, info);
+                        known = read_info(link, info);
                         if (known && info.mode == mode) return;
                     } catch (const std::exception &) {}
                     usb.close();
@@ -179,21 +170,28 @@ namespace {
             throw Failure(OCH_TIMEOUT, std::string("timed out waiting for the device to ") + what);
         }
         void send(UCHAR request, uint16_t value, uint16_t index, const void *data, uint16_t length, const char *what) {
-            require(control(usb, 0x40, request, value, index, const_cast<void *>(data), length), OCH_IO,
-                    std::string("bootloader rejected ") + what);
+            try {
+                link.vendor_out(request, value, index, data, length);
+            } catch (const Error &) {
+                throw Failure(OCH_IO, std::string("bootloader rejected ") + what);
+            }
         }
         // Bootloader operations run outside its USB interrupt; poll until done.
         void finish(const char *what, unsigned timeout_ms) {
             auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
             for (;;) {
-                if (!read_info(usb, info)) {
-                    ULONG n = 0;
+                if (!read_info(link, info)) {
+                    size_t n = 0;
                     Info probe{};
-                    const bool ok = control(usb, 0xC0, REQ_INFO, 0, 0, &probe, sizeof probe, &n);
+                    std::string outcome = "ok";
+                    try {
+                        n = link.vendor_in(REQ_INFO, 0, 0, &probe, sizeof probe);
+                    } catch (const Error &e) {
+                        outcome = e.what();
+                    }
                     throw Failure(OCH_IO, std::string("bootloader stopped answering during ") + what + " (control " +
-                                                  (ok ? "ok" : utf8(syserr(GetLastError()))) + ", " +
-                                                  std::to_string(n) + " bytes, state " + std::to_string(info.state) +
-                                                  ")");
+                                                  outcome + ", " + std::to_string(n) + " bytes, state " +
+                                                  std::to_string(info.state) + ")");
                 }
                 if (info.state != STATE_BUSY) break;
                 require(std::chrono::steady_clock::now() < deadline, OCH_TIMEOUT,
@@ -224,9 +222,9 @@ namespace {
 }
 
 namespace och::core {
-    bool firmware_probe(Usb &usb, och_firmware_info &out, const std::string &serial) {
+    bool firmware_probe(Link &link, och_firmware_info &out, const std::string &serial) {
         Info i;
-        const bool ok = read_info(usb, i);
+        const bool ok = read_info(link, i);
         fill(out, ok ? &i : nullptr, serial);
         return ok;
     }

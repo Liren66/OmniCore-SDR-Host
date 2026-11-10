@@ -63,7 +63,7 @@ void Device::attach(std::unique_ptr<Link> opened) {
     require(link->has(Pipe::control_in) && link->has(Pipe::control_out), OCH_PROTOCOL,
             "control endpoints 02/82 missing");
     // The bridge bootloader keeps the USB identity but has no SDK behind it.
-    firmware_probe(usb, firmware, info.serial);
+    firmware_probe(*link, firmware, info.serial);
     require(firmware.mode != OCH_FW_MODE_BOOTLOADER, OCH_UNSUPPORTED,
             "OmniCoreSDR is in bridge bootloader mode; run och firmware update FILE or och firmware boot");
     info.usb_speed_mbps = link->speed_mbps();
@@ -284,19 +284,22 @@ std::string Device::command(const std::string &cmd, uint32_t timeout) {
 }
 void Device::reset_transport() {
     require(!rx_on && !tx_on, OCH_BUSY, "transport reset requires both directions stopped");
-    WINUSB_SETUP_PACKET setup{};
-    setup.RequestType = 0xc0;
-    setup.Request = 0xd0;
-    setup.Length = 256;
+    // CH32 bridge diagnostics request: value 0 reads the protocol id, value 2 clears its stream buffers.
+    constexpr uint8_t bridge_diagnostics = 0xd0;
     uint32_t words[64]{};
-    ULONG done = 0;
-    require(usb.api.control(usb.h, setup, reinterpret_cast<UCHAR *>(words), sizeof words, &done, nullptr) != FALSE,
-            OCH_IO, "CH32 diagnostics unavailable");
+    size_t done = 0;
+    try {
+        done = link->vendor_in(bridge_diagnostics, 0, 0, words, sizeof words);
+    } catch (const Error &) {
+        throw Failure(OCH_IO, "CH32 diagnostics unavailable");
+    }
     require(done >= 8 && words[0] == 1396983601U && words[1] == 4, OCH_UNSUPPORTED,
             "CH32 transport reset protocol v4 required; firmware was not changed");
-    setup.Value = 2;
-    require(usb.api.control(usb.h, setup, reinterpret_cast<UCHAR *>(words), sizeof words, &done, nullptr) != FALSE,
-            OCH_IO, "CH32 stream cleanup failed");
+    try {
+        link->vendor_in(bridge_diagnostics, 2, 0, words, sizeof words);
+    } catch (const Error &) {
+        throw Failure(OCH_IO, "CH32 stream cleanup failed");
+    }
 #ifndef _WIN32
     // Synchronize endpoint halt/sequence state after firmware cleanup and
     // cancellation before submitting another stream through usbfs/xHCI.

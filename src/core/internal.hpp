@@ -72,7 +72,7 @@ namespace och::core {
 
     // CH32 bridge firmware (firmware.cpp). firmware_probe is false for bridge
     // firmware without the OCFW requests (legacy).
-    bool firmware_probe(och::transport::Usb &, och_firmware_info &, const std::string &serial);
+    bool firmware_probe(och::transport::Link &, och_firmware_info &, const std::string &serial);
 
     och_firmware_image firmware_read_image(const char *path);
 

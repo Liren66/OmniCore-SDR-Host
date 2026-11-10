@@ -39,7 +39,28 @@ namespace och::transport {
 
         bool has(Pipe p) const override { return usb.has(endpoint(p)); }
 
+        size_t vendor_in(uint8_t request, uint16_t value, uint16_t index, void *data, size_t size) override {
+            return vendor(0xc0, request, value, index, data, size);
+        }
+
+        void vendor_out(uint8_t request, uint16_t value, uint16_t index, const void *data, size_t size) override {
+            vendor(0x40, request, value, index, const_cast<void *>(data), size);
+        }
+
     private:
+        size_t vendor(UCHAR type, UCHAR request, uint16_t value, uint16_t index, void *data, size_t size) {
+            WINUSB_SETUP_PACKET setup{};
+            setup.RequestType = type;
+            setup.Request = request;
+            setup.Value = value;
+            setup.Index = index;
+            setup.Length = static_cast<uint16_t>(size);
+            ULONG done = 0;
+            if (!usb.api.control(usb.h, setup, static_cast<PUCHAR>(data), static_cast<ULONG>(size), &done, nullptr))
+                throw Error(utf8(syserr(GetLastError())));
+            return done;
+        }
+
         Usb &usb;
     };
 } // namespace och::transport

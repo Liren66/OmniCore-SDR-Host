@@ -1,12 +1,19 @@
 // Transport interface used by src/core/. Standard library only: no platform or USB library
 // types appear here. The interface grows as core call sites move onto it (TRANSPORT_PLAN.md).
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace och::transport {
+    // A transfer the backend could not complete. what() is the backend's own description.
+    struct Error : std::runtime_error {
+        using std::runtime_error::runtime_error;
+    };
+
     // One connected device as found by enumerate(). Text is UTF-8.
     struct DeviceId {
         std::string path;   // backend-specific address; valid until the device is replugged
@@ -64,5 +71,12 @@ namespace och::transport {
 
         // Whether the opened device has this pipe.
         virtual bool has(Pipe) const = 0;
+
+        // Vendor request to the device on the default control pipe. vendor_in returns the bytes
+        // received (at most size). Both throw Error, also when the device rejects (STALLs) the
+        // request. size is at most 65535.
+        virtual size_t vendor_in(uint8_t request, uint16_t value, uint16_t index, void *data, size_t size) = 0;
+
+        virtual void vendor_out(uint8_t request, uint16_t value, uint16_t index, const void *data, size_t size) = 0;
     };
 } // namespace och::transport
