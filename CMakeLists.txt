@@ -39,7 +39,13 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     # Implementation (core + transport) as a static library: the shared library adds the C entry
     # points, and offline tests link it directly because the shared library exports only the C API.
-    add_library(och_core STATIC src/core/device.cpp src/core/control.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp src/transport/usb_link.cpp)
+    add_library(och_core STATIC src/core/device.cpp src/core/control.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp)
+    # One transport backend per platform; core sees only src/transport/link.hpp.
+    if (WIN32)
+        target_sources(och_core PRIVATE src/transport/win/libusbk_link.cpp)
+    else ()
+        target_sources(och_core PRIVATE src/transport/posix/libusb_link.cpp)
+    endif ()
     # OCH_BUILD: och.h declares the C API as defined in this build, not imported from a DLL.
     target_compile_definitions(och_core PUBLIC OCH_BUILD)
     target_include_directories(och_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -120,6 +126,12 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_link_libraries(fake_link_test PRIVATE och_fake)
         add_test(NAME fake_link COMMAND fake_link_test)
         set_tests_properties(fake_link PROPERTIES TIMEOUT 120)
+
+        # multi_sync on a model of the sync wiring; slower, because multi_sync sleeps between polls.
+        add_executable(sync_test tests/sync_test.cpp)
+        target_link_libraries(sync_test PRIVATE och_fake)
+        add_test(NAME sync COMMAND sync_test)
+        set_tests_properties(sync PROPERTIES TIMEOUT 300)
     endif ()
 
     # Install the library and headers for use by other projects.

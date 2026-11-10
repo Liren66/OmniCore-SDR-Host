@@ -3,7 +3,7 @@
 # code names a platform, a platform or USB library type, a backend header or a USB endpoint number.
 # Comments and string literals are not checked.
 set(forbidden
-        "_WIN32|__linux__|__APPLE__|OVERLAPPED|HANDLE|GetLastError|libusb|windows\\.h|transport\\.hpp|usb_link\\.hpp|0x0[123][^0-9a-fA-F]|0x8[123][^0-9a-fA-F]")
+        "_WIN32|__linux__|__APPLE__|OVERLAPPED|HANDLE|GetLastError|libusb|windows\\.h|transport/(win|posix|fake)/|0x0[123][^0-9a-fA-F]|0x8[123][^0-9a-fA-F]")
 file(GLOB sources "${SOURCE_DIR}/src/core/*" "${SOURCE_DIR}/src/capi/*")
 set(found "")
 foreach (source IN LISTS sources)
