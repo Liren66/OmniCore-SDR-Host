@@ -78,5 +78,19 @@ namespace och::transport {
         virtual size_t vendor_in(uint8_t request, uint16_t value, uint16_t index, void *data, size_t size) = 0;
 
         virtual void vendor_out(uint8_t request, uint16_t value, uint16_t index, const void *data, size_t size) = 0;
+
+        // One bounded transfer on a bulk pipe, in the pipe's direction. Returns the bytes
+        // transferred; 0 when timeout_ms (at least 1) passes with none. Throws Error, whose text
+        // starts with "submit: " or "completion: ". Different pipes may be used concurrently;
+        // the caller serializes transfers on one pipe.
+        virtual size_t transfer(Pipe, uint8_t *data, size_t size, uint32_t timeout_ms) = 0;
+
+        // Reads Pipe::control_in for the control thread. Returns the bytes received, or 0 when
+        // this wait ended without data: the backend chooses between short timed reads and one
+        // request that stays pending. Throws Error like transfer(), also after shutdown_control().
+        virtual size_t read_control(uint8_t *data, size_t size) = 0;
+
+        // Ends a pending read_control() and refuses further ones. Any thread; cannot be undone.
+        virtual void shutdown_control() noexcept = 0;
     };
 } // namespace och::transport

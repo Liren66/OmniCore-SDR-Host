@@ -39,7 +39,7 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     # Implementation (core + transport) as a static library: the shared library adds the C entry
     # points, and offline tests link it directly because the shared library exports only the C API.
-    add_library(och_core STATIC src/core/device.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp src/transport/usb_link.cpp)
+    add_library(och_core STATIC src/core/device.cpp src/core/control.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp src/transport/usb_link.cpp)
     # OCH_BUILD: och.h declares the C API as defined in this build, not imported from a DLL.
     target_compile_definitions(och_core PUBLIC OCH_BUILD)
     target_include_directories(och_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

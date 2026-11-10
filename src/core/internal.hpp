@@ -44,6 +44,17 @@ namespace och::core {
         }
     }
 
+    // Link::transfer with a transport error reported as OCH_IO: "<channel> submit: ..." or
+    // "<channel> completion: ...".
+    inline size_t bounded_transfer(och::transport::Link &link, och::transport::Pipe pipe, uint8_t *data, size_t size,
+                                   uint32_t timeout_ms, const char *channel) {
+        try {
+            return link.transfer(pipe, data, size, timeout_ms);
+        } catch (const och::transport::Error &e) {
+            throw Failure(OCH_IO, std::string(channel) + " " + e.what());
+        }
+    }
+
     template<class T, size_t N>
     class FixedQueue {
         std::array<T, N> values{};
@@ -119,6 +130,43 @@ namespace och::core {
         std::deque<och_event> queue;
         std::atomic<uint64_t> seq{0}, dropped{0};
     };
+
+    // SDK command channel of one device. A reader thread splits Pipe::control_in into lines:
+    // "EVT ..." lines go to on_event, the rest belongs to the reply of the pending command.
+    // command() runs on any thread, one at a time (command_mutex); the reply state is shared
+    // with the reader under reply_mutex. After a timeout, a broken reply or loss of the pipe the
+    // channel stays failed until the device is reopened.
+    class ControlChannel {
+    public:
+        ~ControlChannel();
+
+        // Starts the reader on an opened link. Both callbacks run on the reader thread;
+        // disconnect reports why the pipe was lost.
+        void start(och::transport::Link &, std::function<void(const std::string &)> event,
+                   std::function<void(const std::string &)> disconnect);
+
+        // Ends the reader: stop flag, Link::shutdown_control(), join. Safe to repeat.
+        void stop();
+
+        // Sends one SDK command and returns its reply text; throws Failure.
+        std::string command(const std::string &, uint32_t timeout);
+
+    private:
+        void loop();
+
+        void line(const std::string &);
+
+        och::transport::Link *link = nullptr;
+        std::function<void(const std::string &)> on_event, on_disconnect;
+        std::atomic<bool> stopping{false};
+        std::thread reader;
+        std::mutex command_mutex, reply_mutex;
+        std::condition_variable reply_cv;
+        uint32_t next_id = 0, pending_id = 0;
+        bool reply_started = false, reply_done = false, control_failed = false;
+        int reply_result = 0;
+        std::string reply, control_error;
+    };
 }
 
 struct och::core::Device {
@@ -137,14 +185,7 @@ struct och::core::Device {
     bool reconfiguring_control = false;
     Stream *rx = nullptr, *tx = nullptr;
     bool rx_on = false, tx_on = false;
-    std::atomic<bool> control_stop{false};
-    std::thread control_thread;
-    std::mutex command_mutex, reply_mutex;
-    std::condition_variable reply_cv;
-    uint32_t next_id = 0, pending_id = 0;
-    bool reply_started = false, reply_done = false, control_failed = false;
-    int reply_result = 0;
-    std::string reply, control_error;
+    ControlChannel control;
     EventQueue events;
     // Device FIFO faults from EVT lines (control thread); read by och_get_stats.
     struct DeviceStats {
@@ -162,9 +203,8 @@ struct och::core::Device {
 
     std::string command(const std::string &, uint32_t timeout = 5000);
 
-    void control_loop();
-
-    void line(const std::string &);
+    // One "EVT ..." line from the SDK, on the control channel's reader thread.
+    void event_line(const std::string &);
 
     void emit(uint32_t type, const std::string &, uint64_t epoch = 0, uint64_t hw_time = 0, uint32_t code = 0,
               uint32_t block = 0, uint32_t count = 1);

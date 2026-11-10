@@ -47,7 +47,65 @@ namespace och::transport {
             vendor(0x40, request, value, index, const_cast<void *>(data), size);
         }
 
+        size_t transfer(Pipe p, uint8_t *data, size_t size, uint32_t timeout_ms) override {
+            prepare(p);
+            return bulk(endpoint(p), data, size, timeout_ms ? timeout_ms : 1);
+        }
+
+        size_t read_control(uint8_t *data, size_t size) override {
+            // Linux uses one persistent request. Repeated usbfs timeout/cancel
+            // cycles can stall xHCI service to the high-rate IQ endpoints.
+            // stop_control cancels it and blocks a racing resubmission at close.
+#ifdef _WIN32
+            constexpr ULONG read_timeout = 50;
+#else
+            constexpr ULONG read_timeout = 0;
+#endif
+            prepare(Pipe::control_in);
+            return bulk(endpoint(Pipe::control_in), data, size, read_timeout);
+        }
+
+        void shutdown_control() noexcept override {
+#ifndef _WIN32
+            usb.stop_control();
+#endif
+        }
+
     private:
+        // Line-oriented IN pipes are read without RAW_IO, accepting short reads. Set on first
+        // use; each flag belongs to the one context that reads its pipe (control thread for
+        // control_in, the device's state_mutex for diag_in).
+        void prepare(Pipe p) {
+            if (p != Pipe::control_in && p != Pipe::diag_in) return;
+            bool &done = p == Pipe::control_in ? control_in_ready : diag_in_ready;
+            if (done) return;
+            usb.policy(endpoint(p), RAW_IO, FALSE);
+            usb.policy(endpoint(p), ALLOW_PARTIAL_READS, TRUE);
+            usb.policy(endpoint(p), AUTO_FLUSH, FALSE);
+            done = true;
+        }
+
+        // One overlapped transfer, waited to completion. timeout 0 waits without limit.
+        size_t bulk(UCHAR ep, uint8_t *data, size_t size, ULONG timeout) {
+            usb.timeout(ep, timeout);
+            Handle event(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!event.h) throw Error("event allocation failed");
+            OVERLAPPED ov{};
+            ov.hEvent = event.h;
+            ULONG count = 0;
+            const BOOL ok = (ep & 0x80) ? usb.api.read(usb.h, ep, data, static_cast<ULONG>(size), &count, &ov)
+                                        : usb.api.write(usb.h, ep, data, static_cast<ULONG>(size), &count, &ov);
+            const auto submit_error = ok ? ERROR_SUCCESS : GetLastError();
+            if (!ok && submit_error == ERROR_SEM_TIMEOUT) return 0;
+            if (!ok && submit_error != ERROR_IO_PENDING) throw Error("submit: " + utf8(syserr(submit_error)));
+            if (!ok && !usb.api.result(usb.h, &ov, &count, TRUE)) {
+                const auto code = GetLastError();
+                if (code == ERROR_SEM_TIMEOUT) return 0;
+                throw Error("completion: " + utf8(syserr(code)));
+            }
+            return count;
+        }
+
         size_t vendor(UCHAR type, UCHAR request, uint16_t value, uint16_t index, void *data, size_t size) {
             WINUSB_SETUP_PACKET setup{};
             setup.RequestType = type;
@@ -62,5 +120,6 @@ namespace och::transport {
         }
 
         Usb &usb;
+        bool control_in_ready = false, diag_in_ready = false;
     };
 } // namespace och::transport
