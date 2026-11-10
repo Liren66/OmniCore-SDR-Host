@@ -113,7 +113,7 @@ int Stream::send(const void *data, size_t count, uint32_t mflags, uint64_t mtime
     require(count <= std::numeric_limits<size_t>::max() / (8 * nchan), OCH_INVALID, "sample count overflow");
     require(!flushing, OCH_BUSY, "TX flush in progress");
     if (stop_requested) return OCH_STOPPED;
-    size_t width = och_sample_size(static_cast<och_format>(args.format));
+    size_t width = sample_size(args.format);
     auto p = static_cast<const uint8_t *>(data);
     if (args.format == OCH_SC16 || args.format == OCH_FC32)
         require(reinterpret_cast<uintptr_t>(data) % (args.format == OCH_SC16 ? alignof(int16_t) : alignof(float)) == 0,

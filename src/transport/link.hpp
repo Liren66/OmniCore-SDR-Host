@@ -55,6 +55,64 @@ namespace och::transport {
         diag_in,     // bridge log and query replies
     };
 
+    // One reusable transfer of a SampleQueue. The queue owns the memory; the stream worker fills
+    // or reads data and keeps used up to date.
+    struct Transfer {
+        uint8_t *data = nullptr;
+        size_t capacity = 0;
+        size_t used = 0; // bytes to send, or the size of the read request
+    };
+
+    // Asynchronous transfers on one sample pipe. They complete in the order they were submitted.
+    // Created with all its transfers and their memory, and reused across stream restarts.
+    // Threads: wake() from any thread; reset() and the constructor from the control thread while
+    // the worker is stopped; everything else from the stream worker.
+    class SampleQueue {
+    public:
+        enum class Wait { completed, timeout, woken };
+
+        virtual ~SampleQueue() = default;
+
+        SampleQueue() = default;
+
+        SampleQueue(const SampleQueue &) = delete;
+
+        SampleQueue &operator=(const SampleQueue &) = delete;
+
+        virtual size_t size() const = 0;
+
+        virtual Transfer &slot(size_t index) = 0;
+
+        // Largest single transfer the backend accepts on this pipe.
+        virtual size_t max_transfer_bytes() = 0;
+
+        // Prepares the pipe and the calling thread for streaming.
+        virtual void start() = 0;
+
+        // Queues slot.used bytes of one of this queue's transfers. Throws Error.
+        virtual void submit(Transfer &) = 0;
+
+        // Waits for the oldest submitted transfer; needs at least one in flight. completed: done
+        // is that transfer and bytes its length, and it may be submitted again. woken: wake() was
+        // called. Throws Error if the wait or the transfer failed; the transfer stays in flight.
+        virtual Wait wait(uint32_t timeout_ms, Transfer *&done, size_t &bytes) = 0;
+
+        // Makes wait() return woken, now and on every later call until reset().
+        virtual void wake() noexcept = 0;
+
+        // Cancels the transfers in flight and waits until the backend has finished with all of
+        // them, then leaves streaming mode. Returns the sum of used over the cancelled transfers.
+        virtual uint64_t stop() = 0;
+
+        // Back to the state after construction: nothing in flight, used 0, not woken.
+        virtual void reset() = 0;
+    };
+
+    class Link;
+
+    // Opens a device found by enumerate(). Throws std::runtime_error with the backend's reason.
+    std::unique_ptr<Link> open(const DeviceId &);
+
     // One opened device. Each core Device owns one Link.
     class Link {
     public:
@@ -97,5 +155,9 @@ namespace och::transport {
         // returns both sample pipes to a clean state in which Pipe::sample_in can be drained
         // with transfer(). Only while no sample transfer is in flight. Throws Error.
         virtual void reset_sample_pipes() = 0;
+
+        // Queue of depth transfers of transfer_bytes each on Pipe::sample_in or sample_out.
+        // The Link must outlive it. Throws Error.
+        virtual std::unique_ptr<SampleQueue> open_samples(Pipe, size_t transfer_bytes, unsigned depth) = 0;
     };
 } // namespace och::transport

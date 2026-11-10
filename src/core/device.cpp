@@ -1,5 +1,4 @@
 #include "internal.hpp"
-#include "../transport/usb_link.hpp"
 #include <charconv>
 #include <cstdio>
 #include <iomanip>
@@ -32,8 +31,7 @@ void Device::open(const DeviceId &d) {
     const auto lock = owner.acquire(info.serial);
     require(lock != DeviceLock::Result::unavailable, OCH_IO, "device mutex unavailable");
     require(lock != DeviceLock::Result::busy, OCH_BUSY, "device already owned by another OmniCore Host process");
-    open_usb(usb, d);
-    attach(std::make_unique<UsbLink>(usb));
+    attach(och::transport::open(d));
 }
 void Device::attach(std::unique_ptr<Link> opened) {
     link = std::move(opened);
@@ -60,7 +58,7 @@ void Device::attach(std::unique_ptr<Link> opened) {
     info.hardware_timestamps = supports_capability("hw_time") ? 1 : 0;
     command("usb_stop!");
     rx_on = tx_on = false;
-    och_default_config(&config);
+    config = default_config();
     reset_transport();
 }
 void Device::emit(uint32_t type, const std::string &message, uint64_t ep, uint64_t hw_time, uint32_t code,

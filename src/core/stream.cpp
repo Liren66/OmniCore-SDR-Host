@@ -7,18 +7,16 @@ Stream::Stream(Device *d, const och_stream_args &a)
     : dev(d), args(a), nchan(channels(a.direction == OCH_RX ? d->config.rx_mask : d->config.tx_mask)),
       wire_bytes(iq_bits(d->config) == 8 ? 2 : 3), group(nchan * wire_bytes),
       ring(std::max<size_t>(2, a.host_buffer_bytes / a.transfer_bytes), a.transfer_bytes),
-      stop_event(CreateEventW(nullptr, TRUE, FALSE, nullptr)), rx_state(nchan * (iq_bits(d->config) == 8 ? 2 : 3)) {
-    require(stop_event.h != nullptr, OCH_IO, "stream stop event allocation failed");
+      rx_state(nchan * (iq_bits(d->config) == 8 ? 2 : 3)) {
     const bool block_xfers = a.direction == OCH_RX && (a.start_flags & OCH_RX_TIMED);
     xfer_bytes = block_xfers ? och::dsp::frame_block_bytes : a.transfer_bytes;
     const unsigned nslots = block_xfers ? 128u : args.usb_queue_depth;
-    slots.reserve(nslots);
-    for (unsigned i = 0; i < nslots; ++i) slots.push_back(std::make_unique<Slot>(dev->usb, xfer_bytes));
+    queue = dev->link->open_samples(a.direction == OCH_RX ? Pipe::sample_in : Pipe::sample_out, xfer_bytes, nslots);
 }
 
 Stream::~Stream() {
     stop_requested = true;
-    SetEvent(stop_event.h);
+    queue->wake();
     ring.wake();
     if (worker.joinable()) worker.join();
 }
@@ -159,7 +157,7 @@ void Stream::tx_open(Slot *s, uint32_t f, uint64_t t) {
 
 void Stream::tx_close(Slot *s, uint8_t extra) {
     using namespace och::dsp;
-    uint8_t *b = s->bytes.get() + tx_state.blk_start;
+    uint8_t *b = s->data + tx_state.blk_start;
     memset(b + frame_header_bytes + tx_state.blk_used, 0, frame_payload_bytes - tx_state.blk_used);
     FrameHeader h;
     h.flags = uint8_t(tx_state.blk_flags | extra);
@@ -211,7 +209,7 @@ bool Stream::fill_tx(Slot *s) {
             tx_open(s, b->meta.flags, b->meta.time_ticks);
         }
         const size_t n = std::min(b->size - tx_state.tx_offset, frame_payload_bytes - tx_state.blk_used);
-        memcpy(s->bytes.get() + tx_state.blk_start + frame_header_bytes + tx_state.blk_used,
+        memcpy(s->data + tx_state.blk_start + frame_header_bytes + tx_state.blk_used,
                b->data.get() + tx_state.tx_offset, n);
         tx_state.blk_used += n;
         tx_state.tx_offset += n;
@@ -241,68 +239,27 @@ void Stream::publish_rx() {
 }
 
 bool Stream::submit(Slot *s) {
-    auto &u = dev->usb;
-    UCHAR ep = args.direction == OCH_RX ? 0x81 : 0x01;
     if (args.direction == OCH_RX) s->used = xfer_bytes;
-    ResetEvent(s->ov.hEvent);
-    BOOL ok = args.direction == OCH_RX
-                      ? u.api.read(u.h, ep, s->bytes.get(), static_cast<ULONG>(s->used), nullptr, &s->ov)
-                      : u.api.write(u.h, ep, s->bytes.get(), static_cast<ULONG>(s->used), nullptr, &s->ov);
-    if (!ok && GetLastError() != ERROR_IO_PENDING)
-        throw Failure(OCH_IO, "USB streaming submission failed: " + utf8(syserr(GetLastError())));
-    if (ok) SetEvent(s->ov.hEvent);
-    s->pending = true;
-    active.push_back(s);
-    pending = active.size();
+    queue->submit(*s);
+    pending = pending + 1;
     assembling = 0;
     return true;
 }
 
 void Stream::cancel_all() {
-    auto &u = dev->usb;
-    UCHAR ep = args.direction == OCH_RX ? 0x81 : 0x01;
-    if (!active.empty()) {
-        u.api.abort(u.h, ep);
-        while (!active.empty()) {
-            auto *s = active.front();
-            active.pop_front();
-            if (args.direction == OCH_TX) cancelled_bytes += s->used;
-#ifdef _WIN32
-            CancelIoEx(u.file, &s->ov);
-#endif
-            ULONG n = 0;
-            u.api.result(u.h, &s->ov, &n, TRUE);
-            s->pending = false;
-        }
-        active.clear();
-        pending = 0;
-    }
-    UCHAR off = FALSE;
-    u.api.setPolicy(u.h, ep, RAW_IO, sizeof off, &off);
+    const uint64_t unconfirmed = queue->stop();
+    if (args.direction == OCH_TX) cancelled_bytes += unconfirmed;
+    pending = 0;
 }
 
 void Stream::run() {
-    auto &u = dev->usb;
-    UCHAR ep = args.direction == OCH_RX ? 0x81 : 0x01;
     och::core::FixedQueue<Slot *, 128> free;
-    for (auto &s: slots) free.push_back(s.get());
+    for (size_t i = 0; i < queue->size(); ++i) free.push_back(&queue->slot(i));
     bool starved_notice = false;
     try {
-#ifdef _WIN32
-        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
-#endif
-        require(args.transfer_bytes <= u.maximum(ep), OCH_INVALID, "USB transfer block exceeds driver maximum");
-        u.timeout(ep, 0);
-        u.policy(ep, RAW_IO, FALSE);
-        if (args.direction == OCH_RX) {
-            u.policy(ep, IGNORE_SHORT_PACKETS, FALSE);
-            u.policy(ep, ALLOW_PARTIAL_READS, TRUE);
-            u.policy(ep, AUTO_FLUSH, FALSE);
-        } else {
-            u.policy(ep, SHORT_PACKET_TERMINATE, FALSE);
-            u.parallelLimit(ep, args.usb_queue_depth);
-        }
-        u.policy(ep, RAW_IO, TRUE);
+        require(args.transfer_bytes <= queue->max_transfer_bytes(), OCH_INVALID,
+                "USB transfer block exceeds driver maximum");
+        queue->start();
         while (!stop_requested) {
             while (!free.empty() && !stop_requested) {
                 Slot *s = free.front();
@@ -312,7 +269,7 @@ void Stream::run() {
                 starved_notice = false;
             }
             queued = true;
-            if (active.empty()) {
+            if (!pending) {
                 if (args.direction == OCH_TX && started && !flushing && !starved_notice) {
                     ++stats.starved;
                     dev->emit(OCH_EVENT_TX_STARVED, "TX application queue empty; producer must resume");
@@ -321,24 +278,18 @@ void Stream::run() {
                 ring.wait_read(2, stop_requested);
                 continue;
             }
-            Slot *s = active.front();
-            HANDLE events[2] = {stop_event.h, s->ov.hEvent};
-            DWORD w = WaitForMultipleObjects(2, events, FALSE, 2);
-            if (w == WAIT_OBJECT_0) break;
-            if (w == WAIT_TIMEOUT) continue;
-            require(w == WAIT_OBJECT_0 + 1, OCH_IO, "USB event wait failed");
-            ULONG n = 0;
-            const auto completed = u.api.result(u.h, &s->ov, &n, FALSE);
-            require(completed != FALSE, OCH_IO, "USB transfer failed: " + utf8(syserr(GetLastError())));
+            Slot *s = nullptr;
+            size_t n = 0;
+            const auto w = queue->wait(2, s, n);
+            if (w == SampleQueue::Wait::woken) break;
+            if (w == SampleQueue::Wait::timeout) continue;
             require(n <= s->used, OCH_IO, "driver reported invalid USB completion length");
             if (args.direction == OCH_TX)
                 require(n == s->used, OCH_IO, "short TX completion; byte order cannot be retried safely");
-            active.pop_front();
-            s->pending = false;
-            pending = active.size();
+            pending = pending - 1;
             stats.usb_bytes += n;
             if (args.direction == OCH_RX) {
-                rx_state.fparser.feed(s->bytes.get(), n, &Stream::frame_sink, this);
+                rx_state.fparser.feed(s->data, n, &Stream::frame_sink, this);
                 stats.headers = rx_state.fparser.blocks();
                 stats.resyncs = rx_state.fparser.resyncs();
             }
@@ -431,7 +382,7 @@ void Stream::start() {
         else
             dev->tx_on = false;
         stop_requested = true;
-        SetEvent(stop_event.h);
+        queue->wake();
         ring.wake();
         if (worker.joinable()) worker.join();
         running = false;
@@ -493,7 +444,7 @@ void Stream::stop(uint32_t timeout) {
 void Stream::halt() {
     started = false;
     stop_requested = true;
-    SetEvent(stop_event.h);
+    queue->wake();
     ring.wake();
     if (worker.joinable()) worker.join();
     running = false;
@@ -515,16 +466,8 @@ void Stream::prepare_restart(bool receive_gap) {
     reader.recv_offset = rx_state.rx_filled = tx_state.tx_offset = 0;
     assembling = 0;
     rx_state.rx_meta = {};
-    active.clear();
     pending = 0;
-    for (auto &s: slots) {
-        s->used = 0;
-        s->pending = false;
-        s->ov = {};
-        s->ov.hEvent = s->event.h;
-        ResetEvent(s->event.h);
-    }
-    ResetEvent(stop_event.h);
+    queue->reset();
     queued = false;
     started = false;
     running = false;
@@ -570,7 +513,7 @@ uint64_t Stream::discard_for_reconfigure(const ResumePlan &plan) {
     if (plan.stopped && !plan.resume) {
         stop_requested = true;
         ever_started = plan.ever_started;
-        SetEvent(stop_event.h);
+        queue->wake();
     }
     return discarded;
 }

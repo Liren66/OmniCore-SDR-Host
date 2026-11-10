@@ -4,6 +4,20 @@
 #include <sstream>
 using namespace och::core;
 
+och_config och::core::default_config() {
+    och_config c{};
+    c.struct_size = sizeof c;
+    c.sample_rate = 30720000;
+    c.rx_mask = 3;
+    c.tx_mask = 0;
+    c.rx_frequency = c.tx_frequency = 1000000000ULL;
+    c.rx_bandwidth = c.tx_bandwidth = 18000000;
+    c.rx_gain[0] = c.rx_gain[1] = 30;
+    c.tx_attenuation[0] = c.tx_attenuation[1] = 10;
+    c.rx_agc = 2;
+    return c;
+}
+
 namespace {
     std::string fixed(double n, int precision = 6) {
         std::ostringstream s;

@@ -21,9 +21,7 @@ void och_default_stream_args(och_stream_args *a, och_direction d) {
     a->host_buffer_bytes = 64U * 1024 * 1024;
 }
 
-size_t och_sample_size(och_format f) {
-    return f == OCH_PACKED12 ? 3 : f == OCH_SC16 ? 4 : f == OCH_FC32 ? 8 : f == OCH_SC8 ? 2 : 0;
-}
+size_t och_sample_size(och_format f) { return sample_size(f); }
 
 int och_create_stream(och_device *d, const och_stream_args *a, och_stream **out) {
     return protect([&] {

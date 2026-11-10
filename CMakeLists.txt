@@ -70,6 +70,10 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
             # IDEs often start without Homebrew on PATH; look for pkg-config and libusb there.
             list(APPEND CMAKE_PREFIX_PATH /opt/homebrew /usr/local)
         endif ()
+        if (APPLE)
+            # libc++ gives some of its templates default visibility; export the C API only.
+            target_link_options(omnicore PRIVATE "LINKER:-exported_symbol,_och_*")
+        endif ()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0>=1.0.21)
         target_link_libraries(och_core PUBLIC PkgConfig::LIBUSB)
@@ -98,6 +102,12 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     if (OCH_BUILD_EXAMPLES)
         add_subdirectory(examples)
+    endif ()
+
+    if (OCH_TOP_LEVEL)
+        enable_testing()
+        add_test(NAME core_is_portable COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCorePortable.cmake)
     endif ()
 
     # Install the library and headers for use by other projects.

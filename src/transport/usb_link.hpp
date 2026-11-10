@@ -1,9 +1,10 @@
-// Link implemented on the existing Usb class, shared by both platforms. Temporary: core moves
-// onto Link one operation at a time, then each platform implements Link directly
-// (TRANSPORT_PLAN.md, 2.9 / 2.10) and this adapter is removed.
+// Link implemented on the existing Usb class, shared by both platforms; included only by
+// usb_link.cpp. Temporary: each platform will implement Link directly (TRANSPORT_PLAN.md,
+// 2.9 / 2.10) and this adapter is removed.
 #pragma once
 #include "link.hpp"
 #include "transport.hpp"
+#include <vector>
 
 namespace och::transport {
     constexpr UCHAR endpoint(Pipe p) {
@@ -24,13 +25,137 @@ namespace och::transport {
         return 0;
     }
 
-    // Opens the Usb a Device or firmware session still holds directly.
-    inline void open_usb(Usb &usb, const DeviceId &id) { usb.open(wide(id.path)); }
+    // SampleQueue on overlapped transfers: one event per transfer plus the wake event.
+    class UsbSampleQueue final : public SampleQueue {
+        struct Slot : Transfer {
+            OVERLAPPED ov{};
+            Handle event;
+            TransferBuffer bytes;
+            bool pending = false;
 
-    // Does not own the Usb: the Device still holds it for the call sites not yet moved.
+            Slot(Usb &usb, size_t n) : event(CreateEventW(nullptr, TRUE, FALSE, nullptr)), bytes(usb, n) {
+                if (!event.h) throw Error("cannot create USB event");
+                ov.hEvent = event.h;
+                data = bytes.get();
+                capacity = n;
+                memset(data, 0, n);
+            }
+        };
+
+    public:
+        UsbSampleQueue(Usb &u, Pipe pipe, size_t transfer_bytes, unsigned depth)
+            : usb(u), ep(endpoint(pipe)), wake_event(CreateEventW(nullptr, TRUE, FALSE, nullptr)), active(depth) {
+            if (!wake_event.h) throw Error("stream stop event allocation failed");
+            slots.reserve(depth);
+            for (unsigned i = 0; i < depth; ++i) slots.push_back(std::make_unique<Slot>(usb, transfer_bytes));
+        }
+
+        size_t size() const override { return slots.size(); }
+
+        Transfer &slot(size_t index) override { return *slots[index]; }
+
+        size_t max_transfer_bytes() override { return usb.maximum(ep); }
+
+        void start() override {
+#ifdef _WIN32
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#endif
+            usb.timeout(ep, 0);
+            usb.policy(ep, RAW_IO, FALSE);
+            if (ep & 0x80) {
+                usb.policy(ep, IGNORE_SHORT_PACKETS, FALSE);
+                usb.policy(ep, ALLOW_PARTIAL_READS, TRUE);
+                usb.policy(ep, AUTO_FLUSH, FALSE);
+            } else {
+                usb.policy(ep, SHORT_PACKET_TERMINATE, FALSE);
+                usb.parallelLimit(ep, static_cast<ULONG>(slots.size()));
+            }
+            usb.policy(ep, RAW_IO, TRUE);
+        }
+
+        void submit(Transfer &t) override {
+            auto &s = static_cast<Slot &>(t);
+            ResetEvent(s.ov.hEvent);
+            const BOOL ok = (ep & 0x80) ? usb.api.read(usb.h, ep, s.data, static_cast<ULONG>(s.used), nullptr, &s.ov)
+                                        : usb.api.write(usb.h, ep, s.data, static_cast<ULONG>(s.used), nullptr, &s.ov);
+            if (!ok && GetLastError() != ERROR_IO_PENDING)
+                throw Error("USB streaming submission failed: " + utf8(syserr(GetLastError())));
+            if (ok) SetEvent(s.ov.hEvent);
+            s.pending = true;
+            active[(first + count) % active.size()] = &s;
+            ++count;
+        }
+
+        Wait wait(uint32_t timeout_ms, Transfer *&done, size_t &bytes) override {
+            Slot *s = active[first];
+            HANDLE events[2] = {wake_event.h, s->ov.hEvent};
+            const DWORD w = WaitForMultipleObjects(2, events, FALSE, timeout_ms);
+            if (w == WAIT_OBJECT_0) return Wait::woken;
+            if (w == WAIT_TIMEOUT) return Wait::timeout;
+            if (w != WAIT_OBJECT_0 + 1) throw Error("USB event wait failed");
+            ULONG n = 0;
+            if (!usb.api.result(usb.h, &s->ov, &n, FALSE))
+                throw Error("USB transfer failed: " + utf8(syserr(GetLastError())));
+            pop();
+            s->pending = false;
+            done = s;
+            bytes = n;
+            return Wait::completed;
+        }
+
+        void wake() noexcept override { SetEvent(wake_event.h); }
+
+        uint64_t stop() override {
+            uint64_t unconfirmed = 0;
+            if (count) {
+                usb.api.abort(usb.h, ep);
+                while (count) {
+                    Slot *s = active[first];
+                    pop();
+                    unconfirmed += s->used;
+#ifdef _WIN32
+                    CancelIoEx(usb.file, &s->ov);
+#endif
+                    ULONG n = 0;
+                    usb.api.result(usb.h, &s->ov, &n, TRUE);
+                    s->pending = false;
+                }
+            }
+            UCHAR off = FALSE;
+            usb.api.setPolicy(usb.h, ep, RAW_IO, sizeof off, &off);
+            return unconfirmed;
+        }
+
+        void reset() override {
+            first = count = 0;
+            for (auto &s: slots) {
+                s->used = 0;
+                s->pending = false;
+                s->ov = {};
+                s->ov.hEvent = s->event.h;
+                ResetEvent(s->event.h);
+            }
+            ResetEvent(wake_event.h);
+        }
+
+    private:
+        void pop() {
+            first = (first + 1) % active.size();
+            --count;
+        }
+
+        Usb &usb;
+        UCHAR ep;
+        Handle wake_event;
+        std::vector<std::unique_ptr<Slot>> slots;
+        // In flight, oldest first: a ring over active, which holds one entry per slot.
+        std::vector<Slot *> active;
+        size_t first = 0, count = 0;
+    };
+
     class UsbLink final : public Link {
     public:
-        explicit UsbLink(Usb &u) : usb(u) {}
+        explicit UsbLink(const DeviceId &id) { usb.open(wide(id.path)); }
 
         uint32_t speed_mbps() const override {
             const auto packet_size = usb.pipes.at(endpoint(Pipe::sample_in)).MaximumPacketSize;
@@ -84,6 +209,10 @@ namespace och::transport {
             usb.policy(endpoint(Pipe::sample_in), ALLOW_PARTIAL_READS, TRUE);
         }
 
+        std::unique_ptr<SampleQueue> open_samples(Pipe p, size_t transfer_bytes, unsigned depth) override {
+            return std::make_unique<UsbSampleQueue>(usb, p, transfer_bytes, depth);
+        }
+
     private:
         // Line-oriented IN pipes are read without RAW_IO, accepting short reads. Set on first
         // use; each flag belongs to the one context that reads its pipe (control thread for
@@ -132,7 +261,7 @@ namespace och::transport {
             return done;
         }
 
-        Usb &usb;
+        Usb usb;
         bool control_in_ready = false, diag_in_ready = false;
     };
 } // namespace och::transport

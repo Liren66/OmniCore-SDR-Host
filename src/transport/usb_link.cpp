@@ -1,4 +1,4 @@
-// Enumeration and the cross-process device lock on the existing per-platform transport headers.
+// Enumeration, opening and the cross-process device lock on the existing per-platform transport headers.
 #include "usb_link.hpp"
 
 namespace och::transport {
@@ -11,6 +11,8 @@ namespace och::transport {
         }
         return out;
     }
+
+    std::unique_ptr<Link> open(const DeviceId &id) { return std::make_unique<UsbLink>(id); }
 
     const char *driver_name() {
 #ifdef _WIN32

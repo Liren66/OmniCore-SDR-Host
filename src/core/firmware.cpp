@@ -3,7 +3,6 @@
 // bootloader. Device side and wire format: OmniCore-SDR-Firmware,
 // OmniCore-SDR-Bridge/Common/ocfw.h (keep the constants below in sync).
 #include "internal.hpp"
-#include "../transport/usb_link.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -11,8 +10,8 @@ using namespace och::core;
 using namespace och::transport;
 
 namespace {
-    constexpr UCHAR REQ_ENTER_BOOT = 0xB0, REQ_INFO = 0xB1, REQ_ERASE = 0xB2, REQ_WRITE = 0xB3, REQ_COMMIT = 0xB4,
-                    REQ_REBOOT = 0xB5;
+    constexpr uint8_t REQ_ENTER_BOOT = 0xB0, REQ_INFO = 0xB1, REQ_ERASE = 0xB2, REQ_WRITE = 0xB3, REQ_COMMIT = 0xB4,
+                      REQ_REBOOT = 0xB5;
     constexpr uint16_t KEY = 0x5AA5;
     constexpr uint32_t INFO_MAGIC = 0x4946434F, HEADER_MAGIC = 0x5746434F, HEADER_VERSION = 1, HW_ID = 0x48417B01;
     constexpr uint32_t STATE_BUSY = 1, STATE_DONE = 2;
@@ -96,11 +95,7 @@ namespace {
     };
     Image load(const char *path) {
         require(path && *path, OCH_INVALID, "null firmware image path");
-#ifdef _WIN32
-        std::ifstream f(std::filesystem::path(wide(path)), std::ios::binary);
-#else
-        std::ifstream f(path, std::ios::binary);
-#endif
+        std::ifstream f(std::filesystem::u8path(path), std::ios::binary); // path is UTF-8 on every platform
         require(f.good(), OCH_NOT_FOUND, std::string("cannot open firmware image ") + path);
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
         require(bytes.size() >= sizeof(Header) + PAGE, OCH_INVALID,
@@ -132,8 +127,7 @@ namespace {
     struct Session {
         std::string serial;
         DeviceLock owner;
-        Usb usb;
-        UsbLink link{usb};
+        std::unique_ptr<Link> link;
         Info info{};
         bool known = false;
         explicit Session(const char *wanted) {
@@ -145,12 +139,12 @@ namespace {
             require(lock != DeviceLock::Result::unavailable, OCH_IO, "device mutex unavailable");
             require(lock != DeviceLock::Result::busy, OCH_BUSY,
                     "device is open in an OmniCore Host process; close it first");
-            open_usb(usb, found.front());
-            known = read_info(link, info);
+            link = och::transport::open(found.front());
+            known = read_info(*link, info);
         }
         // After a reset: wait for the same serial to come back in the given mode.
         void reconnect(uint8_t mode, unsigned timeout_ms, const char *what) {
-            usb.close();
+            link.reset();
             known = false;
             auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
             pause(300);
@@ -158,20 +152,21 @@ namespace {
                 auto found = matching(serial);
                 if (found.size() == 1) {
                     try {
-                        open_usb(usb, found.front());
-                        known = read_info(link, info);
+                        link = och::transport::open(found.front());
+                        known = read_info(*link, info);
                         if (known && info.mode == mode) return;
                     } catch (const std::exception &) {}
-                    usb.close();
+                    link.reset();
                     known = false;
                 }
                 pause(200);
             }
             throw Failure(OCH_TIMEOUT, std::string("timed out waiting for the device to ") + what);
         }
-        void send(UCHAR request, uint16_t value, uint16_t index, const void *data, uint16_t length, const char *what) {
+        void send(uint8_t request, uint16_t value, uint16_t index, const void *data, uint16_t length,
+                  const char *what) {
             try {
-                link.vendor_out(request, value, index, data, length);
+                link->vendor_out(request, value, index, data, length);
             } catch (const Error &) {
                 throw Failure(OCH_IO, std::string("bootloader rejected ") + what);
             }
@@ -180,12 +175,12 @@ namespace {
         void finish(const char *what, unsigned timeout_ms) {
             auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
             for (;;) {
-                if (!read_info(link, info)) {
+                if (!read_info(*link, info)) {
                     size_t n = 0;
                     Info probe{};
                     std::string outcome = "ok";
                     try {
-                        n = link.vendor_in(REQ_INFO, 0, 0, &probe, sizeof probe);
+                        n = link->vendor_in(REQ_INFO, 0, 0, &probe, sizeof probe);
                     } catch (const Error &e) {
                         outcome = e.what();
                     }

@@ -8,17 +8,7 @@ const char *och_version() { return OCH_VERSION; }
 const char *och_last_error() { return last_error().c_str(); }
 
 void och_default_config(och_config *c) {
-    if (!c) return;
-    *c = {};
-    c->struct_size = sizeof(*c);
-    c->sample_rate = 30720000;
-    c->rx_mask = 3;
-    c->tx_mask = 0;
-    c->rx_frequency = c->tx_frequency = 1000000000ULL;
-    c->rx_bandwidth = c->tx_bandwidth = 18000000;
-    c->rx_gain[0] = c->rx_gain[1] = 30;
-    c->tx_attenuation[0] = c->tx_attenuation[1] = 10;
-    c->rx_agc = 2;
+    if (c) *c = default_config();
 }
 
 int och_list(och_device_info *output, size_t capacity, size_t *count) {

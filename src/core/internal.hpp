@@ -3,15 +3,31 @@
 #include "ring.hpp"
 #include "power_status.hpp"
 #include "../transport/link.hpp"
-#include "../transport/transport.hpp"
 #include "../dsp/codec.hpp"
 #include "../protocol/frame.hpp"
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cmath>
 #include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <deque>
 #include <functional>
 #include <future>
-#include <deque>
+#include <iomanip>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
-#include <cmath>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
 
 namespace och::core {
     // Implementation classes behind the C handles och_device / och_stream (defined below).
@@ -35,6 +51,14 @@ namespace och::core {
 
     inline uint32_t channels(uint32_t mask) { return mask == 3 ? 2 : 1; }
     inline uint32_t iq_bits(const och_config &c) { return c.usb_iq_bits ? c.usb_iq_bits : 12; }
+
+    // Bytes of one complex sample in an application format (och_sample_size); 0 if unknown.
+    inline size_t sample_size(uint32_t format) {
+        return format == OCH_PACKED12 ? 3 : format == OCH_SC16 ? 4 : format == OCH_FC32 ? 8 : format == OCH_SC8 ? 2 : 0;
+    }
+
+    // The configuration och_default_config returns.
+    och_config default_config();
 
     inline void copy_text(char *to, size_t n, const std::string &s) {
         if (n) {
@@ -170,9 +194,7 @@ namespace och::core {
 }
 
 struct och::core::Device {
-    // usb is what the call sites not yet moved onto Link still use (TRANSPORT_PLAN.md);
-    // link is declared after it so that it is destroyed first.
-    och::transport::Usb usb;
+    // The opened device. Declared before owner, so the cross-process lock is released first.
     std::unique_ptr<och::transport::Link> link;
     och::transport::DeviceLock owner;
     och_device_info info{};
@@ -195,7 +217,7 @@ struct och::core::Device {
 
     ~Device();
 
-    // Takes the cross-process device lock, opens the USB device and attaches its link.
+    // Takes the cross-process device lock, opens the device and attaches its link.
     void open(const och::transport::DeviceId &);
 
     // Handshake on an opened link: bridge firmware, bus speed, SDK protocol, transport reset.
@@ -316,19 +338,7 @@ namespace och::core {
 } // namespace och::core
 
 struct och::core::Stream {
-    struct Slot {
-        OVERLAPPED ov{};
-        och::transport::Handle event;
-        och::transport::TransferBuffer bytes;
-        size_t used = 0;
-        bool pending = false;
-
-        Slot(och::transport::Usb &usb, size_t n) : event(CreateEventW(nullptr, TRUE, FALSE, nullptr)), bytes(usb, n) {
-            och::core::require(event.h != nullptr, OCH_IO, "cannot create USB event");
-            ov.hEvent = event.h;
-            memset(bytes.get(), 0, n);
-        }
-    };
+    using Slot = och::transport::Transfer;
 
     // Threads: control = start/stop/halt/prepare_restart and reconfiguration, under the device's
     // state_mutex; worker = run() and what it calls (rx_frame, publish_rx, fill_tx, submit, ...);
@@ -349,7 +359,6 @@ struct och::core::Stream {
     // Lifecycle. Written by control (and running / ended_ns by the worker as it exits);
     // atomics read by all three. failure is guarded by failure_mutex: the worker sets it
     // through fail(), anyone reads it through error().
-    och::transport::Handle stop_event;
     std::thread worker;
     std::atomic<bool> stop_requested{false}, running{false}, queued{false}, started{false}, flushing{false};
     std::atomic<bool> ever_started{false};
@@ -357,10 +366,11 @@ struct och::core::Stream {
     std::mutex failure_mutex;
     std::string failure;
 
-    // USB transfer slots: the worker's, while it runs; control resets them after halt().
-    // pending / assembling are atomic because flush() and fill_stats() read them.
-    std::vector<std::unique_ptr<Slot>> slots;
-    och::core::FixedQueue<Slot *, 128> active;
+    // USB transfers of this direction: the worker's, while it runs; control resets the queue
+    // after halt(). queue->wake() is how every thread asks the worker to leave its wait.
+    // pending (transfers in flight) is written by the worker only; pending / assembling are
+    // atomic because flush() and fill_stats() read them.
+    std::unique_ptr<och::transport::SampleQueue> queue;
     std::atomic<uint64_t> pending{0};
     std::atomic<size_t> assembling{0};
     std::atomic<uint64_t> cancelled_bytes{0};
