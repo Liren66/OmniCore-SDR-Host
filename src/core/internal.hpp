@@ -2,6 +2,7 @@
 #include <omnicore/och.h>
 #include "ring.hpp"
 #include "power_status.hpp"
+#include "../transport/link.hpp"
 #include "../transport/transport.hpp"
 #include "../dsp/codec.hpp"
 #include "../protocol/frame.hpp"
@@ -123,7 +124,10 @@ namespace och::core {
 }
 
 struct och::core::Device {
+    // usb is what the call sites not yet moved onto Link still use (TRANSPORT_PLAN.md);
+    // link is declared after it so that it is destroyed first.
     och::transport::Usb usb;
+    std::unique_ptr<och::transport::Link> link;
     och::transport::Handle owner;
     bool owns_mutex = false;
     och_device_info info{};
@@ -153,7 +157,11 @@ struct och::core::Device {
 
     ~Device();
 
+    // Takes the cross-process device lock, opens the USB device and attaches its link.
     void open(const och::transport::DeviceInfo &);
+
+    // Handshake on an opened link: bridge firmware, bus speed, SDK protocol, transport reset.
+    void attach(std::unique_ptr<och::transport::Link>);
 
     std::string command(const std::string &, uint32_t timeout = 5000);
 

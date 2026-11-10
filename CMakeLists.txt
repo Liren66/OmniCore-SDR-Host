@@ -37,17 +37,25 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(FATAL_ERROR "OmniCore Host currently supports Windows x64 only")
     endif ()
 
-    add_library(omnicore SHARED src/capi/device.cpp src/capi/stream.cpp src/capi/rf.cpp src/capi/board.cpp src/capi/firmware.cpp src/capi/timebase.cpp src/capi/sync.cpp src/core/device.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp)
-    target_compile_definitions(omnicore PRIVATE OCH_BUILD)
+    # Implementation (core + transport) as a static library: the shared library adds the C entry
+    # points, and offline tests link it directly because the shared library exports only the C API.
+    add_library(och_core STATIC src/core/device.cpp src/core/configuration.cpp src/core/reconfigure.cpp src/core/stream.cpp src/core/stream_io.cpp src/core/rf.cpp src/core/power.cpp src/core/board.cpp src/core/firmware.cpp src/core/timebase.cpp src/core/sync.cpp)
+    # OCH_BUILD: och.h declares the C API as defined in this build, not imported from a DLL.
+    target_compile_definitions(och_core PUBLIC OCH_BUILD)
+    target_include_directories(och_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    target_link_libraries(och_core PUBLIC och_dsp Threads::Threads)
+    set_target_properties(och_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+    add_library(omnicore SHARED src/capi/device.cpp src/capi/stream.cpp src/capi/rf.cpp src/capi/board.cpp src/capi/firmware.cpp src/capi/timebase.cpp src/capi/sync.cpp)
     target_include_directories(omnicore PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
-    target_link_libraries(omnicore PRIVATE och_dsp Threads::Threads)
+    target_link_libraries(omnicore PRIVATE och_core)
     set_target_properties(omnicore PROPERTIES VERSION ${PROJECT_VERSION})
     # Same name as the installed package target, so examples build either way.
     add_library(OmniCore::omnicore ALIAS omnicore)
 
     if (WIN32)
-        target_compile_definitions(omnicore PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-        target_link_libraries(omnicore PRIVATE setupapi ole32 advapi32)
+        target_compile_definitions(och_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+        target_link_libraries(och_core PUBLIC setupapi ole32 advapi32)
         set_target_properties(omnicore PROPERTIES PREFIX "")
         set(OCH_LIBUSBK_DLL "${CMAKE_CURRENT_SOURCE_DIR}/third_party/driver/libusbK-3.1.0.0/libusbK-3.1.0.0-bin/bin/dll/amd64/libusbK.dll")
         if (EXISTS "${OCH_LIBUSBK_DLL}")
@@ -64,8 +72,8 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         endif ()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0>=1.0.21)
-        target_link_libraries(omnicore PRIVATE PkgConfig::LIBUSB)
-        set_target_properties(omnicore och_dsp PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
+        target_link_libraries(och_core PUBLIC PkgConfig::LIBUSB)
+        set_target_properties(omnicore och_core och_dsp PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
         set_target_properties(omnicore PROPERTIES SOVERSION 1)
     endif ()
 
