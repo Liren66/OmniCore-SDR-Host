@@ -1,10 +1,12 @@
 name: Release
 
-# Builds the Linux tarball and the Windows installer.
+# Builds the Linux and macOS tarballs and the Windows installer.
 #   - Run workflow (Actions tab): files are attached to the run only, for testing; nothing is
 #     published.
 #   - Push a tag vX.Y.Z (equal to OCH_VERSION in include/omnicore/och.h): additionally creates a
-#     draft GitHub Release with both files and SHA256SUMS. Publish it by hand after testing.
+#     draft GitHub Release with all three files and SHA256SUMS. Publish it by hand after testing.
+# Each file is uploaded as-is (archive: false), so the Actions page offers the .tar.gz / .exe
+# itself rather than a zip around it.
 on:
   workflow_dispatch:
   push:
@@ -51,10 +53,78 @@ jobs:
           test "$got" = "$VERSION" || { echo "och reports $got, expected $VERSION"; exit 1; }
       - name: Package
         run: tar -C dist -czf "dist/OmniCoreHost-$VERSION-linux-x86_64.tar.gz" OmniCoreHost-linux
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: OmniCoreHost-${{ env.VERSION }}-linux-x86_64
           path: dist/OmniCoreHost-${{ env.VERSION }}-linux-x86_64.tar.gz
+          archive: false
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      # Oldest macOS the package runs on. Applies to libusb and OCH alike.
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      LIBUSB_VERSION: '1.0.30'
+      LIBUSB_SHA256: fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: brew install ninja pkgconf
+      # Homebrew's libusb targets the runner's own macOS version and is a dylib under /opt/homebrew,
+      # which users may not have. Build a static universal libusb for the deployment target instead,
+      # so the package depends on system libraries only.
+      - name: Build static libusb
+        run: |
+          src="$RUNNER_TEMP/libusb-src"; prefix="$RUNNER_TEMP/libusb"
+          mkdir -p "$src"
+          curl -fsSL -o "$RUNNER_TEMP/libusb.tar.bz2" \
+            "https://github.com/libusb/libusb/releases/download/v$LIBUSB_VERSION/libusb-$LIBUSB_VERSION.tar.bz2"
+          echo "$LIBUSB_SHA256  $RUNNER_TEMP/libusb.tar.bz2" | shasum -a 256 -c -
+          tar -xjf "$RUNNER_TEMP/libusb.tar.bz2" -C "$src" --strip-components 1
+          cd "$src"
+          ./configure --prefix="$prefix" --disable-shared --enable-static --disable-dependency-tracking \
+            CFLAGS="-O2 -arch arm64 -arch x86_64"
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
+          lipo "$prefix/lib/libusb-1.0.a" -verify_arch arm64 x86_64
+          echo "LIBUSB_PREFIX=$prefix" >> "$GITHUB_ENV"
+      - name: Configure
+        # libusb's macOS backend needs these beyond the IOKit/CoreFoundation that CMake already links.
+        env:
+          LDFLAGS: -lobjc -framework Security
+          PKG_CONFIG_PATH: ${{ env.LIBUSB_PREFIX }}/lib/pkgconfig
+        run: |
+          cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$LIBUSB_PREFIX" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+            '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
+      - name: Build and stage
+        run: |
+          cmake --build build/macos --parallel
+          cmake --install build/macos --prefix "$PWD/dist/OmniCoreHost-macos"
+      - name: Test
+        # The sync test depends on wall-clock timing and fails on slow runners; run it locally.
+        run: ctest --test-dir build/macos --output-on-failure -E '^sync$'
+      - name: Check the staged binaries
+        run: |
+          cd dist/OmniCoreHost-macos
+          got=$(bin/och version --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+          test "$got" = "$VERSION" || { echo "och reports $got, expected $VERSION"; exit 1; }
+          for f in bin/och lib/libomnicore.*.dylib; do
+            [ -L "$f" ] && continue
+            lipo "$f" -verify_arch arm64 x86_64 || { echo "$f is not universal"; exit 1; }
+            if otool -L "$f" | grep -E '/opt/homebrew|/usr/local'; then echo "$f links a non-system library"; exit 1; fi
+            minos=$(otool -l "$f" | awk '/minos/ {print $2}' | sort -u)
+            test "$minos" = "$MACOSX_DEPLOYMENT_TARGET" || { echo "$f minos $minos"; exit 1; }
+          done
+      - name: Package
+        run: tar -C dist -czf "dist/OmniCoreHost-$VERSION-macos-universal.tar.gz" OmniCoreHost-macos
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/OmniCoreHost-${{ env.VERSION }}-macos-universal.tar.gz
+          archive: false
           if-no-files-found: error
 
   windows:
@@ -130,28 +200,41 @@ jobs:
       - name: Build installer
         # lib.exe for the MSVC import library is found through vswhere on the runner's Visual Studio.
         run: ./packaging/windows/build-package.ps1 -StageDir build/stage -Version $env:VERSION -OutputDir dist -InnoCompiler (Join-Path $env:RUNNER_TEMP 'inno\ISCC.exe')
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: OmniCoreHost-${{ env.VERSION }}-win64-setup
           path: dist/OmniCoreHost-${{ env.VERSION }}-win64-setup.exe
+          archive: false
           if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [version, linux, windows]
+    needs: [version, linux, macos, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v4
+      # With archive: false the artifact name is the file name.
+      - uses: actions/download-artifact@v8
         with:
-          path: dist
-          merge-multiple: true
-      - name: Write SHA256SUMS
-        working-directory: dist
-        run: sha256sum OmniCoreHost-* > SHA256SUMS && cat SHA256SUMS
+          name: OmniCoreHost-${{ env.VERSION }}-linux-x86_64.tar.gz
+          path: download
+      - uses: actions/download-artifact@v8
+        with:
+          name: OmniCoreHost-${{ env.VERSION }}-macos-universal.tar.gz
+          path: download
+      - uses: actions/download-artifact@v8
+        with:
+          name: OmniCoreHost-${{ env.VERSION }}-win64-setup.exe
+          path: download
+      - name: Collect files and write SHA256SUMS
+        run: |
+          mkdir dist
+          find download -type f -name 'OmniCoreHost-*' -exec mv {} dist/ \;
+          cd dist
+          test "$(ls | wc -l)" -eq 3 || { ls -l; echo "Expected 3 files"; exit 1; }
+          sha256sum OmniCoreHost-* > SHA256SUMS && cat SHA256SUMS
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
