@@ -1,0 +1,161 @@
+name: Release
+
+# Builds the Linux tarball and the Windows installer.
+#   - Run workflow (Actions tab): files are attached to the run only, for testing; nothing is
+#     published.
+#   - Push a tag vX.Y.Z (equal to OCH_VERSION in include/omnicore/och.h): additionally creates a
+#     draft GitHub Release with both files and SHA256SUMS. Publish it by hand after testing.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        name: Read OCH_VERSION
+        run: |
+          version=$(sed -n 's/^#define OCH_VERSION "\([0-9]*\.[0-9]*\.[0-9]*\)"$/\1/p' include/omnicore/och.h)
+          test -n "$version" || { echo "OCH_VERSION not found"; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match OCH_VERSION $version"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: version
+    # Oldest supported runner: the binary then also runs on distributions with an older glibc.
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build pkg-config libusb-1.0-0-dev
+      - name: Build and stage
+        run: OCH_BUILD_DIR=build/linux OCH_INSTALL_DIR=dist/OmniCoreHost-linux bash tools/build-linux.sh
+      - name: Test
+        # The sync test depends on wall-clock timing and fails on slow runners; run it locally.
+        run: ctest --test-dir build/linux --output-on-failure -E '^sync$'
+      - name: Check the staged och runs and reports the version
+        run: |
+          got=$(dist/OmniCoreHost-linux/bin/och version --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+          test "$got" = "$VERSION" || { echo "och reports $got, expected $VERSION"; exit 1; }
+      - name: Package
+        run: tar -C dist -czf "dist/OmniCoreHost-$VERSION-linux-x86_64.tar.gz" OmniCoreHost-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OmniCoreHost-${{ env.VERSION }}-linux-x86_64
+          path: dist/OmniCoreHost-${{ env.VERSION }}-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+
+      # The build scripts expect MinGW-w64 at C:\msys64\mingw64\bin, so use the runner's
+      # preinstalled MSYS2 (release: false) instead of a fresh copy elsewhere.
+      - uses: msys2/setup-msys2@v2
+        with:
+          release: false
+          msystem: MINGW64
+          suppress-deprecation-warnings: msystem-mingw64
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-binutils
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+      - name: Check MinGW-w64 location
+        run: |
+          foreach($t in 'gcc.exe','g++.exe','windres.exe','objdump.exe','cmake.exe','ninja.exe'){
+            if(-not (Test-Path "C:\msys64\mingw64\bin\$t")){throw "Missing C:\msys64\mingw64\bin\$t"}
+          }
+
+      # Binaries ignored by git, fetched from the upstream URLs in third_party/driver/SOURCES.json
+      # and checked against the hashes recorded there.
+      - name: Download libusbK and Inno Setup
+        run: |
+          $ProgressPreference='SilentlyContinue'  # the progress bar makes Invoke-WebRequest very slow
+          $sources=Get-Content -Raw third_party/driver/SOURCES.json | ConvertFrom-Json
+          $dl=Join-Path $env:RUNNER_TEMP 'downloads'
+          New-Item -ItemType Directory -Force $dl | Out-Null
+          foreach($name in 'libusbK-3.1.0.0-bin.7z','innosetup-6.2.2.exe'){
+            $s=$sources | Where-Object name -eq $name
+            if(-not $s){throw "$name is not listed in SOURCES.json"}
+            $file=Join-Path $dl $name
+            Invoke-WebRequest -Uri $s.url -OutFile $file -UseBasicParsing
+            $hash=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if($hash -ne $s.sha256){throw "$name sha256 $hash does not match SOURCES.json $($s.sha256)"}
+          }
+      - name: Unpack libusbK runtime
+        run: |
+          7z x -y (Join-Path $env:RUNNER_TEMP 'downloads\libusbK-3.1.0.0-bin.7z') '-othird_party\driver\libusbK-3.1.0.0'
+          if($LASTEXITCODE){throw '7z failed'}
+          foreach($f in 'dll\amd64\libusbK.dll','dll\amd64\libusb0.dll','dll\x86\libusbK.dll','dll\x86\libusb0.dll','sys\amd64\libusbK.sys','sys\amd64\WdfCoInstaller01009.dll'){
+            if(-not (Test-Path "third_party\driver\libusbK-3.1.0.0\libusbK-3.1.0.0-bin\bin\$f")){throw "Missing libusbK file: $f"}
+          }
+      - name: Install Inno Setup compiler
+        run: |
+          $dir=Join-Path $env:RUNNER_TEMP 'inno'
+          $p=Start-Process -Wait -PassThru -FilePath (Join-Path $env:RUNNER_TEMP 'downloads\innosetup-6.2.2.exe') `
+            -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CURRENTUSER',"/DIR=$dir"
+          if($p.ExitCode){throw "Inno Setup install failed: $($p.ExitCode)"}
+          if(-not (Test-Path (Join-Path $dir 'ISCC.exe'))){throw 'ISCC.exe not installed'}
+
+      - name: Build driver assistant (och-driver.exe, libwdi.dll)
+        run: ./packaging/windows/driver/build-driver.ps1
+      - name: Build and stage OCH
+        run: ./tools/build.ps1
+      - name: Test
+        # The sync test depends on wall-clock timing and fails on slow runners; run it locally.
+        run: |
+          $env:PATH='C:\msys64\mingw64\bin;'+$env:PATH
+          ctest --test-dir build --output-on-failure -E '^sync$'
+          if($LASTEXITCODE){throw 'Tests failed'}
+      - name: Build installer
+        # lib.exe for the MSVC import library is found through vswhere on the runner's Visual Studio.
+        run: ./packaging/windows/build-package.ps1 -StageDir build/stage -Version $env:VERSION -OutputDir dist -InnoCompiler (Join-Path $env:RUNNER_TEMP 'inno\ISCC.exe')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OmniCoreHost-${{ env.VERSION }}-win64-setup
+          path: dist/OmniCoreHost-${{ env.VERSION }}-win64-setup.exe
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: sha256sum OmniCoreHost-* > SHA256SUMS && cat SHA256SUMS
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "OmniCore Host $VERSION" --notes "Draft built by CI. Test before publishing." \
+            dist/OmniCoreHost-* dist/SHA256SUMS

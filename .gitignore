@@ -22,3 +22,6 @@ Thumbs.db
 
 # Documentation keeps finished assets only
 /docs/images/src/
+
+# Rust port (rust/)
+/rust/target/
