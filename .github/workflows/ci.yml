@@ -24,12 +24,12 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install libusb (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev pkg-config libsoapysdr-dev
       - name: Install libusb (macOS)
         if: runner.os == 'macOS'
-        run: brew install libusb pkg-config
+        run: brew install libusb pkg-config soapysdr
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_SOAPY=ON
       - name: Build
         run: cmake --build build --parallel
       - name: Test

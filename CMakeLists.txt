@@ -27,6 +27,7 @@ else ()
     set(OCH_TOP_LEVEL OFF)
 endif ()
 option(OCH_BUILD_EXAMPLES "Build the programs in examples/" ${OCH_TOP_LEVEL})
+option(OCH_BUILD_SOAPY "Build the SoapySDR module in bindings/soapy (needs SoapySDR 0.8+)" OFF)
 
 add_library(och_dsp STATIC src/dsp/codec.cpp src/protocol/frame.cpp)
 target_include_directories(och_dsp PUBLIC src)
@@ -116,6 +117,9 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         enable_testing()
         add_test(NAME core_is_portable COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCorePortable.cmake)
+        # Runs whether or not the module is built: it only reads bindings/soapy.
+        add_test(NAME soapy_uses_public_api COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckSoapyPublicApi.cmake)
 
         # Offline tests: no device needed.
         add_executable(frame_parser_test tests/frame_parser_test.cpp)
@@ -134,6 +138,10 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_link_libraries(sync_test PRIVATE och_fake)
         add_test(NAME sync COMMAND sync_test)
         set_tests_properties(sync PROPERTIES TIMEOUT 300)
+    endif ()
+
+    if (OCH_BUILD_SOAPY)
+        add_subdirectory(bindings/soapy)
     endif ()
 
     # Install the library and headers for use by other projects.
