@@ -2,13 +2,18 @@
 // Design: SOAPY_PLAN.md.
 #pragma once
 #include <SoapySDR/Device.hpp>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <omnicore/och.h>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace omnicore_soapy {
+    struct OmniCoreStream; // Streaming.cpp
     // Throws std::runtime_error with och_last_error() when rc is not OCH_OK.
     void check(int rc, const char *what);
 
@@ -36,12 +41,22 @@ namespace omnicore_soapy {
         void setAntenna(int direction, size_t channel, const std::string &name) override;
         std::string getAntenna(int direction, size_t channel) const override;
 
-        // Streams (S2/S3: formats only for now)
+        // Streams (Streaming.cpp). RX in S2; TX setup throws until S3.
         std::vector<std::string> getStreamFormats(int direction, size_t channel) const override;
         std::string getNativeStreamFormat(int direction, size_t channel, double &fullScale) const override;
         SoapySDR::ArgInfoList getStreamArgsInfo(int direction, size_t channel) const override;
         SoapySDR::Stream *setupStream(int direction, const std::string &format, const std::vector<size_t> &channels,
                                       const SoapySDR::Kwargs &args) override;
+        void closeStream(SoapySDR::Stream *stream) override;
+        size_t getStreamMTU(SoapySDR::Stream *stream) const override;
+        int activateStream(SoapySDR::Stream *stream, int flags, long long timeNs, size_t numElems) override;
+        int deactivateStream(SoapySDR::Stream *stream, int flags, long long timeNs) override;
+        int readStream(SoapySDR::Stream *stream, void *const *buffs, size_t numElems, int &flags, long long &timeNs,
+                       long timeoutUs) override;
+        int writeStream(SoapySDR::Stream *stream, const void *const *buffs, size_t numElems, int &flags,
+                        long long timeNs, long timeoutUs) override;
+        int readStreamStatus(SoapySDR::Stream *stream, size_t &chanMask, int &flags, long long &timeNs,
+                             long timeoutUs) override;
 
         // Front-end corrections
         bool hasDCOffsetMode(int direction, size_t channel) const override;
@@ -107,14 +122,31 @@ namespace omnicore_soapy {
         // Applies a modified copy of the cached configuration; the cache changes only on success
         // and is then refreshed from och_get_config (applied sample rate, band-clamped gains).
         void reconfigure(const std::function<void(och_config &)> &change);
+        void apply_locked(const std::function<void(och_config &)> &change); // caller holds mutex_
         void check_channel(int direction, size_t channel) const;
-        double tick_rate() const;
+        double tick_rate() const; // caller holds mutex_
+
+        // Device events (Events.cpp): one thread drains och_poll_event, which is a single
+        // per-device queue, logs them and, while a TX stream is active, queues TX events for
+        // readStreamStatus.
+        void event_loop();
+        void clear_tx_events();
 
         och_device *dev_ = nullptr;
         och_device_info info_{};
         och_config config_{};
         uint32_t auto_agc_mode_ = 2; // och rx_agc value used by setGainMode(true); default slow
-        // Guards dev_ calls that change state and config_. Stream IO will not take it (S2).
+        // Guards dev_ calls that change state, config_ and the stream slots. readStream does not
+        // take it; lock order is mutex_ before a stream's io mutex.
         mutable std::mutex mutex_;
+        OmniCoreStream *rx_stream_ = nullptr, *tx_stream_ = nullptr;
+        std::atomic<bool> stop_events_{false};
+        std::thread events_;
+
+        std::atomic<bool> tx_listening_{false}; // a TX stream is active
+        std::mutex tx_events_mutex_;
+        std::condition_variable tx_events_cv_;
+        std::deque<och_event> tx_events_; // bounded; oldest dropped
+        size_t tx_events_dropped_ = 0;
     };
 } // namespace omnicore_soapy

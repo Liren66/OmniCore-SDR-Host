@@ -54,16 +54,26 @@ OmniCoreDevice::OmniCoreDevice(const SoapySDR::Kwargs &args) {
         och_close(dev_);
         throw;
     }
+    events_ = std::thread([this] { event_loop(); });
     SoapySDR::logf(SOAPY_SDR_INFO, "OmniCore: opened %s (%s, firmware %s, USB %u Mbps)", info_.serial, info_.driver,
                    info_.firmware, info_.usb_speed_mbps);
 }
 
 OmniCoreDevice::~OmniCoreDevice() {
+    // Applications should close their streams first; close any left so och_close does not fail.
+    for (OmniCoreStream *s: {rx_stream_, tx_stream_})
+        if (s) closeStream(reinterpret_cast<SoapySDR::Stream *>(s));
+    stop_events_ = true;
+    if (events_.joinable()) events_.join();
     if (och_close(dev_) != OCH_OK) SoapySDR::logf(SOAPY_SDR_ERROR, "OmniCore: close failed: %s", och_last_error());
 }
 
 void OmniCoreDevice::reconfigure(const std::function<void(och_config &)> &change) {
     std::lock_guard<std::mutex> lock(mutex_);
+    apply_locked(change);
+}
+
+void OmniCoreDevice::apply_locked(const std::function<void(och_config &)> &change) {
     och_config next = config_;
     change(next);
     check(och_configure(dev_, &next), "configure");
