@@ -44,6 +44,8 @@ bench 自动为 8bit 选择 sc8，为 12bit 选择 packed12，并只支持这两
 
 `examples/duplex_iq8.cpp` 展示双通道 SC8 接收和双通道零 IQ 发送，使用独立 TX producer。改变应用 args.format 可用 SC16/FC32/packed12，缓冲按应用格式尺寸分配。
 
+通过 SoapySDR 插件使用时，在设备参数里写 `iq_bits=8`（如 `driver=omnicore,iq_bits=8`）。这时两个通道都要开，原生格式为 CS8，也可以用 CS16 / CF32。全双工还要写 `rx_mask=3,tx_mask=3`。2T2R 61.44 MSPS 在 GNU Radio 中的验收结果见 [SoapySDR 插件](soapy.md)。
+
 SDK 控制命令为 `iq_format?`、`iq_format=8` 和 `iq_format=12`；规范 CLI 名为 `usb.iq-bits`。CH32 数据/控制固件保持透明传输。新 SDK 查询包括 `iq_format=8 requested=8 applied=8 supported=12,8 cfg_busy=0 cfg_error=0 verified=1 scope=2tx2rx`；后续诊断字段允许附加。
 
 ## 实测性能

@@ -6,6 +6,9 @@ OmniCore Host (OCH) 0.7.2 — Windows 安装与驱动说明
   驱动：libusbK 3.1.0.0。安装包完全离线，包含用户态 DLL、内核驱动、安装工具和许可证。
   发行内容为 OCH 运行程序、C/C++ 接口、示例、使用文档与 USB2 实测附录；不包含 PS SDK、板端固件或完整测试工程。
   安装器不会编译或烧写 Zynq、FPGA、CH32。
+  不包含 SoapySDR 插件（GNU Radio / SDR++ 等使用）。插件需要用与 SoapySDR 相同的编译器
+  （radioconda、PothosSDR 均为 MSVC）自行编译，可使用本安装包附带的 MSVC 导入库；
+  步骤见 docs\soapy.md。Windows 上的插件尚未实机验证。
 
 首次安装
   1. 关闭其他访问 SDR 的软件，运行 OmniCoreHost-0.7.2-win64-setup.exe。

@@ -23,7 +23,7 @@
                          ZYNQ 控制接口
 ~~~
 
-CLI 与未来应用适配层调用同一公共接口。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux libusb 1.0。0.3 为 OnAir 等持续收样应用补齐运行中改参的生命周期能力；本版不包含 OnAir 数据源实现，也不需要加载 SoapySDR 驱动。
+CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）就是这样一个适配层，只使用公开 C 接口，由 `soapy_uses_public_api` 测试保证。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux libusb 1.0。0.3 为 OnAir 等持续收样应用补齐运行中改参的生命周期能力；本版不包含 OnAir 数据源实现；核心库本身不依赖 SoapySDR，插件是可选的单独模块。
 
 控制面逐条发送 SDK 命令并分离异步 EVT；数据面使用独立的 RX/TX USB 请求队列和生产者/消费者。一个 RX 流只能有一个应用消费者，一个 TX 流只能有一个应用生产者。RX 与 TX 可以并发。设备配置、打开、关闭、创建/销毁流应由应用管理线程串行执行。
 

@@ -24,9 +24,10 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 4. [Linux 配置](#linux-配置)
 5. [测试结果](#测试结果)
 6. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
-7. [从源码构建与打包](#从源码构建与打包)
-8. [工程目录](#工程目录)
-9. [文档索引](#文档索引)
+7. [GNU Radio 与 SoapySDR](#gnu-radio-与-soapysdr)
+8. [从源码构建与打包](#从源码构建与打包)
+9. [工程目录](#工程目录)
+10. [文档索引](#文档索引)
 
 ## 功能
 
@@ -370,6 +371,32 @@ cmake -S <安装目录>/examples -B build-examples -DCMAKE_PREFIX_PATH=<安装�
 cmake --build build-examples
 ```
 
+## GNU Radio 与 SoapySDR
+
+`bindings/soapy/` 是 OmniCoreSDR 的 [SoapySDR](https://github.com/pothosware/SoapySDR) 插件，驱动名 `omnicore`。装好后，GNU Radio（gr-soapy）、SDR++、SDRangel 以及 SoapySDR 的 Python / C++ 接口都能直接使用这块板。插件只调用公开的 C 接口（`omnicore/och.h`），和 `och` 命令行用的是同一套库。
+
+插件需要和机器上的 SoapySDR 用同一版本、同一种编译器编译，所以只提供源码，安装包和 Linux 发布包里都不带。Linux / macOS 编译：
+
+```bash
+# 先装 SoapySDR 开发包：Debian/Ubuntu 为 libsoapysdr-dev，macOS 为 brew install soapysdr
+cmake -S . -B build -DOCH_BUILD_SOAPY=ON
+cmake --build build -j
+sudo cmake --install build --prefix /usr/local     # macOS（Homebrew）用 --prefix "$(brew --prefix)"
+SoapySDRUtil --find="driver=omnicore"              # 能列出设备即装好
+```
+
+已安装 OCH 时也可以只编插件：`cmake -S bindings/soapy -B build-soapy -DCMAKE_PREFIX_PATH=<OCH 安装目录>`。
+
+使用要点：
+
+- **GNU Radio**：用 Soapy Custom Source / Sink，Driver 填 `omnicore`。全双工时 source 和 sink 的 Device Arguments 要写相同的 `rx_mask`、`tx_mask`（如 `rx_mask=1,tx_mask=1`）。示例流图在 `examples/soapy/`：接收频谱、全双工回环。
+- **Python**：`SoapySDR.Device("driver=omnicore")`，参数用字符串传，不要用 dict。
+- **增益**：RX 增益上限随频段变化（≤ 1.3 GHz 为 73 dB，≤ 4 GHz 为 71 dB，更高频段为 62 dB）；TX 增益按 Pluto 的约定，等于 89.75 − 衰减。
+- **8bit**：设备参数 `iq_bits=8`，此时两个通道都要开，原生格式为 CS8。
+- **时间**：支持定时接收、定时突发发射和 `setHardwareTime`；gr-soapy 本身不支持定时发射，需要时请用 SoapySDR API。
+
+macOS 上已经做过实机验收：收发、全双工 2T2R（12bit 30.72 MSPS、8bit 61.44 MSPS）、GNU Radio 流图。Linux、Windows 目前只在 CI 中编译。设备参数、格式、运行中改参的影响和排错见 [SoapySDR 插件](docs/soapy.md)。
+
 ## 从源码构建与打包
 
 需要 CMake 3.20+、Ninja 与 C++17 x64 工具链（Windows 使用 MSYS2 MinGW-w64，默认 `C:\msys64\mingw64\bin`）。
@@ -386,6 +413,8 @@ powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/
 # Linux：编译并安装到 dist/OmniCoreHost-linux
 bash tools/build-linux.sh
 ```
+
+加 `-DOCH_BUILD_SOAPY=ON` 会同时编译 SoapySDR 插件（需要 SoapySDR 开发包，见上一节）。默认关闭，`tools/build.ps1`、`tools/build-linux.sh` 和安装包都不包含插件。
 
 打包脚本会校验 stage 内容与版本号，加入驱动助手、libusbK 与许可证，生成 MSVC 导入库（需 VS Build Tools 的 `lib.exe`），并写入 `PAYLOAD_SHA256.txt`。Inno Setup 6.2.2 已随工程提供，详见 [安装包构建说明](packaging/windows/BUILD_INSTALLER.txt)。
 

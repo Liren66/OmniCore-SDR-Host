@@ -71,6 +71,20 @@ TX 吞吐测试发送全零 IQ，并设最大衰减 89.75 dB；不测射频功�
 
 出现 `LIBUSB_ERROR_IO`、EPROTO 或持续 RX 溢出时，应先记录 `lsusb -t`、端口、固件及原始统计，尝试另一 USB3 接口/线材后复测。标称 5 Gbit/s 本身不代表连接能稳定收发。不要将有溢出但平均速率接近目标的结果判为合格。
 
+## SoapySDR 插件（可选）
+
+供 GNU Radio（gr-soapy）、SDR++、SDRangel 和 SoapySDR Python 接口使用。发布包里不带，需要和系统的 SoapySDR 一起从源码编译：
+
+```bash
+sudo apt-get install libsoapysdr-dev soapysdr-tools        # GNU Radio 用户再装 gnuradio（含 gr-soapy）
+/usr/bin/cmake -S . -B build/soapy -G Ninja -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_SOAPY=ON
+/usr/bin/cmake --build build/soapy -j4
+sudo /usr/bin/cmake --install build/soapy --prefix /usr/local
+SoapySDRUtil --find="driver=omnicore"
+```
+
+插件装到 `/usr/local/lib/SoapySDR/modules<版本>/`。发行版自带的 SoapySDR 在 `/usr` 下，不一定会搜索这个目录；找不到插件时，设置 `SOAPY_SDR_PLUGIN_PATH` 指向它。已经把 OCH 装到 `/opt/omnicore/0.7.2` 时，也可以只编插件：`cmake -S bindings/soapy -B build/soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.7.2`。USB 权限沿用上面的 udev 规则，插件不需要 sudo。Linux 上目前只在 CI 中编译过，还没有实机验收；详细说明见 [SoapySDR 插件](soapy.md)。
+
 ## SDK 集成与发布包
 
 ```cmake

@@ -56,6 +56,10 @@ och_send_burst(tx, samples, n, &md, &accepted, 1000);  // 在样点时间 T 开�
 - 过载时（例如 RX+TX 超过 UHSIF 约 533 MB/s）欠流和 RX GAP 可能每块都发生。v2026.11.07 之后的固件对 `tx_underflow`、`rx_overflow_gap` 做合并：每串的第一条单独上报，之后每 250 ms 最多一条汇总，停止某个方向时立即补报剩余部分。汇总记录的 `och_event.count`（0.6.1 起）为它代表的事件数，`hw_time`/`block` 是其中最后一条；普通事件 `count` 为 1。`device_underflows` 按 `count` 累加。
 - 不带元数据的 `och_send` 仍可使用：发出的是不定时的连续流，第一块自动标记 SOB。
 
+## SoapySDR
+
+SoapySDR 插件把上面的能力对应到 Soapy 接口：`getHardwareTime` / `setHardwareTime`（`"pps"` 表示在下一个 PPS 生效）；`activateStream` 带 `HAS_TIME` 为定时接收，带 `numElems` 为有限长度接收；`writeStream` 带 `HAS_TIME` 为定时突发，带 `END_BURST` 结束突发；`readStreamStatus` 返回突发完成、迟到（`TIME_ERROR`）和欠流（`UNDERFLOW`）。时间以纳秒表示，按当前采样率与样点时间互换，所以改采样率后要重新设置硬件时间。gr-soapy 的 source 会输出 `rx_time` 标签，但 sink 不支持定时发射。详见 [SoapySDR 插件](soapy.md)。
+
 ## 兼容性
 
 - 不能再连接旧固件（无成帧的 PL/SDK）；旧固件请使用 OCH 0.5.x。

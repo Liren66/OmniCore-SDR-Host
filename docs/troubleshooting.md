@@ -62,6 +62,8 @@ RX 的 RECONFIGURED、START、DISCONTINUITY 标志意味着新数据段，下游
 
 ## 与第三方软件的关系
 
-GNU Radio、MATLAB、SDRangel 等第三方软件不会自动识别 OmniCoreSDR，需要基于公共 C/C++ 接口单独编写适配层；当前版本不包含这些插件。
+GNU Radio（gr-soapy）、SDR++、SDRangel 和 SoapySDR 的 Python / C++ 接口可以通过 SoapySDR 插件（驱动名 `omnicore`）使用 OmniCoreSDR。插件需要从源码编译，安装包不带，见 [SoapySDR 插件](soapy.md)；插件相关的问题见那里的“排错”一节。MATLAB 目前还没有适配层。
+
+通过插件运行时，上面“运行中改参”一节同样适用：改 TX 本振、带宽或采样率会让传输短暂暂停，全双工下 RX 会出现空档，插件会把它报成 OVERFLOW 并重新打时间标签。插件的写入会在调用方给的超时时间内等待暂停结束，所以 gr-soapy 只有在暂停超过 100 ms 时才会报 `TIMEOUT`。
 
 外部 PPS 支持频率监控；开启后没有输入时显示 `no_signal`，频率无效。尚不支持硬件时间戳、精确定时 TX、PPS 闭环调频、设备间同步或多软件同时独占同一设备。首次发行安装器还需要在干净 Windows 主机及不同安全策略上实测。
