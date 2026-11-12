@@ -1,11 +1,11 @@
-// TX burst bookkeeping for writeStream (SOAPY_PLAN.md 4.3). Pure logic on och flag values;
-// tested offline in tests/interleave_test.cpp.
+// TX burst bookkeeping for the bindings' write calls (SoapySDR writeStream: SOAPY_PLAN.md 4.3).
+// Pure logic on och flag values; tested offline in tests/interleave_test.cpp.
 #pragma once
 #include <cstddef>
 #include <cstdint>
 #include <omnicore/och.h>
 
-namespace omnicore_soapy {
+namespace omnicore_bindings {
     class TxBurst {
     public:
         // Call after every activation.
@@ -15,8 +15,9 @@ namespace omnicore_soapy {
             ended_once_ = false;
         }
 
-        // och_tx_metadata flags for one writeStream call. SoapySDR has no start-of-burst flag:
-        // the first write after an END_BURST (or after activation) starts a new burst.
+        // och_tx_metadata flags for one write call. Neither SoapySDR nor the MATLAB API has a
+        // start-of-burst flag: the first write after an END_BURST (or after activation) starts a
+        // new burst.
         uint32_t flags(bool has_time, bool end_burst) const {
             uint32_t f = 0;
             if (!open_) f |= OCH_TX_START_OF_BURST;
@@ -53,4 +54,4 @@ namespace omnicore_soapy {
         bool ended_once_ = false;
         size_t queued_ = 0; // samples per channel accepted since activation
     };
-} // namespace omnicore_soapy
+} // namespace omnicore_bindings

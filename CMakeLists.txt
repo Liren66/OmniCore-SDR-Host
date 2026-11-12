@@ -117,9 +117,11 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         enable_testing()
         add_test(NAME core_is_portable COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCorePortable.cmake)
-        # Runs whether or not the module is built: it only reads bindings/soapy.
-        add_test(NAME soapy_uses_public_api COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckSoapyPublicApi.cmake)
+        # Runs whether or not the bindings are built: it only reads bindings/.
+        add_test(NAME bindings_use_public_api COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckBindingsPublicApi.cmake)
+        # Helpers shared by the bindings; their offline tests need neither SoapySDR nor MATLAB.
+        add_subdirectory(bindings/common)
 
         # Offline tests: no device needed.
         add_executable(frame_parser_test tests/frame_parser_test.cpp)

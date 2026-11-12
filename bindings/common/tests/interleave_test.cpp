@@ -1,12 +1,12 @@
 // Offline test of channel (de)interleaving and RX block verdicts (Interleave.hpp, RxTracker.hpp).
-#include "Interleave.hpp"
-#include "RxTracker.hpp"
-#include "TxBurst.hpp"
+#include "common/Interleave.hpp"
+#include "common/RxTracker.hpp"
+#include "common/TxBurst.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <vector>
 
-using namespace omnicore_soapy;
+using namespace omnicore_bindings;
 
 static int errors = 0;
 #define EXPECT(cond)                                                                                                   \

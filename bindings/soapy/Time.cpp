@@ -1,10 +1,11 @@
 // Reference clock, PPS time source and the 64-bit hardware sample time (1 tick = 1 sample).
-#include "Mapping.hpp"
+#include "common/Mapping.hpp"
 #include "OmniCoreDevice.hpp"
 #include <SoapySDR/Time.hpp>
 #include <algorithm>
 #include <cctype>
 
+using namespace omnicore_bindings;
 using namespace omnicore_soapy;
 
 namespace {

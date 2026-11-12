@@ -3,11 +3,11 @@
 // An och stream can be started only once, while SoapySDR applications activate and deactivate
 // the same stream repeatedly. So setupStream only records the request, every activateStream
 // creates and starts a fresh och_stream, and deactivateStream stops and destroys it.
-#include "Interleave.hpp"
-#include "Mapping.hpp"
 #include "OmniCoreDevice.hpp"
-#include "RxTracker.hpp"
-#include "TxBurst.hpp"
+#include "common/Interleave.hpp"
+#include "common/Mapping.hpp"
+#include "common/RxTracker.hpp"
+#include "common/TxBurst.hpp"
 #include <SoapySDR/Formats.hpp>
 #include <SoapySDR/Logger.hpp>
 #include <SoapySDR/Time.hpp>
@@ -19,6 +19,8 @@
 #include <limits>
 #include <memory>
 #include <thread>
+
+using namespace omnicore_bindings;
 
 namespace omnicore_soapy {
     struct OmniCoreStream {

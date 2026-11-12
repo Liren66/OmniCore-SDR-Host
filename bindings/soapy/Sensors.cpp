@@ -1,10 +1,11 @@
 // Sensors (read-only status) and settings (board switches safe to change while streaming,
 // except iq_bits).
-#include "Mapping.hpp"
+#include "common/Mapping.hpp"
 #include "OmniCoreDevice.hpp"
 #include <cmath>
 #include <cstdio>
 
+using namespace omnicore_bindings;
 using namespace omnicore_soapy;
 
 namespace {

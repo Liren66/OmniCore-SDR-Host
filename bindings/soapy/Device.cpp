@@ -1,9 +1,10 @@
 // Open/close, identification, channels and RF parameters.
-#include "Mapping.hpp"
+#include "common/Mapping.hpp"
 #include "OmniCoreDevice.hpp"
 #include <SoapySDR/Logger.hpp>
 #include <cmath>
 
+using namespace omnicore_bindings;
 using namespace omnicore_soapy;
 
 bool omnicore_soapy::check_supported(int rc, const char *what) {

@@ -1,13 +1,14 @@
 // och streams are time-major interleaved (ch0, ch1, ch0, ch1, ...); SoapySDR wants one buffer per
-// channel. One complex sample is copied as a unit of its size: CS8 = 2 bytes, CS16 = 4,
-// CF32 = 8. No SoapySDR or device dependency (tests/interleave_test.cpp).
+// channel and MATLAB one column per channel. One complex sample is copied as a unit of its size:
+// CS8 = 2 bytes, CS16 = 4, CF32 = 8. Shared by the bindings; no SoapySDR, MATLAB or device
+// dependency (tests/interleave_test.cpp).
 #pragma once
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 
-namespace omnicore_soapy {
+namespace omnicore_bindings {
     namespace detail {
         // Fixed-size memcpy compiles to a plain load/store and, unlike a cast, is valid for any
         // alignment the application's buffers have (CF32 buffers need not be 8-byte aligned).
@@ -63,4 +64,4 @@ namespace omnicore_soapy {
         }
         throw std::invalid_argument("unsupported sample size");
     }
-} // namespace omnicore_soapy
+} // namespace omnicore_bindings

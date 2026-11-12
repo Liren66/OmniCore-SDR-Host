@@ -1,11 +1,12 @@
-// Decides what readStream reports for each block och_recv returns (SOAPY_PLAN.md 4.2).
-// Pure logic on och_metadata values; tested offline in tests/interleave_test.cpp.
+// Decides what the bindings report for each block och_recv returns: sample loss, a late start and
+// the block's time (SoapySDR readStream: SOAPY_PLAN.md 4.2). Pure logic on och_metadata values;
+// tested offline in tests/interleave_test.cpp.
 #pragma once
 #include <cstddef>
 #include <cstdint>
 #include <omnicore/och.h>
 
-namespace omnicore_soapy {
+namespace omnicore_bindings {
     struct RxVerdict {
         bool overflow = false; // samples were lost before this block: report SOAPY_SDR_OVERFLOW first
         bool late = false;     // a timed RX command started late: report SOAPY_SDR_TIME_ERROR first
@@ -45,4 +46,4 @@ namespace omnicore_soapy {
         bool expected_valid_ = false;
         uint64_t expected_ = 0;
     };
-} // namespace omnicore_soapy
+} // namespace omnicore_bindings
