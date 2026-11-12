@@ -38,7 +38,18 @@ jobs:
 
   # Same toolchain as tools/build.ps1: MSYS2 MinGW-w64 with Ninja.
   windows:
+    name: windows (${{ matrix.msystem }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # MSYS2 is retiring MINGW64 in favour of UCRT64; keep it while tools/build.ps1 uses it.
+          # MSYS2 no longer ships SoapySDR for MINGW64, so the SoapySDR module is built on UCRT64.
+          - msystem: MINGW64
+            soapy: 'OFF'
+          - msystem: UCRT64
+            soapy: 'ON'
     defaults:
       run:
         shell: msys2 {0}
@@ -46,14 +57,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
-          # MSYS2 is retiring MINGW64 in favour of UCRT64; stay on it while tools/build.ps1 does.
+          msystem: ${{ matrix.msystem }}
           suppress-deprecation-warnings: msystem-mingw64
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-soapysdr
+          pacboy: >-
+            gcc:p
+            cmake:p
+            ninja:p
+            ${{ matrix.soapy == 'ON' && 'soapysdr:p' || '' }}
       # libusbK.dll is not in the repository (*.dll is ignored) and CMake refuses to configure
       # without it. It is loaded at run time only, and the offline tests never load it, so an
       # empty file is enough here, as in tools/cross-build-windows.sh. Not for release builds.
@@ -65,7 +75,7 @@ jobs:
       - name: Configure
         # The SoapySDR module is built here for compile coverage only: Windows SoapySDR builds
         # (radioconda, PothosSDR) use MSVC, so a MinGW-built module is not shipped (docs/soapy.md).
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_SOAPY=ON
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_SOAPY=${{ matrix.soapy }}
       - name: Build
         run: cmake --build build --parallel
       - name: Test
