@@ -25,3 +25,4 @@ Thumbs.db
 
 # Rust port (rust/)
 /rust/target/
+*PLAN.md

@@ -28,6 +28,7 @@ else ()
 endif ()
 option(OCH_BUILD_EXAMPLES "Build the programs in examples/" ${OCH_TOP_LEVEL})
 option(OCH_BUILD_SOAPY "Build the SoapySDR module in bindings/soapy (needs SoapySDR 0.8+)" OFF)
+option(OCH_BUILD_MATLAB "Build the MATLAB MEX gateway in bindings/matlab (needs MATLAB R2018a+)" OFF)
 
 add_library(och_dsp STATIC src/dsp/codec.cpp src/protocol/frame.cpp)
 target_include_directories(och_dsp PUBLIC src)
@@ -144,6 +145,9 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     if (OCH_BUILD_SOAPY)
         add_subdirectory(bindings/soapy)
+    endif ()
+    if (OCH_BUILD_MATLAB)
+        add_subdirectory(bindings/matlab)
     endif ()
 
     # Install the library and headers for use by other projects.
