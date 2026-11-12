@@ -47,6 +47,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 | PPS 驯服 | 仅 PPS 时由 CH32 PA4 DAC 驯服 40 MHz 晶振（相位锁定 ±1 µs）；与 10 MHz 同用时仅作频偏校验 |
 | 监控与板控 | PPS 频偏监控（±1 ppm LOCK）、RGB 状态灯、按温度调速的风扇 |
 | USB 链路 | USB 3.0 SuperSpeed；USB 2.0 High-Speed 适用于低采样率 |
+| SoapySDR 插件 | `driver=omnicore`，接入 GNU Radio（gr-soapy）、SDR++、SDRangel、Python 等，见 [SoapySDR 插件](docs/soapy.md) |
 
 ## 快速上手
 
@@ -431,7 +432,9 @@ OmniCoreHost/
 │   ├── dsp/            IQ 编解码
 │   ├── protocol/       16 KiB 成帧块解析与生成
 │   └── transport/      libusbK (Windows) / libusb (Linux) 传输层
-├── examples/           C++ 示例与 FTR 示例
+├── bindings/
+│   └── soapy/          SoapySDR 插件（driver=omnicore）与实机验收脚本（hwtest/）
+├── examples/           C++ 示例、FTR 示例、GNU Radio 流图（soapy/）
 ├── tests/              成帧解析单元测试、硬件时间戳板上测试
 ├── docs/               使用与开发文档、插图
 ├── cmake/              CMake 包配置模板
@@ -452,6 +455,7 @@ OmniCoreHost/
 | [Linux 安装](docs/INSTALL_LINUX.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
 | [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
 | [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | [多板同步](docs/multi-board-sync.md) |
+| [SoapySDR 插件](docs/soapy.md) | | |
 
 ## 许可证
 
