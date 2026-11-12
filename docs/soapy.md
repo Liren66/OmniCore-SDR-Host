@@ -142,6 +142,7 @@ OCH 对设备有跨进程独占锁：插件打开设备期间，`och` 命令行�
 - **全双工**：source 和 sink 必须在 Device Arguments 里写**相同**的 `rx_mask` 和 `tx_mask`，例如单通道收发写 `rx_mask=1,tx_mask=1`，双通道写 `rx_mask=3,tx_mask=3`。原因是 GNU Radio 先启动一个块再启动另一个；第二个块启动时第一个已经在跑，这时 core 不允许修改通道配置。
 - **时间标签**：source 在启动、改频率、改采样率和溢出之后打 `rx_time`、`rx_rate`、`rx_freq` 标签。
 - **发送**：sink 支持长度标签突发（`set_length_tag_name`），但 gr-soapy **不支持定时发送**（不读 `tx_time`/`tx_sob`/`tx_eob` 标签）。需要定时发送时，直接用 SoapySDR 的 Python / C++ 接口。
+- **运行中改参数**：改 RX 本振、增益不会丢数据。改 TX 本振、带宽或采样率时，设备会短暂暂停传输，全双工下 RX 会丢几十到一两百毫秒的数据。source 会把每段空档都上报，并重新打 `rx_time` 标签。
 - **启停**：整个流图停止再启动没有问题。全双工时只停一个方向再单独重启会失败（core 要求两个方向都停下才能重开），下一版 core 会放宽。
 
 示例流图在 `examples/soapy/`。
@@ -179,4 +180,4 @@ SoapySDR 0.8 的 Python 绑定用 dict 传参数（`SoapySDR.Device(dict(driver=
 | GNU Radio 全双工启动报 `needs rx_mask=...` | 在 source 和 sink 的 Device Arguments 里写相同的 `rx_mask`、`tx_mask` |
 | 双通道 61.44 MSPS 偶尔溢出 | 先用 `och bench` 测同样的速率；macOS 上这一档有设备端溢出，与插件无关 |
 | 改采样率后时间跳变 | 正常现象，重新 `setHardwareTime` |
-| 日志出现 `OmniCore TX: write timed out ...`，gr-soapy 报 `Soapy sink error: TIMEOUT` | 写入时发送队列一直没有空位。日志在第 1、10、100…… 次超时时打印，附带流状态：`started=0` 表示还没开始发送；`running=0` 表示流已停止；`host_queue` 一直满且 `underflows` 不增长，说明设备没在取数据。请把这几行日志连同当时的操作一起反馈 |
+| gr-soapy 偶尔报 `Soapy sink error: TIMEOUT` | 改采样率、带宽时，设备会暂停传输 0.05–0.7 s，超过 100 ms 就会出现几条，属正常现象。如果不改参数也持续出现，看日志里的 `OmniCore TX: write timed out ...`：`started=0` 表示还没开始发送；`running=0` 表示流已停止；`host_queue` 一直满且 `underflows` 不增长，说明设备没在取数据。请把这几行日志连同当时的操作一起反馈 |

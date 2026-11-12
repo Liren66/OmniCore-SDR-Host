@@ -7,7 +7,7 @@ source into a probe) and checks: 20 start/stop cycles of the whole flowgraph; a 
 gain changes (rates held, rx_time continuous); a sample-rate change (new rx_rate / rx_time tags, 12-bit
 only); both tones visible in RX.
 
-Transmits only at 2.45 GHz (2.44 GHz during the retune) at TX gain 10 (79.75 dB attenuation). Without
+Transmits only at 2.45 GHz (2.44 GHz during the TX retune) at TX gain 30 (59.75 dB attenuation). Without
 a cable the tones reach RX through on-board leakage, so the channel mapping is only reported. With
 --cable (TX1 -> RX1 and TX2 -> RX2, each through at least 30 dB attenuation) RX1 must see TX1's tone
 stronger than TX2's, and RX2 the other way round.
@@ -33,7 +33,7 @@ def report(name, ok, detail):
 class Probe(gr.sync_block):
     """Counts samples per channel, records rx_time / rx_rate tags of channel 0, keeps the last chunk."""
 
-    def __init__(self, nch, keep=1 << 15):
+    def __init__(self, nch, keep=1 << 17):
         gr.sync_block.__init__(self, "probe", [np.complex64] * nch, None)
         self.nch, self.keep = nch, keep
         self.reset()
@@ -72,7 +72,7 @@ class Duplex(gr.top_block):
     def __init__(self, dev_args, rate):
         gr.top_block.__init__(self, "duplex_accept")
         self.src = soapy.source("driver=omnicore", "fc32", 2, dev_args, "", [""] * 2, [""] * 2)
-        self.snk = soapy.sink("driver=omnicore", "fc32", 2, dev_args, "", [""] * 2, [""] * 2, "")
+        self.snk = soapy.sink("driver=omnicore", "fc32", 2, dev_args, "", [""] * 2, [""] * 2)
         for ch in range(2):
             # The calls GRC always makes (SOAPY_PLAN.md 9.2).
             for b in (self.src, self.snk):
@@ -87,7 +87,7 @@ class Duplex(gr.top_block):
             self.src.set_gain_mode(ch, False)
             self.src.set_dc_offset_mode(ch, False)
             self.src.set_gain(ch, 40)
-            self.snk.set_gain(ch, 10)
+            self.snk.set_gain(ch, 30)
         self.tones = [analog.sig_source_c(rate, analog.GR_COS_WAVE, f, 0.3, 0) for f in TONES]
         self.probe = Probe(2)
         self.sent = Counter()
@@ -150,25 +150,44 @@ def run_config(label, dev_args, rate):
             failures.append((cycle, str(e)))
     report(f"{label}: 20 flowgraph start/stop cycles", not failures, f"failures={failures[:3]}")
 
-    # 10 s with LO and gain changes halfway.
-    def retune():
+    # 10 s with RX LO and gain changes halfway: RX must not lose a sample, TX keeps its rate.
+    def rx_changes():
         for ch in range(2):
             tb.src.set_gain(ch, 30)
-            tb.snk.set_gain(ch, 5)
+            tb.snk.set_gain(ch, 25)
         tb.src.set_frequency(0, FREQ - 10e6)
-        tb.snk.set_frequency(0, FREQ - 10e6)
         time.sleep(0.5)
         tb.src.set_frequency(0, FREQ)
-        tb.snk.set_frequency(0, FREQ)
+        for ch in range(2):
+            tb.snk.set_gain(ch, 30)
 
-    el = tb.timed_run(10.0, retune)
+    el = tb.timed_run(10.0, rx_changes)
     rx = [n / el for n in tb.probe.n]
     tx = tb.sent.n / el
     breaks = time_breaks(tb.probe.tags, rate)
     ntime = sum(1 for _, k, _ in tb.probe.tags if k == "rx_time")
-    report(f"{label}: 10 s with LO / gain changes", min(rx) > 0.97 * rate and tx > 0.97 * rate and breaks == 0
+    report(f"{label}: 10 s with RX LO and gain changes", min(rx) > 0.97 * rate and tx > 0.97 * rate and breaks == 0
            and ntime >= 3,
            f"RX {[round(r / 1e6, 2) for r in rx]} MSPS, TX {tx / 1e6:.2f} MSPS, rx_time tags={ntime}, breaks={breaks}")
+
+    # 10 s with a TX LO change and back. The core pauses the whole transport for it (about 30 ms), so RX
+    # loses samples (usually a ~23 ms gap, sometimes a second ~165 ms one; more at the 8-bit USB limit); each comes back as an OVERFLOW with a fresh rx_time tag. TX must keep
+    # its rate without write timeouts (SOAPY_PLAN.md 8.5).
+    def tx_retune():
+        tb.snk.set_frequency(0, FREQ - 10e6)
+        time.sleep(0.5)
+        tb.snk.set_frequency(0, FREQ)
+
+    el = tb.timed_run(10.0, tx_retune)
+    rx = [n / el for n in tb.probe.n]
+    tx = tb.sent.n / el
+    breaks = time_breaks(tb.probe.tags, rate)
+    ntime = sum(1 for _, k, _ in tb.probe.tags if k == "rx_time")
+    lost_ms = max(0.0, (el - tb.probe.n[0] / rate) * 1e3) / 2  # per retune; includes start-up
+    report(f"{label}: 10 s with TX LO changes", min(rx) > 0.95 * rate and tx > 0.95 * rate,
+           f"RX {[round(r / 1e6, 2) for r in rx]} MSPS (about {lost_ms:.0f} ms lost per retune), "
+           f"TX {tx / 1e6:.2f} MSPS, rx_time tags={ntime}, breaks={breaks} (each retagged), "
+           f"freq back at {tb.snk.get_frequency(0) / 1e6:.0f} MHz")
 
     snr = [[tone_db(tb.probe.last[ch], rate, f) for f in TONES] for ch in range(2)]
     seen = all(max(s) > 20 for s in snr)

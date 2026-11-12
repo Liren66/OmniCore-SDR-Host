@@ -18,6 +18,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <thread>
 
 namespace omnicore_soapy {
     struct OmniCoreStream {
@@ -395,8 +396,20 @@ int OmniCoreDevice::writeStream(SoapySDR::Stream *stream, const void *const *buf
         if (timeNs < 0) return SOAPY_SDR_TIME_ERROR;
         md.time_ticks = uint64_t(SoapySDR::timeNsToTicks(timeNs, s->rate.load()));
     }
+    // While a TX reconfigure runs (LO, bandwidth) the core pauses the stream and och_send_burst returns
+    // OCH_TIMEOUT at once instead of waiting. Keep retrying until the caller's timeout has really
+    // passed: SoapySDR callers (gr-soapy) treat TIMEOUT as "waited the full time" and retry at once,
+    // which otherwise spins and floods the log (SOAPY_PLAN.md 8.5).
+    using clock = std::chrono::steady_clock;
+    const auto deadline = clock::now() + std::chrono::microseconds(std::max(timeoutUs, 0L));
     size_t accepted = 0;
-    const int rc = och_send_burst(s->handle, src, n, &md, &accepted, timeout_ms(timeoutUs));
+    int rc;
+    for (;;) {
+        const auto left = std::chrono::duration_cast<std::chrono::microseconds>(deadline - clock::now()).count();
+        rc = och_send_burst(s->handle, src, n, &md, &accepted, timeout_ms(std::max<long>(long(left), 0)));
+        if (rc != OCH_TIMEOUT || accepted != 0 || clock::now() >= deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     if (rc == OCH_TIMEOUT && accepted == 0) {
         log_tx_timeout(*s, timeoutUs);
         return SOAPY_SDR_TIMEOUT;
