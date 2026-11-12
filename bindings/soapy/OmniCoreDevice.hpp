@@ -16,6 +16,9 @@ namespace omnicore_soapy {
     struct OmniCoreStream; // Streaming.cpp
     // Throws std::runtime_error with och_last_error() when rc is not OCH_OK.
     void check(int rc, const char *what);
+    // Like check, but returns false for OCH_UNSUPPORTED (older firmware without the feature), so
+    // GUIs that read every sensor and setting at startup do not fail on such devices.
+    bool check_supported(int rc, const char *what);
 
     template<class T>
     T och_struct() {
@@ -124,7 +127,8 @@ namespace omnicore_soapy {
         void reconfigure(const std::function<void(och_config &)> &change);
         void apply_locked(const std::function<void(och_config &)> &change); // caller holds mutex_
         void check_channel(int direction, size_t channel) const;
-        double tick_rate() const; // caller holds mutex_
+        double tick_rate() const;    // caller holds mutex_
+        void stream_rate_changed();  // caller holds mutex_; after a sample-rate change
 
         // Device events (Events.cpp): one thread drains och_poll_event, which is a single
         // per-device queue, logs them and, while a TX stream is active, queues TX events for
@@ -136,6 +140,7 @@ namespace omnicore_soapy {
         och_device_info info_{};
         och_config config_{};
         uint32_t auto_agc_mode_ = 2; // och rx_agc value used by setGainMode(true); default slow
+        bool rx_correction_ = true;  // firmware supports RX DC/IQ tracking switches (checked at open)
         // Guards dev_ calls that change state, config_ and the stream slots. readStream does not
         // take it; lock order is mutex_ before a stream's io mutex.
         mutable std::mutex mutex_;

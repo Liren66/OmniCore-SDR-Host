@@ -128,6 +128,35 @@ def main():
     report("retune LO and gain while streaming", r.overflows == 0 and r.errors == 0 and r.time_jumps == 0,
            r.summary() + f", freq now {sdr.getFrequency(SOAPY_SDR_RX, 0)/1e6:.1f} MHz")
 
+    # RX gain limits follow the LO band (73 / 71 / 62 dB). Too-high requests are clamped, and a retune
+    # lowers a gain the new band cannot take; the device must never reject one (that stops streams).
+    r.reset()
+    seen = []
+    try:
+        sdr.setFrequency(SOAPY_SDR_RX, 0, 2.45e9)
+        sdr.setGain(SOAPY_SDR_RX, 0, 76)
+        seen.append(("2450 MHz set 76", sdr.getGain(SOAPY_SDR_RX, 0), sdr.getGainRange(SOAPY_SDR_RX, 0).maximum()))
+        r.run(rate, 0.3)
+        sdr.setFrequency(SOAPY_SDR_RX, 0, 1e9)
+        sdr.setGain(SOAPY_SDR_RX, 0, 76)
+        seen.append(("1000 MHz set 76", sdr.getGain(SOAPY_SDR_RX, 0), sdr.getGainRange(SOAPY_SDR_RX, 0).maximum()))
+        r.run(rate, 0.3)
+        for f in (2.45e9, 5.8e9):
+            sdr.setFrequency(SOAPY_SDR_RX, 0, f)
+            seen.append((f"retune {f/1e6:.0f} MHz", sdr.getGain(SOAPY_SDR_RX, 0),
+                         sdr.getGainRange(SOAPY_SDR_RX, 0).maximum()))
+            r.run(rate, 0.3)
+        error = None
+    except Exception as e:  # noqa: BLE001
+        error = str(e)
+    want = [71, 73, 71, 62]
+    report("RX gain limited by LO band while streaming",
+           error is None and [g for _, g, _ in seen] == want and [m for _, _, m in seen] == want
+           and r.overflows == 0 and r.errors == 0 and r.samples > 0,
+           f"(step, gain, max)={seen}, error={error}, " + r.summary())
+    sdr.setFrequency(SOAPY_SDR_RX, 0, 1e9)
+    sdr.setGain(SOAPY_SDR_RX, 0, 30)
+
     # Sample-rate change while streaming: expect OVERFLOW, then data with a new time reference.
     r.reset()
     new_rate = 20e6

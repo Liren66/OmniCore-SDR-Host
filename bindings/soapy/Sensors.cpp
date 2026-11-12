@@ -58,24 +58,22 @@ std::string OmniCoreDevice::readSensor(const std::string &key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (key == "temperature") {
         auto t = och_struct<och_core_temperature>();
-        check(och_get_core_temperature(dev_, &t), "get_core_temperature");
+        if (!check_supported(och_get_core_temperature(dev_, &t), "get_core_temperature")) return "nan";
         return t.valid ? number(t.milli_celsius / 1000.0) : "nan";
     }
     if (key == "ref_locked") {
         auto r = och_struct<och_reference_status>();
-        check(och_get_reference_status(dev_, &r), "get_reference_status");
+        if (!check_supported(och_get_reference_status(dev_, &r), "get_reference_status")) return flag(false);
         return flag(r.lock_known && r.locked == 1);
     }
     if (key == "pps_locked") {
         auto p = och_struct<och_pps_status>();
-        check(och_get_pps_status(dev_, &p), "get_pps_status");
+        if (!check_supported(och_get_pps_status(dev_, &p), "get_pps_status")) return flag(false);
         return flag(p.lock_known && p.locked == 1);
     }
     if (key == "vcxo_locked") {
         auto v = och_struct<och_vcxo_status>();
-        const int rc = och_get_vcxo_status(dev_, &v);
-        if (rc == OCH_UNSUPPORTED) return flag(false);
-        check(rc, "get_vcxo_status");
+        if (!check_supported(och_get_vcxo_status(dev_, &v), "get_vcxo_status")) return flag(false);
         return flag(v.locked == 1);
     }
     if (key == "time_valid") {
@@ -106,7 +104,7 @@ std::string OmniCoreDevice::readSensor(int direction, size_t channel, const std:
     if (direction != SOAPY_SDR_RX || key != "rssi") throw std::invalid_argument("unknown sensor " + key);
     auto r = och_struct<och_rx_rssi>();
     std::lock_guard<std::mutex> lock(mutex_);
-    check(och_get_rx_rssi(dev_, &r), "get_rx_rssi");
+    if (!check_supported(och_get_rx_rssi(dev_, &r), "get_rx_rssi")) return "nan";
     return r.valid[channel] ? number(r.rssi_db[channel]) : "nan";
 }
 
@@ -174,28 +172,28 @@ std::string OmniCoreDevice::readSetting(const std::string &key) const {
     if (key == "rx_agc_mode") return agc_modes().at(config_.rx_agc < agc_modes().size() ? config_.rx_agc : 0);
     if (key == "rx_lo_source" || key == "tx_lo_source") {
         auto l = och_struct<och_lo_source_config>();
-        check(och_get_lo_source(dev_, &l), "get_lo_source");
+        if (!check_supported(och_get_lo_source(dev_, &l), "get_lo_source")) return clock_sources()[0];
         const uint32_t s = key == "rx_lo_source" ? l.rx_source : l.tx_source;
         return clock_sources().at(s ? 1 : 0);
     }
     if (key == "pps_enable") {
         auto p = och_struct<och_pps_status>();
-        check(och_get_pps_status(dev_, &p), "get_pps_status");
+        if (!check_supported(och_get_pps_status(dev_, &p), "get_pps_status")) return flag(false);
         return flag(p.enabled != 0);
     }
     if (key == "rssi_enable") {
         auto r = och_struct<och_rx_rssi>();
-        check(och_get_rx_rssi(dev_, &r), "get_rx_rssi");
+        if (!check_supported(och_get_rx_rssi(dev_, &r), "get_rx_rssi")) return flag(false);
         return flag(r.enabled != 0);
     }
     if (key == "rgb_enable") {
         auto r = och_struct<och_rgb_status>();
-        check(och_get_rgb_status(dev_, &r), "get_rgb_status");
+        if (!check_supported(och_get_rgb_status(dev_, &r), "get_rgb_status")) return flag(false);
         return flag(r.enabled != 0);
     }
     if (key == "fan_enable") {
         auto f = och_struct<och_fan_status>();
-        check(och_get_fan_status(dev_, &f), "get_fan_status");
+        if (!check_supported(och_get_fan_status(dev_, &f), "get_fan_status")) return flag(false);
         return flag(f.enabled != 0);
     }
     throw std::invalid_argument("unknown setting " + key);

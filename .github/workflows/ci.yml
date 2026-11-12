@@ -53,6 +53,7 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-soapysdr
       # libusbK.dll is not in the repository (*.dll is ignored) and CMake refuses to configure
       # without it. It is loaded at run time only, and the offline tests never load it, so an
       # empty file is enough here, as in tools/cross-build-windows.sh. Not for release builds.
@@ -62,7 +63,9 @@ jobs:
           mkdir -p "$d"
           : > "$d/libusbK.dll"
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        # The SoapySDR module is built here for compile coverage only: Windows SoapySDR builds
+        # (radioconda, PothosSDR) use MSVC, so a MinGW-built module is not shipped (docs/soapy.md).
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_SOAPY=ON
       - name: Build
         run: cmake --build build --parallel
       - name: Test

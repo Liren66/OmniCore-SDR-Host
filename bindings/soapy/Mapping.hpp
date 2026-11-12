@@ -18,14 +18,21 @@ namespace omnicore_soapy {
     constexpr double min_frequency = 70e6, max_frequency = 6e9;
     constexpr double min_bandwidth = 200e3, max_bandwidth = 56e6;
 
-    // RX: integer dB in -3..76 (the device band may restrict further).
-    constexpr double rx_gain_min = -3, rx_gain_max = 76, rx_gain_step = 1;
+    // RX: integer dB. The core accepts -3..76, but the AD9361 gain table caps it by RX LO band;
+    // a rejected gain makes the core stop every stream, so the module never sends one.
+    // Limits measured on hardware (SOAPY_PLAN.md 8.4).
+    constexpr double rx_gain_min = -3, rx_gain_step = 1;
+    inline double rx_gain_max(double rx_lo_hz) {
+        return rx_lo_hz <= 1300e6 ? 73 : rx_lo_hz <= 4000e6 ? 71 : 62;
+    }
     // TX follows SoapyPlutoSDR: gain = max attenuation - attenuation, 0.25 dB steps.
     constexpr double tx_attenuation_max = 89.75, tx_gain_step = 0.25;
 
     inline double clamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
 
-    inline double rx_gain_to_config(double gain) { return std::round(clamp(gain, rx_gain_min, rx_gain_max)); }
+    inline double rx_gain_to_config(double gain, double rx_lo_hz) {
+        return std::round(clamp(gain, rx_gain_min, rx_gain_max(rx_lo_hz)));
+    }
 
     inline double tx_gain_to_attenuation(double gain) {
         const double g = std::round(clamp(gain, 0, tx_attenuation_max) / tx_gain_step) * tx_gain_step;

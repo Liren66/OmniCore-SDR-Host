@@ -34,7 +34,9 @@ namespace omnicore_soapy {
         // Only while active. Changed only with the device mutex and io both held, so either
         // one is enough to read it.
         och_stream *handle = nullptr;
-        double rate = 0;              // sample rate at activation; och_metadata.tick_rate wins
+        // Sample rate for time conversion; kept current by setSampleRate (stream_rate_changed).
+        // och_metadata.tick_rate wins on RX.
+        std::atomic<double> rate{0};
 
         // Interleaved samples from och_recv: always for two channels, and for one channel when a
         // block is held back. 8-byte elements keep sc16/fc32 alignment.
@@ -46,6 +48,7 @@ namespace omnicore_soapy {
         TxBurst burst;
         bool started = false;
         std::atomic<bool> burst_open{false};
+        uint64_t tx_timeouts = 0; // write timeouts since activation, for the diagnostic log
 
         // A block held back after an OVERFLOW or TIME_ERROR return, delivered by the next reads.
         struct Held {
@@ -77,6 +80,24 @@ namespace {
     }
 
     uint32_t timeout_ms(long timeout_us) { return timeout_us <= 0 ? 0 : uint32_t((timeout_us + 999) / 1000); }
+
+    // A TX write that accepts nothing within its timeout means the queue is not draining. Logged on
+    // the 1st, 10th, 100th ... timeout of an activation, with the stream state, so a stall can be told
+    // apart from a stopped stream or an application that writes faster than real time.
+    void log_tx_timeout(OmniCoreStream &s, long timeout_us) {
+        const uint64_t n = ++s.tx_timeouts;
+        uint64_t p = 1;
+        while (p < n) p *= 10;
+        if (p != n || timeout_us <= 0) return;
+        auto st = och_struct<och_stats>();
+        if (och_get_stats(s.handle, &st) != OCH_OK) return;
+        SoapySDR::logf(SOAPY_SDR_WARNING,
+                       "OmniCore TX: write timed out (%llu so far, %ld us each); started=%d running=%u "
+                       "queued=%zu host_queue=%llu B usb_pending=%llu underflows=%llu starved=%llu",
+                       (unsigned long long)n, timeout_us, int(s.started), st.running, s.burst.queued(),
+                       (unsigned long long)st.host_queue_bytes, (unsigned long long)st.usb_queue_pending,
+                       (unsigned long long)st.device_underflows, (unsigned long long)st.tx_starvation_events);
+    }
 
     // Sets the flags and time SoapySDR reports for samples [offset, offset + n) of a block.
     // gr-soapy uses timeNs without checking HAS_TIME, so it is always written.
@@ -198,6 +219,11 @@ void OmniCoreDevice::closeStream(SoapySDR::Stream *stream) {
     delete s;
 }
 
+void OmniCoreDevice::stream_rate_changed() {
+    for (OmniCoreStream *s: {rx_stream_, tx_stream_})
+        if (s) s->rate = config_.sample_rate;
+}
+
 size_t OmniCoreDevice::getStreamMTU(SoapySDR::Stream *stream) const { return cast(stream)->mtu; }
 
 int OmniCoreDevice::activateStream(SoapySDR::Stream *stream, int flags, long long timeNs, size_t numElems) {
@@ -212,6 +238,7 @@ int OmniCoreDevice::activateStream(SoapySDR::Stream *stream, int flags, long lon
         s->rate = config_.sample_rate;
         s->started = false;
         s->burst.reset();
+        s->tx_timeouts = 0;
         s->burst_open = false;
         clear_tx_events();
         tx_listening_ = true;
@@ -316,7 +343,7 @@ int OmniCoreDevice::readStream(SoapySDR::Stream *stream, void *const *buffs, siz
     }
 
     const RxVerdict v = s->tracker.observe(meta, n);
-    const double rate = meta.tick_rate ? double(meta.tick_rate) : s->rate;
+    const double rate = meta.tick_rate ? double(meta.tick_rate) : s->rate.load();
     const bool eob = (meta.flags & OCH_META_END_OF_BURST) != 0;
     if (v.overflow || v.late) {
         // Report the error alone now and the samples, with their time, on the next reads; that is
@@ -366,11 +393,14 @@ int OmniCoreDevice::writeStream(SoapySDR::Stream *stream, const void *const *buf
     md.flags = s->burst.flags(has_time, closes);
     if (has_time) {
         if (timeNs < 0) return SOAPY_SDR_TIME_ERROR;
-        md.time_ticks = uint64_t(SoapySDR::timeNsToTicks(timeNs, s->rate));
+        md.time_ticks = uint64_t(SoapySDR::timeNsToTicks(timeNs, s->rate.load()));
     }
     size_t accepted = 0;
     const int rc = och_send_burst(s->handle, src, n, &md, &accepted, timeout_ms(timeoutUs));
-    if (rc == OCH_TIMEOUT && accepted == 0) return SOAPY_SDR_TIMEOUT;
+    if (rc == OCH_TIMEOUT && accepted == 0) {
+        log_tx_timeout(*s, timeoutUs);
+        return SOAPY_SDR_TIMEOUT;
+    }
     if (rc != OCH_OK && rc != OCH_TIMEOUT) {
         if (rc != OCH_STOPPED) SoapySDR::logf(SOAPY_SDR_ERROR, "OmniCore TX: %s", och_last_error());
         return SOAPY_SDR_STREAM_ERROR;
@@ -405,8 +435,9 @@ int OmniCoreDevice::readStreamStatus(SoapySDR::Stream *stream, size_t &chanMask,
         chanMask = (size_t(1) << s->channels) - 1;
         flags = 0;
         timeNs = 0;
-        if (e.hw_time && s->rate > 0) {
-            timeNs = SoapySDR::ticksToTimeNs((long long)e.hw_time, s->rate);
+        const double rate = s->rate.load();
+        if (e.hw_time && rate > 0) {
+            timeNs = SoapySDR::ticksToTimeNs((long long)e.hw_time, rate);
             flags |= SOAPY_SDR_HAS_TIME;
         }
         switch (e.type) {

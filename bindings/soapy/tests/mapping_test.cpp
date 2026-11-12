@@ -37,10 +37,15 @@ int main() {
         EXPECT(tx_attenuation_to_gain(tx_gain_to_attenuation(g)) == g);
 
     // RX gain: integer dB in -3..76.
-    EXPECT(rx_gain_to_config(30.4) == 30);
-    EXPECT(rx_gain_to_config(30.6) == 31);
-    EXPECT(rx_gain_to_config(-10) == -3);
-    EXPECT(rx_gain_to_config(100) == 76);
+    EXPECT(rx_gain_to_config(30.4, 2.45e9) == 30);
+    EXPECT(rx_gain_to_config(30.6, 2.45e9) == 31);
+    EXPECT(rx_gain_to_config(-10, 2.45e9) == -3);
+    EXPECT(rx_gain_to_config(100, 1.0e9) == 73);
+    EXPECT(rx_gain_to_config(100, 1.3e9) == 73);
+    EXPECT(rx_gain_to_config(72, 1.31e9) == 71);
+    EXPECT(rx_gain_to_config(72, 4.0e9) == 71);
+    EXPECT(rx_gain_to_config(63, 4.01e9) == 62);
+    EXPECT(rx_gain_to_config(62, 5.8e9) == 62);
 
     // Channels -> mask.
     EXPECT(channels_to_mask({}, 2) == 1);

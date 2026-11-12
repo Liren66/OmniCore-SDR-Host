@@ -6,6 +6,12 @@
 
 using namespace omnicore_soapy;
 
+bool omnicore_soapy::check_supported(int rc, const char *what) {
+    if (rc == OCH_UNSUPPORTED) return false;
+    check(rc, what);
+    return true;
+}
+
 void omnicore_soapy::check(int rc, const char *what) {
     if (rc == OCH_OK) return;
     const char *detail = och_last_error();
@@ -45,6 +51,8 @@ OmniCoreDevice::OmniCoreDevice(const SoapySDR::Kwargs &args) {
         }
         check(och_configure(dev_, &config_), "configure");
         check(och_get_config(dev_, &config_), "get_config");
+        auto correction = och_struct<och_rx_correction_config>();
+        rx_correction_ = check_supported(och_get_rx_correction(dev_, &correction), "get_rx_correction");
 
         const auto clock = args.find("clock_source");
         if (clock != args.end()) setClockSource(clock->second);
@@ -119,29 +127,32 @@ std::string OmniCoreDevice::getAntenna(int direction, size_t) const { return dir
 
 // --- Front-end corrections (RX only, shared by both receivers) ------------------------------
 
-bool OmniCoreDevice::hasDCOffsetMode(int direction, size_t) const { return direction == SOAPY_SDR_RX; }
+bool OmniCoreDevice::hasDCOffsetMode(int direction, size_t) const { return direction == SOAPY_SDR_RX && rx_correction_; }
 void OmniCoreDevice::setDCOffsetMode(int direction, size_t channel, bool automatic) {
     check_channel(direction, channel);
-    if (direction != SOAPY_SDR_RX) throw std::invalid_argument("DC correction is RX only");
+    // gr-soapy turns the mode off even on channels without it; off is then already true.
+    if (!automatic && !hasDCOffsetMode(direction, channel)) return;
+    if (!hasDCOffsetMode(direction, channel)) throw std::invalid_argument("automatic DC correction is not available");
     std::lock_guard<std::mutex> lock(mutex_);
     check(och_set_rx_dc_correction(dev_, automatic), "set_rx_dc_correction");
 }
 bool OmniCoreDevice::getDCOffsetMode(int direction, size_t) const {
-    if (direction != SOAPY_SDR_RX) return false;
+    if (direction != SOAPY_SDR_RX || !rx_correction_) return false;
     auto c = och_struct<och_rx_correction_config>();
     std::lock_guard<std::mutex> lock(mutex_);
     check(och_get_rx_correction(dev_, &c), "get_rx_correction");
     return c.dc_enabled != 0;
 }
-bool OmniCoreDevice::hasIQBalanceMode(int direction, size_t) const { return direction == SOAPY_SDR_RX; }
+bool OmniCoreDevice::hasIQBalanceMode(int direction, size_t) const { return direction == SOAPY_SDR_RX && rx_correction_; }
 void OmniCoreDevice::setIQBalanceMode(int direction, size_t channel, bool automatic) {
     check_channel(direction, channel);
-    if (direction != SOAPY_SDR_RX) throw std::invalid_argument("IQ correction is RX only");
+    if (!automatic && !hasIQBalanceMode(direction, channel)) return;
+    if (!hasIQBalanceMode(direction, channel)) throw std::invalid_argument("automatic IQ correction is not available");
     std::lock_guard<std::mutex> lock(mutex_);
     check(och_set_rx_iq_correction(dev_, automatic), "set_rx_iq_correction");
 }
 bool OmniCoreDevice::getIQBalanceMode(int direction, size_t) const {
-    if (direction != SOAPY_SDR_RX) return false;
+    if (direction != SOAPY_SDR_RX || !rx_correction_) return false;
     auto c = och_struct<och_rx_correction_config>();
     std::lock_guard<std::mutex> lock(mutex_);
     check(och_get_rx_correction(dev_, &c), "get_rx_correction");
@@ -155,7 +166,11 @@ std::vector<std::string> OmniCoreDevice::listGains(int, size_t) const { return {
 bool OmniCoreDevice::hasGainMode(int direction, size_t) const { return direction == SOAPY_SDR_RX; }
 void OmniCoreDevice::setGainMode(int direction, size_t channel, bool automatic) {
     check_channel(direction, channel);
-    if (direction != SOAPY_SDR_RX) throw std::invalid_argument("AGC is RX only");
+    // gr-soapy calls setGainMode(false) on every channel, TX included.
+    if (direction != SOAPY_SDR_RX) {
+        if (automatic) throw std::invalid_argument("AGC is RX only");
+        return;
+    }
     const uint32_t mode = automatic ? auto_agc_mode_ : 0;
     reconfigure([&](och_config &c) { c.rx_agc = mode; });
 }
@@ -169,7 +184,7 @@ void OmniCoreDevice::setGain(int direction, size_t channel, const std::string &n
     check_channel(direction, channel);
     if (name != "PGA") throw std::invalid_argument("unknown gain element " + name);
     if (direction == SOAPY_SDR_RX)
-        reconfigure([&](och_config &c) { c.rx_gain[channel] = rx_gain_to_config(value); });
+        reconfigure([&](och_config &c) { c.rx_gain[channel] = rx_gain_to_config(value, double(c.rx_frequency)); });
     else
         reconfigure([&](och_config &c) { c.tx_attenuation[channel] = tx_gain_to_attenuation(value); });
 }
@@ -183,7 +198,10 @@ SoapySDR::Range OmniCoreDevice::getGainRange(int direction, size_t channel) cons
     return getGainRange(direction, channel, "PGA");
 }
 SoapySDR::Range OmniCoreDevice::getGainRange(int direction, size_t, const std::string &) const {
-    if (direction == SOAPY_SDR_RX) return SoapySDR::Range(rx_gain_min, rx_gain_max, rx_gain_step);
+    if (direction == SOAPY_SDR_RX) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return SoapySDR::Range(rx_gain_min, rx_gain_max(double(config_.rx_frequency)), rx_gain_step);
+    }
     return SoapySDR::Range(0, tx_attenuation_max, tx_gain_step);
 }
 
@@ -197,7 +215,22 @@ void OmniCoreDevice::setFrequency(int direction, size_t channel, const std::stri
     check_channel(direction, channel);
     if (name != "RF") throw std::invalid_argument("unknown frequency element " + name);
     const auto hz = uint64_t(std::llround(clamp(frequency, min_frequency, max_frequency)));
-    reconfigure([&](och_config &c) { (direction == SOAPY_SDR_RX ? c.rx_frequency : c.tx_frequency) = hz; });
+    if (direction == SOAPY_SDR_TX) {
+        reconfigure([&](och_config &c) { c.tx_frequency = hz; });
+        return;
+    }
+    // A gain that was valid in the old band can be too high for the new one; lower it in the same
+    // configure so the device never rejects it.
+    reconfigure([&](och_config &c) {
+        c.rx_frequency = hz;
+        for (auto &g : c.rx_gain) {
+            const double fitted = rx_gain_to_config(g, double(hz));
+            if (fitted != g)
+                SoapySDR::logf(SOAPY_SDR_INFO, "OmniCore: RX gain %.0f dB lowered to %.0f dB, the maximum at %.3f MHz",
+                               g, fitted, double(hz) / 1e6);
+            g = fitted;
+        }
+    });
 }
 double OmniCoreDevice::getFrequency(int direction, size_t channel) const { return getFrequency(direction, channel, "RF"); }
 double OmniCoreDevice::getFrequency(int direction, size_t channel, const std::string &) const {
@@ -222,6 +255,7 @@ void OmniCoreDevice::setSampleRate(int direction, size_t channel, double rate) {
                                     std::to_string(max_sample_rate) + " Hz");
     reconfigure([&](och_config &c) { c.sample_rate = uint32_t(std::llround(rate)); });
     std::lock_guard<std::mutex> lock(mutex_);
+    stream_rate_changed();
     if (std::fabs(config_.sample_rate - rate) >= 1)
         SoapySDR::logf(SOAPY_SDR_INFO, "OmniCore: %.0f Hz is not exact on the AD9361 clock chain; using %u Hz", rate,
                        config_.sample_rate);
@@ -236,6 +270,8 @@ SoapySDR::RangeList OmniCoreDevice::getSampleRateRange(int, size_t) const {
 
 void OmniCoreDevice::setBandwidth(int direction, size_t channel, double bandwidth) {
     check_channel(direction, channel);
+    // 0 means "no preference": GRC's Soapy blocks always pass it by default.
+    if (!(bandwidth > 0)) return;
     const auto hz = uint32_t(std::llround(clamp(bandwidth, min_bandwidth, max_bandwidth)));
     reconfigure([&](och_config &c) { (direction == SOAPY_SDR_RX ? c.rx_bandwidth : c.tx_bandwidth) = hz; });
 }

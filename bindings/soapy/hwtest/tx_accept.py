@@ -155,16 +155,22 @@ def bursts(sdr):
         sdr.deactivateStream(tx)
     report("10 TX activate/burst/deactivate cycles", failures == 0, f"failures={failures}")
 
-    # Known core limit (SOAPY_PLAN.md 9.3 item 1): a first burst shorter than one block.
-    sdr.activateStream(tx)
-    short = [tone(1000, SOAPY_SDR_CF32, rate)]
-    t0 = time.monotonic()
-    done, err = write_all(sdr, tx, short, 1000, SOAPY_SDR_END_BURST)
-    took = time.monotonic() - t0
-    st = drain_status(sdr, tx, 500000)
-    print(f"[INFO] first burst of 1000 samples: write error={err}, took {took:.2f}s, acks={len(acks(st))} "
-          "(core limit 9.3.1: expected to fail until the core relaxes the TX prefill gate)", flush=True)
-    sdr.deactivateStream(tx)
+    # First burst shorter than one block (gr-soapy length-tag bursts). The EOB block reaches the
+    # FPGA padded, so och_start's prefill gate is met (SOAPY_PLAN.md 9.3 item 1, checked 2026-11-12).
+    short_failures = []
+    for n_short, timed in ((1, False), (1000, False), (1000, True)):
+        sdr.activateStream(tx)
+        f = SOAPY_SDR_END_BURST | (SOAPY_SDR_HAS_TIME if timed else 0)
+        t = sdr.getHardwareTime() + 50_000_000
+        t0 = time.monotonic()
+        done, err = write_all(sdr, tx, [tone(n_short, SOAPY_SDR_CF32, rate)], n_short, f, t)
+        took = time.monotonic() - t0
+        st = drain_status(sdr, tx, 500000)
+        if err != 0 or len(acks(st)) != 1 or took > 1:
+            short_failures.append((n_short, timed, err, round(took, 2), len(acks(st))))
+        sdr.deactivateStream(tx)
+    report("short first bursts (1 and 1000 samples, timed and untimed)", not short_failures,
+           f"failures (n, timed, err, seconds, acks)={short_failures}")
     sdr.closeStream(tx)
 
 
@@ -221,7 +227,8 @@ def duplex():
             print("   duplex cycle error:", e)
     report("full duplex 1R1T 30.72 MSPS, 10 s then 4 restarts",
            failures == 0 and first is not None and first["underflow"] == 0,
-           f"first run: RX {first['rx']/10/1e6:.2f} MSPS, TX {first['tx']/10/1e6:.2f} MSPS, "
+           f"first run: RX {first['rx']/10/1e6:.2f} MSPS, TX {first['tx']/10/1e6:.2f} MSPS "
+           f"(accepted writes, includes the host buffer prefill), "
            f"overflow={first['overflow']}, underflow={first['underflow']}, errors={first['errors']}; "
            f"cycle failures={failures}" if first else f"cycle failures={failures}")
     sdr.closeStream(tx)
@@ -267,18 +274,18 @@ def leakage(sdr):
     if not chunks:
         print("[INFO] leakage check: no RX samples", flush=True)
         return
+    # 2.45 GHz WiFi/Bluetooth is far stronger than on-board leakage, so a wideband power edge finds
+    # the wrong thing. Correlate with the 1 MHz tone over the burst length instead.
     x = np.concatenate(chunks)
-    p = np.abs(x) ** 2
-    win = 1000
-    pw = np.convolve(p, np.ones(win) / win, mode="valid")
-    noise = np.median(pw[: int(0.05 * rate)])
-    peak = pw.max()
-    rise = np.argmax(pw > np.sqrt(noise * peak)) if peak > 10 * noise else None
+    y = x * np.exp(-2j * np.pi * 1e6 / rate * np.arange(len(x)))
+    cs = np.concatenate([[0], np.cumsum(y)])
+    c = np.abs(cs[n_burst:] - cs[:-n_burst])
+    k = int(np.argmax(c))
+    snr = 20 * np.log10(c[k] / np.median(c))
     expected = (burst_at - t_first) * rate / 1e9
-    detail = (f"RX power rise {10*np.log10(peak/noise):.1f} dB; "
-              + (f"burst edge at sample {rise + win//2}, expected {expected:.0f} "
-                 f"(error {(rise + win//2 - expected)/rate*1e6:.1f} us)" if rise is not None
-                 else "burst not visible above noise (no RF path between TX and RX)"))
+    detail = (f"tone correlation {snr:.1f} dB over median; "
+              + (f"burst at sample {k}, expected {expected:.0f} (error {(k - expected)/rate*1e6:.1f} us)"
+                 if snr > 30 else "burst not visible (no RF path between TX and RX)"))
     print(f"[INFO] leakage check: {detail}", flush=True)
 
 
