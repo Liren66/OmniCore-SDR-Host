@@ -25,11 +25,6 @@ namespace {
     }
 
     size_t channel_count(uint32_t mask) { return size_t((mask & 1) != 0) + size_t((mask & 2) != 0); }
-
-    uint32_t to_ms(double seconds) {
-        if (!(seconds > 0) || seconds > 3600) throw invalid_argument("Timeout must be more than 0 and at most 3600 s");
-        return uint32_t(std::ceil(seconds * 1000));
-    }
 } // namespace
 
 namespace omnicore_mex {
@@ -143,7 +138,7 @@ RxSession::RxSession(DeviceSession &device, const RxOptions &options) : device_(
 
 RxSession::~RxSession() { close(nullptr); }
 
-void RxSession::open(uint32_t start_flags, uint32_t num_samples) {
+void RxSession::open(uint32_t start_flags, uint32_t num_samples, uint64_t start_ticks) {
     if (stream_) throw Error("omnicore:BUSY", "the RX stream is already running");
     const och_config c = device_.config();
     channels_ = channel_count(c.rx_mask);
@@ -157,6 +152,8 @@ void RxSession::open(uint32_t start_flags, uint32_t num_samples) {
     if (options_.buffer_bytes) a.host_buffer_bytes = options_.buffer_bytes;
     a.start_flags = start_flags;
     a.num_samples = num_samples;
+    a.start_time_lo = uint32_t(start_ticks);
+    a.start_time_hi = uint32_t(start_ticks >> 32);
     check(och_create_stream(device_.handle(), &a, &stream_), "create RX stream");
     if (och_start(stream_) != OCH_OK) {
         const std::string error = och_last_error();
@@ -179,7 +176,7 @@ void RxSession::close(std::string *error) {
     stream_ = nullptr;
 }
 
-void RxSession::start() { open(0, 0); }
+void RxSession::start(bool has_time, uint64_t ticks) { open(has_time ? OCH_RX_TIMED : 0, 0, ticks); }
 
 void RxSession::stop() {
     std::string error;
@@ -239,7 +236,7 @@ mxArray *RxSession::meta_struct(const RxReport &r) const {
 }
 
 void RxSession::read(size_t n, double timeout, mxArray **samples, mxArray **meta) {
-    const uint32_t wait_ms = to_ms(timeout);
+    const uint32_t wait_ms = timeout_ms(timeout);
     if (!stream_) throw Error("omnicore:STOPPED", "the RX stream is not running: call start first");
     RxOutput out(options_.type, n, channels_);
     RxReport report;
@@ -251,20 +248,28 @@ void RxSession::read(size_t n, double timeout, mxArray **samples, mxArray **meta
     if (meta) *meta = meta_struct(report);
 }
 
-void RxSession::receive(DeviceSession &device, const RxOptions &options, size_t n, double timeout,
-                        mxArray **samples, mxArray **meta) {
-    const uint32_t wait_ms = to_ms(timeout);
+void RxSession::receive(DeviceSession &device, const RxOptions &options, size_t n, double timeout, bool has_time,
+                        uint64_t ticks, mxArray **samples, mxArray **meta) {
+    const uint32_t wait_ms = timeout_ms(timeout);
     if (n == 0 || n > std::numeric_limits<uint32_t>::max())
         throw invalid_argument("receive: N must be 1 to 4294967295 samples");
     RxSession session(device, options);
     // The output first: allocating gigabytes can fail, and should before the device streams.
     const size_t channels = channel_count(device.config().rx_mask);
     RxOutput out(options.type, n, channels ? channels : 1);
-    session.open(OCH_RX_TIMED | OCH_RX_NOW, uint32_t(n));
+    // The first block also waits for the stream to start (USB queue setup, a few ms) and for a
+    // timed start to come.
+    uint64_t first_wait = uint64_t(wait_ms) + 1000;
+    if (has_time) {
+        const DeviceTime t = device.time();
+        if (ticks > t.now && t.tick_rate)
+            first_wait += uint64_t(std::ceil(double(ticks - t.now) * 1000 / t.tick_rate));
+        if (first_wait > 3600000) throw invalid_argument("StartTime is more than an hour ahead of the device time");
+    }
+    session.open(has_time ? OCH_RX_TIMED : OCH_RX_TIMED | OCH_RX_NOW, uint32_t(n), ticks);
     RxReport report;
     bool timed_out = false;
-    // The first block also waits for the stream to start (USB queue setup, a few ms).
-    const size_t rows = session.pump(out, wait_ms + 1000, wait_ms, report, timed_out);
+    const size_t rows = session.pump(out, uint32_t(first_wait), wait_ms, report, timed_out);
     if (rows < n && !report.end_of_burst && timed_out)
         throw Error("omnicore:TIMEOUT", "OmniCore receive: " + std::to_string(rows) + " of " + std::to_string(n) +
                                                 " samples within the timeout");

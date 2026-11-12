@@ -18,7 +18,7 @@ if (NOT TARGET och_bindings_common)
 endif ()
 
 # Offline tests of the configuration mapping and the RX gap report: need neither MATLAB nor a device.
-foreach (name config_request rx_gaps)
+foreach (name config_request rx_gaps tx_events)
     add_executable(matlab_${name}_test tests/${name}_test.cpp)
     target_include_directories(matlab_${name}_test PRIVATE mex)
     target_link_libraries(matlab_${name}_test PRIVATE och_bindings_common)
@@ -29,7 +29,7 @@ endforeach ()
 find_package(Matlab 9.4 REQUIRED COMPONENTS MX_LIBRARY)
 
 matlab_add_mex(NAME omnicore_mex
-        SRC mex/omnicore_mex.cpp mex/Registry.cpp mex/DeviceSession.cpp mex/RxSession.cpp mex/LibraryLoader.cpp
+        SRC mex/omnicore_mex.cpp mex/Registry.cpp mex/DeviceSession.cpp mex/RxSession.cpp mex/TxSession.cpp mex/LibraryLoader.cpp
         R2018a
         # C API only: no MATLAB Engine / Data Array (C++ API) libraries.
         NO_IMPLICIT_LINK_TO_MATLAB_LIBRARIES

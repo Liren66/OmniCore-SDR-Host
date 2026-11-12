@@ -35,7 +35,7 @@ if ~isfolder(out)
     mkdir(out);
 end
 
-sources = fullfile(here, 'mex', {'omnicore_mex.cpp', 'Registry.cpp', 'DeviceSession.cpp', 'RxSession.cpp', 'LibraryLoader.cpp'});
+sources = fullfile(here, 'mex', {'omnicore_mex.cpp', 'Registry.cpp', 'DeviceSession.cpp', 'RxSession.cpp', 'TxSession.cpp', 'LibraryLoader.cpp'});
 args = [{'-R2018a', '-outdir', out, ...
          ['-I' fullfile(prefix, 'include')], ['-I' fullfile(here, '..')], ['-I' fullfile(here, 'mex')]}, sources];
 

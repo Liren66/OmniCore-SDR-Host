@@ -44,6 +44,12 @@ namespace omnicore_mex {
         return v[0];
     }
 
+    // Timeout arguments: seconds -> milliseconds for och calls.
+    inline uint32_t timeout_ms(double seconds) {
+        if (!(seconds > 0) || seconds > 3600) throw invalid_argument("Timeout must be more than 0 and at most 3600 s");
+        return uint32_t(std::ceil(seconds * 1000));
+    }
+
     inline bool to_bool(const mxArray *a, const char *what) { return to_scalar(a, what) != 0; }
 
     // Handles are uint64 scalars issued by the registry.

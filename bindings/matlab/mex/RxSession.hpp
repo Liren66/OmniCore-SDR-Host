@@ -36,9 +36,12 @@ namespace omnicore_mex {
         RxSession(const RxSession &) = delete;
         RxSession &operator=(const RxSession &) = delete;
 
+        DeviceSession &device() const { return device_; }
+
         const RxOptions &options() const { return options_; }
         bool running() const { return stream_ != nullptr; }
-        void start();
+        // Starts now, or with has_time at hardware time `ticks` (a timed RX command).
+        void start(bool has_time = false, uint64_t ticks = 0);
         void stop();
 
         // Up to n samples per channel, waiting at most `timeout` seconds for each block. Returns
@@ -46,12 +49,13 @@ namespace omnicore_mex {
         // meta is built only when wanted (non-null).
         void read(size_t n, double timeout, mxArray **samples, mxArray **meta);
 
-        // One finite RX command of n samples per channel on a stream of its own.
-        static void receive(DeviceSession &device, const RxOptions &options, size_t n, double timeout,
-                            mxArray **samples, mxArray **meta);
+        // One finite RX command of n samples per channel on a stream of its own, now or (has_time)
+        // at hardware time `ticks`.
+        static void receive(DeviceSession &device, const RxOptions &options, size_t n, double timeout, bool has_time,
+                            uint64_t ticks, mxArray **samples, mxArray **meta);
 
     private:
-        void open(uint32_t start_flags, uint32_t num_samples);
+        void open(uint32_t start_flags, uint32_t num_samples, uint64_t start_ticks);
         void close(std::string *error);
         // Fills the rows of `out` until it is full, the burst ends or a block takes longer than the
         // wait (first_wait_ms for the first block of the call).

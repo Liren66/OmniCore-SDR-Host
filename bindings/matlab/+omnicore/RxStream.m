@@ -8,6 +8,7 @@ classdef RxStream < handle
     %     'Timeout'         seconds read waits for each block, default 1 (settable later)
     %
     %   start(RX)                 starts streaming; the device keeps receiving between reads
+    %   start(RX, 'StartTime', T) starts at hardware time T (seconds)
     %   [X, META] = read(RX, N)   N samples per channel, N x numel(DEV.RxChannels) complex
     %   stop(RX)                  stops; start again for a new stream
     %
@@ -76,9 +77,17 @@ classdef RxStream < handle
             end
         end
 
-        function start(obj)
+        function start(obj, varargin)
             %START Start streaming. Creates the device stream; errors if it is already running.
-            omnicore_mex('rx_start', obj.requireId());
+            %   start(RX, 'StartTime', T) starts at hardware time T (seconds, see
+            %   omnicore.Device.time); read waits Timeout for each block, so make it longer than the
+            %   delay to T for the first read.
+            opts = nameValueStruct({'StartTime'}, varargin, 'start');
+            t = [];
+            if isfield(opts, 'StartTime')
+                t = opts.StartTime;
+            end
+            omnicore_mex('rx_start', obj.requireId(), t);
         end
 
         function stop(obj)

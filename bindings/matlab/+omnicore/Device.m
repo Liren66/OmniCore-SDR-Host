@@ -33,13 +33,24 @@ classdef Device < handle
     %
     %   Read only: Serial, TxAttenuation.
     %
-    %   Methods: configure, info, status, receive, rxStream, delete.
+    %   Methods: configure, info, status, time, timeTicks, receive, rxStream, transmit,
+    %   transmitRepeat, stopTransmit, isTransmitting, txStream, delete.
     %
     %   Receiving:
     %       [x, meta] = receive(DEV, N) captures N samples per enabled RX channel: an N x numel(
     %       RxChannels) complex single array scaled to +-1. meta.Time is the hardware time of the
     %       first sample and meta.Gaps lists lost samples; see help omnicore.Device.receive.
     %       For continuous reception use RX = rxStream(DEV); see omnicore.RxStream.
+    %
+    %   Transmitting (TxChannels must be set, for example omnicore.Device('TxChannels', 1)):
+    %       transmit(DEV, X) sends X (one column per TX channel) as one burst and returns once
+    %       the device reports its end. transmitRepeat(DEV, X) repeats X in the background until
+    %       stopTransmit(DEV). For streaming writes use TX = txStream(DEV); see omnicore.TxStream.
+    %
+    %   Hardware time: time(DEV) is the device sample clock in seconds (timeTicks(DEV) in
+    %   samples). receive and transmit take 'StartTime' in the same seconds, for example
+    %       t0 = time(DEV);
+    %       transmit(DEV, x, 'StartTime', t0 + 0.5);
     %
     %   Errors have identifiers omnicore:<reason>, for example omnicore:BUSY when the device is in
     %   use by another program, omnicore:NOT_FOUND, omnicore:InvalidArgument.
@@ -83,6 +94,7 @@ classdef Device < handle
 
     properties (Access = private)
         Id = uint64(0)
+        RepeatId = uint64(0)
         CachedSerial = ''
     end
 
@@ -110,6 +122,13 @@ classdef Device < handle
         end
 
         function delete(obj)
+            if obj.RepeatId ~= 0
+                try
+                    omnicore_mex('tx_destroy', obj.RepeatId);
+                catch
+                end
+                obj.RepeatId = uint64(0);
+            end
             if obj.Id ~= 0
                 try
                     omnicore_mex('close', obj.Id);
@@ -154,6 +173,7 @@ classdef Device < handle
             %   [X, META] = receive(DEV, N, Name, Value) with
             %     'OutputDataType'  'single' (default, +-1), 'double', 'int16' (12-bit samples
             %                       left-aligned, +-32768) or 'int8' (IQBits 8 only)
+            %     'StartTime'       hardware time of the first sample, seconds (see time); default now
             %     'Timeout'         seconds to wait for each block, default 1
             %     'BufferBytes'     host ring buffer, default 64 MiB
             %   Memory: N x channels x 8 bytes for single, 16 for double, 4 for int16, 2 for int8;
@@ -166,7 +186,7 @@ classdef Device < handle
             if ~(isnumeric(n) && isscalar(n))
                 error('omnicore:InvalidArgument', 'receive: N must be a numeric scalar');
             end
-            opts = nameValueStruct({'OutputDataType', 'Timeout', 'BufferBytes'}, varargin, 'receive');
+            opts = nameValueStruct({'OutputDataType', 'StartTime', 'Timeout', 'BufferBytes'}, varargin, 'receive');
             if nargout > 1
                 [x, meta] = omnicore_mex('receive', obj.requireId(), double(n), opts);
             else
@@ -178,6 +198,84 @@ classdef Device < handle
             %RXSTREAM A continuous RX stream on this device; see omnicore.RxStream.
             %   RX = rxStream(DEV, 'OutputDataType', 'int16', 'BufferBytes', 256*2^20, 'Timeout', 2)
             rx = omnicore.RxStream(obj, varargin{:});
+        end
+
+        function s = transmit(obj, x, varargin)
+            %TRANSMIT Send X as one burst and wait until the device has sent it.
+            %   transmit(DEV, X) with X an N x numel(DEV.TxChannels) array (a row or column vector
+            %   for one channel): complex single or double scaled to +-1 (values beyond are limited,
+            %   warning omnicore:TxClipped; real X has Q = 0), int16 (12-bit samples left-aligned),
+            %   or int8 (IQBits 8 only).
+            %   transmit(DEV, X, Name, Value) with
+            %     'StartTime'    hardware time of the first sample, seconds (see time)
+            %     'Timeout'      seconds without progress before omnicore:TIMEOUT, default 1
+            %     'BufferBytes'  host ring buffer, default 64 MiB
+            %   S = transmit(...) returns the TX events of the burst: Underflow (device ran out of
+            %   samples while sending), Starved (host queue ran empty inside the burst; harmless while
+            %   a timed burst waits for its start), Late, BurstAck (counts), AckTime / AckTicks (end of the burst, hardware time), Errors, LastError and
+            %   Dropped. Late and underflows also raise warnings omnicore:TxLate / omnicore:TxUnderflow.
+            opts = nameValueStruct({'StartTime', 'Timeout', 'BufferBytes'}, varargin, 'transmit');
+            s = omnicore_mex('transmit', obj.requireId(), x, opts);
+        end
+
+        function transmitRepeat(obj, x, varargin)
+            %TRANSMITREPEAT Send X over and over in the background until stopTransmit.
+            %   transmitRepeat(DEV, X) returns at once; X is copied, so it can be changed or cleared
+            %   afterwards. Calling it again replaces the waveform. Types as for transmit.
+            %   transmitRepeat(DEV, X, 'BufferBytes', B) sets the host ring buffer.
+            opts = nameValueStruct({'BufferBytes'}, varargin, 'transmitRepeat');
+            obj.stopTransmit();
+            sid = omnicore_mex('tx_create', obj.requireId(), opts);
+            try
+                omnicore_mex('tx_repeat', sid, x);
+            catch err
+                omnicore_mex('tx_destroy', sid);
+                rethrow(err);
+            end
+            obj.RepeatId = sid;
+        end
+
+        function s = stopTransmit(obj)
+            %STOPTRANSMIT Stop transmitRepeat. S = stopTransmit(DEV) returns the TX events since it
+            %   started (fields as for transmit); underflows mean the host could not keep up.
+            s = [];
+            if obj.RepeatId ~= 0
+                sid = obj.RepeatId;
+                obj.RepeatId = uint64(0);
+                cleanup = onCleanup(@() omnicore_mex('tx_destroy', sid));
+                omnicore_mex('tx_stop', sid);
+                s = omnicore_mex('tx_status', sid);
+            end
+        end
+
+        function tf = isTransmitting(obj)
+            %ISTRANSMITTING True while transmitRepeat runs.
+            tf = false;
+            if obj.RepeatId ~= 0
+                try
+                    st = omnicore_mex('tx_state', obj.RepeatId);
+                    tf = st.Repeating;
+                catch
+                end
+            end
+        end
+
+        function tx = txStream(obj, varargin)
+            %TXSTREAM A TX stream for streaming writes and timed bursts; see omnicore.TxStream.
+            tx = omnicore.TxStream(obj, varargin{:});
+        end
+
+        function t = time(obj)
+            %TIME Hardware time of the device in seconds: the sample clock (1 tick = 1 sample).
+            %   A sample-rate change restarts it.
+            s = omnicore_mex('time', obj.requireId());
+            t = s.Time;
+        end
+
+        function t = timeTicks(obj)
+            %TIMETICKS Hardware time in samples (uint64).
+            s = omnicore_mex('time', obj.requireId());
+            t = s.TimeTicks;
         end
 
         function tf = isOpen(obj)
@@ -252,7 +350,7 @@ classdef Device < handle
         function set.RxIQCorrection(obj, v), obj.setSetting('RxIQCorrection', v); end
     end
 
-    methods (Access = {?omnicore.RxStream})
+    methods (Access = {?omnicore.RxStream, ?omnicore.TxStream})
         function id = requireId(obj)
             if obj.Id == 0
                 error('omnicore:InvalidHandle', 'The OmniCore device was closed; create a new omnicore.Device');

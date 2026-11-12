@@ -1,5 +1,7 @@
 #include "DeviceSession.hpp"
 #include "MxConvert.hpp"
+#include <chrono>
+#include <cmath>
 #include <limits>
 
 using namespace omnicore_mex;
@@ -28,6 +30,7 @@ DeviceSession::DeviceSession(const std::string &serial, const ConfigRequest &req
         check(och_configure(dev_, &next), "configure");
         check(och_get_config(dev_, &next), "get_config");
         config_ = next;
+        events_ = std::thread(&DeviceSession::event_loop, this);
     } catch (...) {
         och_close(dev_);
         throw;
@@ -35,8 +38,51 @@ DeviceSession::DeviceSession(const std::string &serial, const ConfigRequest &req
 }
 
 DeviceSession::~DeviceSession() {
+    stop_events_ = true;
+    if (events_.joinable()) events_.join();
     // Nothing can be reported from here; close errors only mean the device is already gone.
     if (dev_) och_close(dev_);
+}
+
+void DeviceSession::event_loop() {
+    while (!stop_events_) {
+        auto e = och_struct<och_event>();
+        const int rc = och_poll_event(dev_, &e, 100);
+        if (rc == OCH_OK)
+            tx_events_.push(e);
+        else if (rc != OCH_TIMEOUT)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // device gone: keep quiet
+    }
+}
+
+DeviceTime DeviceSession::time() const {
+    auto t = och_struct<och_time_status>();
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        check(och_get_time(dev_, &t), "get_time");
+    }
+    DeviceTime d;
+    d.now = t.now;
+    d.tick_rate = t.tick_rate ? t.tick_rate : config().sample_rate;
+    d.valid = t.valid != 0;
+    return d;
+}
+
+uint64_t DeviceSession::to_ticks(double seconds) const {
+    if (!(seconds >= 0) || !std::isfinite(seconds)) throw invalid_argument("StartTime must be a time in seconds, 0 or more");
+    return uint64_t(std::llround(seconds * double(time().tick_rate)));
+}
+
+mxArray *DeviceSession::time_struct() const {
+    const DeviceTime t = time();
+    mxArray *ticks = mxCreateNumericMatrix(1, 1, mxUINT64_CLASS, mxREAL);
+    *mxGetUint64s(ticks) = t.now;
+    return StructBuilder()
+            .add("Time", make_double(t.tick_rate ? double(t.now) / t.tick_rate : no_value))
+            .add("TimeTicks", ticks)
+            .add("TickRate", make_double(t.tick_rate))
+            .add("Valid", make_bool(t.valid))
+            .build();
 }
 
 och_config DeviceSession::config() const {
