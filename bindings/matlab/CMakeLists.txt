@@ -55,6 +55,10 @@ set(OCH_MATLAB_STAGE ${CMAKE_CURRENT_BINARY_DIR}/toolbox)
 add_custom_command(TARGET omnicore_mex POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OCH_MATLAB_STAGE}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:omnicore_mex> ${OCH_MATLAB_STAGE}
+        VERBATIM)
+# The .m files change without the MEX file relinking: copy them on every build.
+add_custom_target(omnicore_matlab_package ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${OCH_MATLAB_STAGE}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/+omnicore ${OCH_MATLAB_STAGE}/+omnicore
         VERBATIM)
 if (WIN32)
@@ -71,3 +75,4 @@ endif ()
 
 install(TARGETS omnicore_mex DESTINATION matlab)
 install(DIRECTORY +omnicore DESTINATION matlab)
+install(DIRECTORY examples DESTINATION matlab)
