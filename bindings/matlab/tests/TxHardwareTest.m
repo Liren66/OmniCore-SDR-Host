@@ -170,6 +170,19 @@ classdef (TestTags = {'Hardware'}) TxHardwareTest < matlab.unittest.TestCase
             tc.verifyEqual(s.BurstAck, 1);
         end
 
+        function restartingOneDirectionNeedsBothStopped(tc)
+            % The core resets the USB pipes only when no stream runs: while TX streams, RX can be
+            % started once, but not stopped and started again.
+            dev = tc.open();
+            transmitRepeat(dev, TxHardwareTest.tone(1000, 1));
+            x = receive(dev, 1000);
+            tc.verifySize(x, [1000 2]);
+            tc.verifyError(@() receive(dev, 1000), 'omnicore:BUSY');
+            stopTransmit(dev);
+            x = receive(dev, 1000); % both stopped: fine again
+            tc.verifySize(x, [1000 2]);
+        end
+
         function deleteWhileRepeating(tc)
             dev = tc.open();
             transmitRepeat(dev, TxHardwareTest.tone(1000, 1));

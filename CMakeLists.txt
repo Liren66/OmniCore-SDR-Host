@@ -29,6 +29,10 @@ endif ()
 option(OCH_BUILD_EXAMPLES "Build the programs in examples/" ${OCH_TOP_LEVEL})
 option(OCH_BUILD_SOAPY "Build the SoapySDR module in bindings/soapy (needs SoapySDR 0.8+)" OFF)
 option(OCH_BUILD_MATLAB "Build the MATLAB MEX gateway in bindings/matlab (needs MATLAB R2018a+)" OFF)
+# Linux: MATLAB loads its own, older libstdc++ first, so a libomnicore built with a newer GCC can
+# fail with "GLIBCXX_3.4.x not found" inside MATLAB. Linking libstdc++ statically avoids that; the
+# library still exports only och_* (MEX_PLAN.md 6.5). Used for the MATLAB release package.
+option(OCH_STATIC_LIBSTDCXX "Linux: link libstdc++ and libgcc statically into libomnicore" OFF)
 
 add_library(och_dsp STATIC src/dsp/codec.cpp src/protocol/frame.cpp)
 target_include_directories(och_dsp PUBLIC src)
@@ -93,6 +97,9 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     if (MINGW)
         target_link_options(omnicore PRIVATE -static -static-libgcc -static-libstdc++)
+    elseif (OCH_STATIC_LIBSTDCXX AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # --exclude-libs: do not re-export the static libstdc++ symbols next to och_*.
+        target_link_options(omnicore PRIVATE -static-libgcc -static-libstdc++ "LINKER:--exclude-libs,ALL")
     endif ()
     add_executable(och apps/och/main.cpp)
     target_link_libraries(och PRIVATE omnicore Threads::Threads)

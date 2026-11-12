@@ -25,9 +25,10 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 5. [测试结果](#测试结果)
 6. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
 7. [GNU Radio 与 SoapySDR](#gnu-radio-与-soapysdr)
-8. [从源码构建与打包](#从源码构建与打包)
-9. [工程目录](#工程目录)
-10. [文档索引](#文档索引)
+8. [MATLAB](#matlab)
+9. [从源码构建与打包](#从源码构建与打包)
+10. [工程目录](#工程目录)
+11. [文档索引](#文档索引)
 
 ## 功能
 
@@ -48,6 +49,7 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 | 监控与板控 | PPS 频偏监控（±1 ppm LOCK）、RGB 状态灯、按温度调速的风扇 |
 | USB 链路 | USB 3.0 SuperSpeed；USB 2.0 High-Speed 适用于低采样率 |
 | SoapySDR 插件 | `driver=omnicore`，接入 GNU Radio（gr-soapy）、SDR++、SDRangel、Python 等，见 [SoapySDR 插件](docs/soapy.md) |
+| MATLAB 工具箱 | MATLAB R2018a+ 直接采集、发射、定时收发、全双工，System object 与 Simulink，不需要任何工具箱，见 [MATLAB 工具箱](docs/matlab.md) |
 
 ## 快速上手
 
@@ -398,6 +400,21 @@ SoapySDRUtil --find="driver=omnicore"              # 能列出设备即装好
 
 macOS 上已经做过实机验收：收发、全双工 2T2R（12bit 30.72 MSPS、8bit 61.44 MSPS）、GNU Radio 流图。Linux、Windows 目前只在 CI 中编译。设备参数、格式、运行中改参的影响和排错见 [SoapySDR 插件](docs/soapy.md)。
 
+## MATLAB
+
+`bindings/matlab/` 是 MATLAB 工具箱：MEX 网关 `omnicore_mex` 加 `+omnicore` 包，同样只调用公开的 C 接口。发布页的 `omnicore-matlab-<版本>-<平台>.zip` 解压即用（自带运行库）；Windows 安装包也可以勾选安装到 `<安装目录>\matlab`。
+
+```matlab
+addpath('<解压目录>/omnicore-matlab');
+dev = omnicore.Device('SampleRate', 30.72e6, 'RxFrequency', 2.45e9);
+[x, meta] = receive(dev, 1e6);          % 1e6 x 2 complex single；meta 含硬件时间和丢样位置
+delete(dev)
+```
+
+提供 `omnicore.Device`（射频参数、一次性采集、突发 / 定时 / 循环发射、硬件时间与 PPS、事件）、`RxStream` / `TxStream`（连续收发），以及 `omnicore.Receiver` / `omnicore.Transmitter` 两个 System object（可作为 Simulink 的 MATLAB System 模块）。从源码编译用 `-DOCH_BUILD_MATLAB=ON`，或者在 MATLAB 里运行 `build_omnicore_mex`。
+
+macOS（R2024b，Apple Silicon）上已做实机验收：收发、10 分钟帧式全双工、8bit 2T2R 61.44 MSPS、Simulink、内部 PPS 对时。Windows、Linux 由 CI 编译并做不接设备的测试。用法、参数和排错见 [MATLAB 工具箱](docs/matlab.md)。
+
 ## 从源码构建与打包
 
 需要 CMake 3.20+、Ninja 与 C++17 x64 工具链（Windows 使用 MSYS2 MinGW-w64，默认 `C:\msys64\mingw64\bin`）。
@@ -417,6 +434,8 @@ bash tools/build-linux.sh
 
 加 `-DOCH_BUILD_SOAPY=ON` 会同时编译 SoapySDR 插件（需要 SoapySDR 开发包，见上一节）。默认关闭，`tools/build.ps1`、`tools/build-linux.sh` 和安装包都不包含插件。
 
+加 `-DOCH_BUILD_MATLAB=ON` 会编译 MATLAB 工具箱（需要 MATLAB R2018a+），`--target omnicore_matlab_zip` 生成发布用的 zip。发布流水线（`.github/workflows/release.yml`）为三个平台各生成一个 zip，并把 Windows 版放进安装包的可选 MATLAB 任务。
+
 打包脚本会校验 stage 内容与版本号，加入驱动助手、libusbK 与许可证，生成 MSVC 导入库（需 VS Build Tools 的 `lib.exe`），并写入 `PAYLOAD_SHA256.txt`。Inno Setup 6.2.2 已随工程提供，详见 [安装包构建说明](packaging/windows/BUILD_INSTALLER.txt)。
 
 ## 工程目录
@@ -433,6 +452,8 @@ OmniCoreHost/
 │   ├── protocol/       16 KiB 成帧块解析与生成
 │   └── transport/      libusbK (Windows) / libusb (Linux) 传输层
 ├── bindings/
+│   ├── common/         各插件共用的映射、交织、RX 时间与 TX 突发逻辑及其离线测试
+│   ├── matlab/         MATLAB 工具箱：MEX 网关（mex/）、+omnicore 包、示例、测试与实机验收脚本
 │   └── soapy/          SoapySDR 插件（driver=omnicore）与实机验收脚本（hwtest/）
 ├── examples/           C++ 示例、FTR 示例、GNU Radio 流图（soapy/）
 ├── tests/              成帧解析单元测试、硬件时间戳板上测试
@@ -456,6 +477,7 @@ OmniCoreHost/
 | [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
 | [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | [多板同步](docs/multi-board-sync.md) |
 | [SoapySDR 插件](docs/soapy.md) | | |
+| [MATLAB 工具箱](docs/matlab.md) | | |
 
 ## 许可证
 

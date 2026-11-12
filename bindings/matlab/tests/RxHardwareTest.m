@@ -115,7 +115,7 @@ classdef (TestTags = {'Hardware'}) RxHardwareTest < matlab.unittest.TestCase
             start(rx);
             n = 65536;
             [~, a] = read(rx, n);
-            pause(1); % ~0.5 s of samples fit in 16 MiB at 2 x 30.72 MSPS: the rest is lost
+            pause(1); % 16 MiB holds ~0.09 s at 2 x 30.72 MSPS (3 bytes per sample): the rest is lost
             [~, b] = read(rx, n);
             got = 0;
             while ~b.Overflow && got < 200

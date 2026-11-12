@@ -3,8 +3,8 @@ classdef RxStream < handle
     %   RX = rxStream(DEV) or RX = omnicore.RxStream(DEV, Name, Value) with
     %     'OutputDataType'  'single' (default, +-1), 'double', 'int16' or 'int8' (IQBits 8 only)
     %     'BufferBytes'     host ring buffer, default 64 MiB; samples arriving while MATLAB is not
-    %                       reading wait here (64 MiB holds about 0.5 s of two channels at
-    %                       30.72 MSPS)
+    %                       reading wait here, in the wire format (64 MiB holds about 0.36 s
+    %                       of two channels at 30.72 MSPS with 12-bit samples)
     %     'Timeout'         seconds read waits for each block, default 1 (settable later)
     %
     %   start(RX)                 starts streaming; the device keeps receiving between reads

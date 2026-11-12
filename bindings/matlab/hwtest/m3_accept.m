@@ -5,7 +5,7 @@ function m3_accept(varargin)
 %     'Minutes'   length of the repeat run, default 10
 %     'Loopback'  true when TX1 is cabled to RX1 through >= 30 dB attenuation: also checks
 %                 the timed burst loopback, default false
-%   Needs the staged toolbox folder on the path. Prints one line per check and errors on the
+%   Needs the staged toolbox folder (and, for 'Loopback', bindings/matlab/examples) on the path. Prints one line per check and errors on the
 %   first failure.
 %     1. transmitRepeat of a tone for 'Minutes': no underflow. 2R RX reads alongside; its
 %        overflows are listed for information (full duplex for 10 minutes is the M4 check)
@@ -80,19 +80,9 @@ check(all(delta == delta(1)), 'timed bursts: ack - start = %s samples (N = %d)',
 
 % 3 -------------------------------------------------------------------------------------------
 if o.Loopback
-    configure(dev, 'RxGainMode', 'manual', 'RxGain', 20);
-    offsets = zeros(1, 10);
-    for k = 1:10
-        t = time(dev) + 0.3;
-        tx = txStream(dev);
-        write(tx, tone(1:n), 'StartTime', t, 'EndBurst', true);
-        [x, meta] = receive(dev, 3 * n, 'StartTime', t - n / fs, 'Timeout', 2);
-        stop(tx);
-        delete(tx);
-        p = abs(x(:, 1)).^2;
-        onset = find(p > 0.5 * max(p), 1);
-        offsets(k) = double(meta.TimeTicks) + onset - 1 - round(t * fs);
-    end
+    % examples/timed_burst_loopback.m on its own device handle: the bursts against one RX stream.
+    delete(dev);
+    offsets = timed_burst_loopback(10);
     check(max(offsets) - min(offsets) <= 1, 'loopback: burst at %s samples after StartTime', mat2str(offsets));
 end
 fprintf('M3 acceptance passed\n');

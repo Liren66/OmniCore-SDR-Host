@@ -1,4 +1,5 @@
 #include "RxSession.hpp"
+#include "Interrupt.hpp"
 #include "MxConvert.hpp"
 #include "common/Interleave.hpp"
 #include <algorithm>
@@ -155,11 +156,14 @@ void RxSession::open(uint32_t start_flags, uint32_t num_samples, uint64_t start_
     a.start_time_lo = uint32_t(start_ticks);
     a.start_time_hi = uint32_t(start_ticks >> 32);
     check(och_create_stream(device_.handle(), &a, &stream_), "create RX stream");
-    if (och_start(stream_) != OCH_OK) {
+    const int started = och_start(stream_);
+    if (started != OCH_OK) {
+        // Keep the core's reason: BUSY when the other direction streams and the transport needs a
+        // reset first ("stop both directions before reopening a stream").
         const std::string error = och_last_error();
         och_destroy_stream(stream_);
         stream_ = nullptr;
-        throw Error("omnicore:IO", "OmniCore start RX: " + error);
+        throw Error(std::string("omnicore:") + result_name(started), "OmniCore start RX: " + error);
     }
     sample_rate_ = c.sample_rate;
     tracker_.reset();
@@ -198,7 +202,16 @@ size_t RxSession::pump(RxOutput &out, uint32_t first_wait_ms, uint32_t wait_ms, 
         }
         auto meta = och_struct<och_metadata>();
         size_t n = 0;
-        const int rc = och_recv(stream_, target, capacity, &n, &meta, report.blocks ? wait_ms : first_wait_ms);
+        // The wait for one block, in slices so Ctrl+C is noticed (Interrupt.hpp).
+        uint32_t budget = report.blocks ? wait_ms : first_wait_ms;
+        int rc;
+        for (;;) {
+            check_interrupt();
+            const uint32_t slice = std::min(budget, wait_slice_ms);
+            rc = och_recv(stream_, target, capacity, &n, &meta, slice);
+            if (rc != OCH_TIMEOUT || budget <= slice) break;
+            budget -= slice;
+        }
         if (rc == OCH_TIMEOUT) {
             timed_out = true;
             break;

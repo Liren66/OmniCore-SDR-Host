@@ -28,13 +28,17 @@ classdef Device < handle
     %   Use configure(DEV, Name, Value, ...) to change several at once with a single
     %   reconfiguration (a sample-rate and bandwidth change then pauses streams only once).
     %
+    %   Clock and time: ClockSource ('internal' 40 MHz oscillator / 'external' 10 MHz input),
+    %   TimeSource ('none', 'external' PPS input, 'internal' PPS generated on the board, 'sync'
+    %   shared TRIG of several boards). See time, setTime, lastPPS.
+    %
     %   Board settings: RxLOSource, TxLOSource ('internal' / 'external'), PpsEnable, RssiEnable,
     %   RgbEnable, FanEnable, RxDCCorrection, RxIQCorrection (logical).
     %
     %   Read only: Serial, TxAttenuation.
     %
-    %   Methods: configure, info, status, time, timeTicks, receive, rxStream, transmit,
-    %   transmitRepeat, stopTransmit, isTransmitting, txStream, delete.
+    %   Methods: configure, info, status, events, time, timeTicks, setTime, lastPPS, receive,
+    %   rxStream, transmit, transmitRepeat, stopTransmit, isTransmitting, txStream, delete.
     %
     %   Receiving:
     %       [x, meta] = receive(DEV, N) captures N samples per enabled RX channel: an N x numel(
@@ -51,6 +55,8 @@ classdef Device < handle
     %   samples). receive and transmit take 'StartTime' in the same seconds, for example
     %       t0 = time(DEV);
     %       transmit(DEV, x, 'StartTime', t0 + 0.5);
+    %   To align it to PPS: DEV.TimeSource = 'external'; setTime(DEV, 0, 'AtNextPPS', true).
+    %   Changing SampleRate restarts the time (warning omnicore:TimeInvalidated once it was set).
     %
     %   Errors have identifiers omnicore:<reason>, for example omnicore:BUSY when the device is in
     %   use by another program, omnicore:NOT_FOUND, omnicore:InvalidArgument.
@@ -77,6 +83,8 @@ classdef Device < handle
         TxChannels
         IQBits
 
+        ClockSource
+        TimeSource
         RxLOSource
         TxLOSource
         PpsEnable
@@ -272,6 +280,35 @@ classdef Device < handle
             t = s.Time;
         end
 
+        function setTime(obj, t, varargin)
+            %SETTIME Set the hardware time to T seconds.
+            %   setTime(DEV, T) sets it now. setTime(DEV, T, 'AtNextPPS', true) sets it at the next
+            %   PPS edge of TimeSource (which must not be 'none'): the edge's sample gets time T, so
+            %   whole seconds of hardware time then fall on PPS edges.
+            opts = nameValueStruct({'AtNextPPS'}, varargin, 'setTime');
+            atPps = isfield(opts, 'AtNextPPS') && opts.AtNextPPS;
+            if ~(isnumeric(t) && isscalar(t))
+                error('omnicore:InvalidArgument', 'setTime: T must be a numeric scalar (seconds)');
+            end
+            omnicore_mex('set_time', obj.requireId(), double(t), double(atPps));
+        end
+
+        function [t, ticks] = lastPPS(obj)
+            %LASTPPS Hardware time latched at the last PPS edge: T in seconds, TICKS in samples.
+            s = omnicore_mex('time', obj.requireId());
+            t = s.LastPps;
+            ticks = s.LastPpsTicks;
+        end
+
+        function e = events(obj)
+            %EVENTS Device events since the last call (the latest 256), oldest first: a struct
+            %   array with Type ('device', 'transport', 'tx_underflow', 'rx_gap', 'reconfigured',
+            %   'time_invalidated', ...), Message, HwTime / HwTicks (hardware time for timed
+            %   events, NaN / 0 otherwise), Count (device events it stands for) and HostTime
+            %   (host monotonic clock, seconds).
+            e = omnicore_mex('events', obj.requireId());
+        end
+
         function t = timeTicks(obj)
             %TIMETICKS Hardware time in samples (uint64).
             s = omnicore_mex('time', obj.requireId());
@@ -331,6 +368,8 @@ classdef Device < handle
         function set.IQBits(obj, v),      obj.configure('IQBits', v);      end
 
         % --- board settings -------------------------------------------------------------------
+        function v = get.ClockSource(obj),    v = obj.getSetting('ClockSource');    end
+        function v = get.TimeSource(obj),     v = obj.getSetting('TimeSource');     end
         function v = get.RxLOSource(obj),     v = obj.getSetting('RxLOSource');     end
         function v = get.TxLOSource(obj),     v = obj.getSetting('TxLOSource');     end
         function v = get.PpsEnable(obj),      v = obj.getSetting('PpsEnable');      end
@@ -340,6 +379,8 @@ classdef Device < handle
         function v = get.RxDCCorrection(obj), v = obj.getSetting('RxDCCorrection'); end
         function v = get.RxIQCorrection(obj), v = obj.getSetting('RxIQCorrection'); end
 
+        function set.ClockSource(obj, v),    obj.setSetting('ClockSource', v);    end
+        function set.TimeSource(obj, v),     obj.setSetting('TimeSource', v);     end
         function set.RxLOSource(obj, v),     obj.setSetting('RxLOSource', v);     end
         function set.TxLOSource(obj, v),     obj.setSetting('TxLOSource', v);     end
         function set.PpsEnable(obj, v),      obj.setSetting('PpsEnable', v);      end

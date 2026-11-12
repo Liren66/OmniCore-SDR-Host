@@ -96,6 +96,10 @@ TxSession &Registry::tx(uint64_t id) const {
     return *it->second.tx;
 }
 
+void Registry::take_notices(Warnings &warnings) {
+    for (auto &d: devices_) d.second.session->take_notices(warnings);
+}
+
 void Registry::destroy_stream(uint64_t id) { streams_.erase(id); }
 
 DeviceSession &Registry::device(uint64_t id) const {

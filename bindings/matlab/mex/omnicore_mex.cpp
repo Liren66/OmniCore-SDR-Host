@@ -20,7 +20,10 @@
 //   omnicore_mex('rx_stop' | 'rx_destroy', sid)
 //   [x, meta] = omnicore_mex('rx_read', sid, n, timeout)
 //   tf = omnicore_mex('rx_running', sid)
-//   t = omnicore_mex('time', id)                           struct: Time, TimeTicks, TickRate, Valid
+//   t = omnicore_mex('time', id)                           struct: Time, TimeTicks, TickRate, Valid, Armed,
+//                                                          Source, LastPps, LastPpsTicks, PpsCount
+//   omnicore_mex('set_time', id, seconds, at_next_pps)
+//   e = omnicore_mex('events', id)                         Nx1 struct: device events since the last call
 //   s = omnicore_mex('transmit', id, x, options)           one burst; options: StartTime, Timeout, BufferBytes
 //   sid = omnicore_mex('tx_create', id, options)           options: BufferBytes
 //   omnicore_mex('tx_write', sid, x, options, timeout)     options: StartTime, EndBurst
@@ -283,6 +286,12 @@ namespace {
         } else if (command == "time") {
             need_args(nrhs, 2, "time");
             plhs[0] = registry.device(to_id(prhs[1])).time_struct();
+        } else if (command == "set_time") {
+            need_args(nrhs, 4, "set_time");
+            registry.device(to_id(prhs[1])).set_time(to_scalar(prhs[2], "time"), to_bool(prhs[3], "AtNextPPS"));
+        } else if (command == "events") {
+            need_args(nrhs, 2, "events");
+            plhs[0] = registry.device(to_id(prhs[1])).events_struct();
         } else if (command == "transmit") {
             need_args(nrhs, 3, "transmit");
             DeviceSession &d = registry.device(to_id(prhs[1]));
@@ -326,6 +335,7 @@ namespace {
         try {
             ensure_library_loaded();
             dispatch(nlhs, plhs, nrhs, prhs, warnings);
+            Registry::instance().take_notices(warnings);
         } catch (const Error &e) {
             store(error_report, e.id(), e.what());
             failed = true;

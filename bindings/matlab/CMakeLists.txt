@@ -36,11 +36,26 @@ matlab_add_mex(NAME omnicore_mex
         LINK_TO ${Matlab_MEX_LIBRARY} ${Matlab_MX_LIBRARY} OmniCore::omnicore och_bindings_common)
 target_compile_features(omnicore_mex PRIVATE cxx_std_17)
 
+# Ctrl+C inside long calls (mex/Interrupt.hpp) uses MATLAB's undocumented utIsInterruptPending.
+option(OCH_MATLAB_CTRL_C "Let Ctrl+C stop long MEX calls (undocumented MATLAB libut API)" OFF)
+if (OCH_MATLAB_CTRL_C)
+    get_filename_component(OCH_MATLAB_LIB_DIR ${Matlab_MX_LIBRARY} DIRECTORY)
+    find_library(OCH_MATLAB_UT_LIBRARY NAMES ut libut PATHS ${OCH_MATLAB_LIB_DIR} NO_DEFAULT_PATH REQUIRED)
+    target_compile_definitions(omnicore_mex PRIVATE OMNICORE_MEX_CTRL_C)
+    target_link_libraries(omnicore_mex ${OCH_MATLAB_UT_LIBRARY})
+endif ()
+
 if (MSVC)
     # Load omnicore.dll from next to the MEX file (mex/LibraryLoader.cpp).
     target_link_options(omnicore_mex PRIVATE /DELAYLOAD:omnicore.dll)
     target_link_libraries(omnicore_mex delayimp)
 elseif (APPLE)
+    # A universal OmniCore Host build (release) still links MATLAB's single-architecture libmx.
+    if (Matlab_MEX_EXTENSION STREQUAL "mexmaca64")
+        set_target_properties(omnicore_mex PROPERTIES OSX_ARCHITECTURES arm64)
+    elseif (Matlab_MEX_EXTENSION STREQUAL "mexmaci64")
+        set_target_properties(omnicore_mex PROPERTIES OSX_ARCHITECTURES x86_64)
+    endif ()
     # @loader_path first: the staged and installed copies sit next to libomnicore.
     set_target_properties(omnicore_mex PROPERTIES BUILD_RPATH "@loader_path;$<TARGET_FILE_DIR:OmniCore::omnicore>"
             INSTALL_RPATH "@loader_path")
@@ -73,6 +88,39 @@ else ()
             VERBATIM)
 endif ()
 
-install(TARGETS omnicore_mex DESTINATION matlab)
-install(DIRECTORY +omnicore DESTINATION matlab)
-install(DIRECTORY examples DESTINATION matlab)
+# Install component "matlab": a self-contained folder <prefix>/matlab with the MEX file, the
+# +omnicore package, examples and the OmniCore Host runtime library next to the MEX file.
+install(TARGETS omnicore_mex DESTINATION matlab COMPONENT matlab)
+install(DIRECTORY +omnicore examples DESTINATION matlab COMPONENT matlab)
+install(FILES README.md DESTINATION matlab COMPONENT matlab)
+if (WIN32)
+    install(FILES $<TARGET_FILE:OmniCore::omnicore> $<TARGET_FILE_DIR:OmniCore::omnicore>/libusbK.dll
+            DESTINATION matlab COMPONENT matlab)
+else ()
+    # Under the SONAME the MEX file records (libomnicore.1.dylib / libomnicore.so.1), as a file:
+    # the build tree has it as a symlink.
+    install(CODE "execute_process(COMMAND \"${CMAKE_COMMAND}\" -E copy \"$<TARGET_FILE:OmniCore::omnicore>\"
+            \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/matlab/$<TARGET_SONAME_FILE_NAME:OmniCore::omnicore>\")"
+            COMPONENT matlab)
+endif ()
+
+# Release zip: build/omnicore-matlab-<version>-<arch>.zip holding the folder omnicore-matlab/, made
+# from the installed component (install rpath only, so it does not lean on the build tree).
+if (DEFINED OmniCoreHost_VERSION)
+    set(OCH_MATLAB_VERSION ${OmniCoreHost_VERSION})
+else ()
+    set(OCH_MATLAB_VERSION ${PROJECT_VERSION})
+endif ()
+string(REGEX REPLACE "^mex" "" OCH_MATLAB_ARCH "${Matlab_MEX_EXTENSION}")
+set(OCH_MATLAB_ZIP_STAGE ${CMAKE_CURRENT_BINARY_DIR}/zip)
+set(OCH_MATLAB_ZIP ${CMAKE_BINARY_DIR}/omnicore-matlab-${OCH_MATLAB_VERSION}-${OCH_MATLAB_ARCH}.zip)
+add_custom_target(omnicore_matlab_zip
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${OCH_MATLAB_ZIP_STAGE} ${OCH_MATLAB_ZIP}
+        COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --config $<CONFIG> --component matlab
+        --prefix ${OCH_MATLAB_ZIP_STAGE}
+        COMMAND ${CMAKE_COMMAND} -E rename ${OCH_MATLAB_ZIP_STAGE}/matlab ${OCH_MATLAB_ZIP_STAGE}/omnicore-matlab
+        COMMAND ${CMAKE_COMMAND} -E chdir ${OCH_MATLAB_ZIP_STAGE}
+        ${CMAKE_COMMAND} -E tar cf ${OCH_MATLAB_ZIP} --format=zip omnicore-matlab
+        COMMENT "MATLAB package ${OCH_MATLAB_ZIP}"
+        VERBATIM)
+add_dependencies(omnicore_matlab_zip omnicore_mex)

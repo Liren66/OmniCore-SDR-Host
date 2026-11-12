@@ -44,6 +44,8 @@ namespace omnicore_mex {
         // Unknown ids are ignored, like close.
         void destroy_stream(uint64_t id);
         size_t stream_count() const { return streams_.size(); }
+        // Device notices for the warnings of this MEX call.
+        void take_notices(Warnings &warnings);
 
     private:
         struct Entry {

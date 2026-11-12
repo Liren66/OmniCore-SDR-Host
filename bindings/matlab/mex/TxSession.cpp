@@ -1,4 +1,5 @@
 #include "TxSession.hpp"
+#include "Interrupt.hpp"
 #include "MxConvert.hpp"
 #include "TxConvert.hpp"
 #include <algorithm>
@@ -166,10 +167,12 @@ void TxSession::write(const mxArray *x, const TxWrite &how, double timeout, Warn
             auto md = och_struct<och_tx_metadata>();
             md.flags = burst_.flags(first && how.has_time, closes);
             md.time_ticks = how.time_ticks;
+            check_interrupt();
             const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - clock_type::now());
+            const auto wait = std::min<long long>(std::max<long long>(left.count(), 0), wait_slice_ms);
             size_t accepted = 0;
             const int rc = och_send_burst(stream_, bounce_.data() + offset * channels_ * sample_bytes_, n - offset, &md,
-                                          &accepted, uint32_t(std::max<long long>(left.count(), 0)));
+                                          &accepted, uint32_t(wait));
             if (rc != OCH_OK && rc != OCH_TIMEOUT) check(rc, "transmit");
             if (accepted) {
                 first = false;
@@ -324,9 +327,14 @@ mxArray *TxSession::transmit(DeviceSession &device, const TxOptions &options, co
             clock_type::now() + std::chrono::milliseconds(static_cast<long long>(std::ceil(seconds * 1000)));
     TxEvents &events = device.tx_events();
     TxStatus status = session.pending_;
-    const bool done = events.wait_for(TxEvents::bit(OCH_EVENT_TX_BURST_ACK) | TxEvents::bit(OCH_EVENT_TX_LATE) |
-                                              TxEvents::bit(OCH_EVENT_TX_ERROR),
-                                      deadline, status);
+    const uint32_t ends = TxEvents::bit(OCH_EVENT_TX_BURST_ACK) | TxEvents::bit(OCH_EVENT_TX_LATE) |
+                          TxEvents::bit(OCH_EVENT_TX_ERROR);
+    bool done = false;
+    while (!done && clock_type::now() < deadline) {
+        check_interrupt();
+        const auto slice = std::min(deadline, clock_type::now() + std::chrono::milliseconds(wait_slice_ms));
+        done = events.wait_for(ends, slice, status);
+    }
     std::string error;
     session.close(&error, true);
     status.merge(session.pending_); // events that arrived before the stream was closed
