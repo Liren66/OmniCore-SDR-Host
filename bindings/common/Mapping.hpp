@@ -1,5 +1,5 @@
-// Pure value mappings between SoapySDR conventions and och_config. No SoapySDR or device
-// dependency, so tests/mapping_test.cpp can check them offline.
+// Pure value mappings between the bindings' conventions (SoapySDR, MATLAB) and och_config. No
+// SoapySDR, MATLAB or device dependency, so tests/mapping_test.cpp can check them offline.
 #pragma once
 #include <cmath>
 #include <cstdint>
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace omnicore_soapy {
+namespace omnicore_bindings {
     // Sample rate range offered to applications. The lower bound is a conservative value above
     // the AD9361 no-FIR minimum (about 2.083 MSPS); lower rates need FIR decimation and are not
     // advertised until they are verified on hardware.
@@ -25,7 +25,7 @@ namespace omnicore_soapy {
     inline double rx_gain_max(double rx_lo_hz) {
         return rx_lo_hz <= 1300e6 ? 73 : rx_lo_hz <= 4000e6 ? 71 : 62;
     }
-    // TX follows SoapyPlutoSDR: gain = max attenuation - attenuation, 0.25 dB steps.
+    // TX follows SoapyPlutoSDR in every binding: gain = max attenuation - attenuation, 0.25 dB steps.
     constexpr double tx_attenuation_max = 89.75, tx_gain_step = 0.25;
 
     inline double clamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -89,4 +89,4 @@ namespace omnicore_soapy {
         if (v == "false" || v == "0" || v == "off") return false;
         throw std::invalid_argument("expected true or false, got '" + v + "'");
     }
-} // namespace omnicore_soapy
+} // namespace omnicore_bindings

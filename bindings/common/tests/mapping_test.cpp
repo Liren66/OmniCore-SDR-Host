@@ -1,8 +1,8 @@
-// Offline test of the SoapySDR <-> och_config value mappings (bindings/soapy/Mapping.hpp).
-#include "Mapping.hpp"
+// Offline test of the SoapySDR <-> och_config value mappings (bindings/common/Mapping.hpp).
+#include "common/Mapping.hpp"
 #include <cstdio>
 
-using namespace omnicore_soapy;
+using namespace omnicore_bindings;
 
 static int errors = 0;
 #define EXPECT(cond)                                                                                                   \

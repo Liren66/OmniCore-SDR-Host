@@ -1,10 +1,11 @@
 name: Release
 
-# Builds the Linux and macOS tarballs and the Windows installer.
+# Builds the Linux and macOS tarballs, the Windows installer (with an optional MATLAB toolbox task)
+# and the MATLAB toolbox zips omnicore-matlab-<version>-<glnxa64|maca64|win64>.zip.
 #   - Run workflow (Actions tab): files are attached to the run only, for testing; nothing is
 #     published.
 #   - Push a tag vX.Y.Z (equal to OCH_VERSION in include/omnicore/och.h): additionally creates a
-#     draft GitHub Release with all three files and SHA256SUMS. Publish it by hand after testing.
+#     draft GitHub Release with all six files and SHA256SUMS. Publish it by hand after testing.
 # Each file is uploaded as-is (archive: false), so the Actions page offers the .tar.gz / .exe
 # itself rather than a zip around it.
 on:
@@ -56,6 +57,29 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           path: dist/OmniCoreHost-${{ env.VERSION }}-linux-x86_64.tar.gz
+          archive: false
+          if-no-files-found: error
+      # MATLAB toolbox: a separate build with libstdc++ linked statically into libomnicore, since
+      # MATLAB loads its own older libstdc++ first (MEX_PLAN.md 6.5).
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2023b
+      - name: Build the MATLAB toolbox zip
+        run: |
+          cmake -S . -B build/matlab -G Ninja -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_MATLAB=ON -DOCH_STATIC_LIBSTDCXX=ON
+          cmake --build build/matlab --target omnicore_matlab_zip
+          mv build/matlab/omnicore-matlab-$VERSION-glnxa64.zip dist/
+      - name: Check the MATLAB toolbox loads
+        uses: matlab-actions/run-command@v2
+        with:
+          command: >-
+            unzip(fullfile('dist', ['omnicore-matlab-' getenv('VERSION') '-glnxa64.zip']), 'zipcheck');
+            addpath('zipcheck/omnicore-matlab'); addpath('bindings/matlab/tests');
+            v = omnicore.version(); assert(strcmp(v.Library, getenv('VERSION')));
+            assertSuccess(runtests('OfflineTest'));
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/omnicore-matlab-${{ env.VERSION }}-glnxa64.zip
           archive: false
           if-no-files-found: error
 
@@ -126,10 +150,35 @@ jobs:
           path: dist/OmniCoreHost-${{ env.VERSION }}-macos-universal.tar.gz
           archive: false
           if-no-files-found: error
+      # MATLAB toolbox for Apple Silicon MATLAB (maca64, R2023b+): the same build with the MEX
+      # gateway added; the MEX file is arm64 only, libomnicore stays universal.
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2023b
+      - name: Build the MATLAB toolbox zip
+        run: |
+          cmake -S . -B build/macos -DOCH_BUILD_MATLAB=ON
+          cmake --build build/macos --target omnicore_matlab_zip
+          mv build/macos/omnicore-matlab-$VERSION-maca64.zip dist/
+      - name: Check the MATLAB toolbox loads
+        uses: matlab-actions/run-command@v2
+        with:
+          command: >-
+            unzip(fullfile('dist', ['omnicore-matlab-' getenv('VERSION') '-maca64.zip']), 'zipcheck');
+            addpath('zipcheck/omnicore-matlab'); addpath('bindings/matlab/tests');
+            v = omnicore.version(); assert(strcmp(v.Library, getenv('VERSION')));
+            assertSuccess(runtests('OfflineTest'));
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/omnicore-matlab-${{ env.VERSION }}-maca64.zip
+          archive: false
+          if-no-files-found: error
 
   windows:
     needs: version
-    runs-on: windows-latest
+    # Not windows-latest: that image ships Visual Studio 2026, which the R2023b mex command does not
+    # recognise, so the MATLAB MEX build below needs the Visual Studio 2022 image.
+    runs-on: windows-2022
     env:
       VERSION: ${{ needs.version.outputs.version }}
     defaults:
@@ -197,12 +246,40 @@ jobs:
           $env:PATH='C:\msys64\mingw64\bin;'+$env:PATH
           ctest --test-dir build --output-on-failure -E '^sync$'
           if($LASTEXITCODE){throw 'Tests failed'}
+      # MATLAB toolbox: MSVC MEX file (build_omnicore_mex.m) linked to the MinGW omnicore.dll through
+      # its MSVC import library, staged in build/stage/matlab for the installer's MATLAB task.
+      - name: MSVC import library for the MEX build
+        run: ./packaging/windows/build-msvc-import.ps1 -DllPath build/stage/bin/omnicore.dll -OutputDir (Join-Path $env:RUNNER_TEMP 'msvc')
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2023b
+      - name: Build the MATLAB toolbox
+        uses: matlab-actions/run-command@v2
+        with:
+          command: >-
+            addpath('bindings/matlab');
+            build_omnicore_mex(fullfile(pwd, 'build', 'stage'), 'LibDir', fullfile(getenv('RUNNER_TEMP'), 'msvc'),
+            'OutputDir', fullfile(pwd, 'build', 'stage', 'matlab'));
+            addpath(fullfile(pwd, 'build', 'stage', 'matlab')); addpath('bindings/matlab/tests');
+            v = omnicore.version(); assert(strcmp(v.Library, getenv('VERSION')));
+            assertSuccess(runtests('OfflineTest'));
       - name: Build installer
         # lib.exe for the MSVC import library is found through vswhere on the runner's Visual Studio.
         run: ./packaging/windows/build-package.ps1 -StageDir build/stage -Version $env:VERSION -OutputDir dist -InnoCompiler (Join-Path $env:RUNNER_TEMP 'inno\ISCC.exe')
       - uses: actions/upload-artifact@v7
         with:
           path: dist/OmniCoreHost-${{ env.VERSION }}-win64-setup.exe
+          archive: false
+          if-no-files-found: error
+      - name: Package the MATLAB toolbox zip
+        run: |
+          $dir=Join-Path $env:RUNNER_TEMP 'zip\omnicore-matlab'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item -Path build/stage/matlab/* -Destination $dir -Recurse -Force
+          Compress-Archive -Path $dir -DestinationPath "dist/omnicore-matlab-$env:VERSION-win64.zip" -Force
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/omnicore-matlab-${{ env.VERSION }}-win64.zip
           archive: false
           if-no-files-found: error
 
@@ -228,17 +305,29 @@ jobs:
         with:
           name: OmniCoreHost-${{ env.VERSION }}-win64-setup.exe
           path: download
+      - uses: actions/download-artifact@v8
+        with:
+          name: omnicore-matlab-${{ env.VERSION }}-glnxa64.zip
+          path: download
+      - uses: actions/download-artifact@v8
+        with:
+          name: omnicore-matlab-${{ env.VERSION }}-maca64.zip
+          path: download
+      - uses: actions/download-artifact@v8
+        with:
+          name: omnicore-matlab-${{ env.VERSION }}-win64.zip
+          path: download
       - name: Collect files and write SHA256SUMS
         run: |
           mkdir dist
-          find download -type f -name 'OmniCoreHost-*' -exec mv {} dist/ \;
+          find download -type f \( -name 'OmniCoreHost-*' -o -name 'omnicore-matlab-*' \) -exec mv {} dist/ \;
           cd dist
-          test "$(ls | wc -l)" -eq 3 || { ls -l; echo "Expected 3 files"; exit 1; }
-          sha256sum OmniCoreHost-* > SHA256SUMS && cat SHA256SUMS
+          test "$(ls | wc -l)" -eq 6 || { ls -l; echo "Expected 6 files"; exit 1; }
+          sha256sum OmniCoreHost-* omnicore-matlab-* > SHA256SUMS && cat SHA256SUMS
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
             --title "OmniCore Host $VERSION" --notes "Draft built by CI. Test before publishing." \
-            dist/OmniCoreHost-* dist/SHA256SUMS
+            dist/OmniCoreHost-* dist/omnicore-matlab-* dist/SHA256SUMS

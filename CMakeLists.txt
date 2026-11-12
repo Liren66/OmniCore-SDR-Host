@@ -28,6 +28,11 @@ else ()
 endif ()
 option(OCH_BUILD_EXAMPLES "Build the programs in examples/" ${OCH_TOP_LEVEL})
 option(OCH_BUILD_SOAPY "Build the SoapySDR module in bindings/soapy (needs SoapySDR 0.8+)" OFF)
+option(OCH_BUILD_MATLAB "Build the MATLAB MEX gateway in bindings/matlab (needs MATLAB R2018a+)" OFF)
+# Linux: MATLAB loads its own, older libstdc++ first, so a libomnicore built with a newer GCC can
+# fail with "GLIBCXX_3.4.x not found" inside MATLAB. Linking libstdc++ statically avoids that; the
+# library still exports only och_* (MEX_PLAN.md 6.5). Used for the MATLAB release package.
+option(OCH_STATIC_LIBSTDCXX "Linux: link libstdc++ and libgcc statically into libomnicore" OFF)
 
 add_library(och_dsp STATIC src/dsp/codec.cpp src/protocol/frame.cpp)
 target_include_directories(och_dsp PUBLIC src)
@@ -92,6 +97,9 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     if (MINGW)
         target_link_options(omnicore PRIVATE -static -static-libgcc -static-libstdc++)
+    elseif (OCH_STATIC_LIBSTDCXX AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # --exclude-libs: do not re-export the static libstdc++ symbols next to och_*.
+        target_link_options(omnicore PRIVATE -static-libgcc -static-libstdc++ "LINKER:--exclude-libs,ALL")
     endif ()
     add_executable(och apps/och/main.cpp)
     target_link_libraries(och PRIVATE omnicore Threads::Threads)
@@ -117,9 +125,11 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         enable_testing()
         add_test(NAME core_is_portable COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCorePortable.cmake)
-        # Runs whether or not the module is built: it only reads bindings/soapy.
-        add_test(NAME soapy_uses_public_api COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckSoapyPublicApi.cmake)
+        # Runs whether or not the bindings are built: it only reads bindings/.
+        add_test(NAME bindings_use_public_api COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckBindingsPublicApi.cmake)
+        # Helpers shared by the bindings; their offline tests need neither SoapySDR nor MATLAB.
+        add_subdirectory(bindings/common)
 
         # Offline tests: no device needed.
         add_executable(frame_parser_test tests/frame_parser_test.cpp)
@@ -142,6 +152,9 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     if (OCH_BUILD_SOAPY)
         add_subdirectory(bindings/soapy)
+    endif ()
+    if (OCH_BUILD_MATLAB)
+        add_subdirectory(bindings/matlab)
     endif ()
 
     # Install the library and headers for use by other projects.

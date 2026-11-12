@@ -81,3 +81,88 @@ jobs:
       - name: Test
         # The sync test depends on wall-clock timing and fails on slow runners; run it locally.
         run: ctest --test-dir build --output-on-failure -E '^sync$'
+
+  # MATLAB MEX gateway (bindings/matlab). Builds with CMake, runs the offline C++ tests and the MATLAB
+  # tests that need no device. On Linux this also checks that MATLAB loads libomnicore next to its
+  # own libstdc++ (MEX_PLAN.md 6.5). MATLAB is free for public repositories in GitHub Actions.
+  matlab:
+    name: matlab (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install libusb (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev pkg-config
+      - name: Install libusb (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libusb pkg-config
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          # maca64 (Apple Silicon) MATLAB starts at R2023b.
+          release: R2023b
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_MATLAB=ON -DOCH_STATIC_LIBSTDCXX=ON
+      - name: Build
+        run: cmake --build build --parallel --target omnicore_matlab_zip matlab_config_request_test matlab_rx_gaps_test matlab_tx_events_test
+      - name: Offline C++ tests
+        run: ctest --test-dir build --output-on-failure -R '^matlab_'
+      - name: MATLAB tests without a device, from the release zip
+        uses: matlab-actions/run-command@v2
+        with:
+          command: >-
+            z = dir('build/omnicore-matlab-*.zip'); unzip(fullfile(z(1).folder, z(1).name), 'zipcheck');
+            addpath('zipcheck/omnicore-matlab'); addpath('bindings/matlab/tests');
+            disp(which('omnicore_mex')); disp(omnicore.version());
+            assertSuccess(runtests('OfflineTest'));
+
+  # build_omnicore_mex.m with MSVC against the MinGW-built omnicore.dll through its MSVC import
+  # library, as a user without CMake would (and as the release does).
+  # Not windows-latest: that image ships Visual Studio 2026, which the R2023b mex command does not
+  # recognise ("Supported compiler not detected"). Same image as the release build.
+  matlab-windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: msys2/setup-msys2@v2
+        with:
+          # The runner's own C:\msys64, as in release.yml: build-msvc-import.ps1 looks for
+          # C:\msys64\mingw64\bin\objdump.exe.
+          release: false
+          msystem: MINGW64
+          suppress-deprecation-warnings: msystem-mingw64
+          pacboy: >-
+            gcc:p
+            cmake:p
+            ninja:p
+      # Placeholder as in the windows job: only the offline tests load the library, and they do
+      # not touch USB.
+      - name: Placeholder for the bundled libusbK.dll
+        run: |
+          d=third_party/driver/libusbK-3.1.0.0/libusbK-3.1.0.0-bin/bin/dll/amd64
+          mkdir -p "$d"
+          : > "$d/libusbK.dll"
+      - name: Build and install OCH
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          cmake --install build --prefix stage
+      - name: MSVC import library
+        shell: powershell
+        run: ./packaging/windows/build-msvc-import.ps1 -DllPath stage/bin/omnicore.dll -OutputDir stage/lib
+      - uses: matlab-actions/setup-matlab@v2
+        with:
+          release: R2023b
+      - name: Build the MEX file with build_omnicore_mex
+        uses: matlab-actions/run-command@v2
+        with:
+          command: >-
+            addpath('bindings/matlab');
+            build_omnicore_mex(fullfile(pwd, 'stage'), 'OutputDir', fullfile(pwd, 'omnicore-matlab'));
+            addpath('omnicore-matlab'); disp(which('omnicore_mex')); disp(omnicore.version());

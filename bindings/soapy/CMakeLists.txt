@@ -12,10 +12,15 @@ endif ()
 
 find_package(SoapySDR 0.8 CONFIG REQUIRED)
 
+# Helpers shared with the other bindings, and their offline tests (bindings/common).
+if (NOT TARGET och_bindings_common)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../common ${CMAKE_CURRENT_BINARY_DIR}/common)
+endif ()
+
 SOAPY_SDR_MODULE_UTIL(
         TARGET omnicoreSupport
         SOURCES Registration.cpp Device.cpp Streaming.cpp Events.cpp Time.cpp Sensors.cpp
-        LIBRARIES OmniCore::omnicore)
+        LIBRARIES OmniCore::omnicore och_bindings_common)
 
 # The module installs to <prefix>/lib/SoapySDR/modules<ABI>/; find libomnicore two levels up.
 # If SoapySDR lives under another prefix, point SOAPY_SDR_PLUGIN_PATH at the module directory.
@@ -24,13 +29,3 @@ if (APPLE)
 elseif (UNIX)
     set_target_properties(omnicoreSupport PROPERTIES INSTALL_RPATH "$ORIGIN/../..")
 endif ()
-
-# Offline tests of the pure logic: no device and no SoapySDR needed.
-add_executable(soapy_mapping_test tests/mapping_test.cpp)
-target_include_directories(soapy_mapping_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-add_test(NAME soapy_mapping COMMAND soapy_mapping_test)
-
-add_executable(soapy_interleave_test tests/interleave_test.cpp)
-target_include_directories(soapy_interleave_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-        $<TARGET_PROPERTY:OmniCore::omnicore,INTERFACE_INCLUDE_DIRECTORIES>)
-add_test(NAME soapy_interleave COMMAND soapy_interleave_test)

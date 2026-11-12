@@ -1,7 +1,10 @@
-# Run as: cmake -DSOURCE_DIR=<repo> -P CheckSoapyPublicApi.cmake
-# The SoapySDR module must build against an installed OmniCore Host, so it may include only the
-# public C header <omnicore/och.h>, SoapySDR, the standard library and its own files.
-file(GLOB_RECURSE sources "${SOURCE_DIR}/bindings/soapy/*.cpp" "${SOURCE_DIR}/bindings/soapy/*.hpp")
+# Run as: cmake -DSOURCE_DIR=<repo> -P CheckBindingsPublicApi.cmake
+# The bindings (SoapySDR module, MATLAB MEX gateway and their shared helpers in bindings/common)
+# must build against an installed OmniCore Host, so they may include only the public C header
+# <omnicore/och.h>, their host framework (SoapySDR, MATLAB), the standard library, their own files
+# and "common/..." helpers.
+file(GLOB_RECURSE sources "${SOURCE_DIR}/bindings/*.c" "${SOURCE_DIR}/bindings/*.cpp"
+        "${SOURCE_DIR}/bindings/*.h" "${SOURCE_DIR}/bindings/*.hpp")
 set(found "")
 foreach (source IN LISTS sources)
     file(STRINGS "${source}" lines REGEX "^[ \t]*#[ \t]*include")
@@ -20,5 +23,5 @@ foreach (source IN LISTS sources)
     endforeach ()
 endforeach ()
 if (found)
-    message(FATAL_ERROR "bindings/soapy may include only <omnicore/och.h> from OmniCore Host:\n${found}")
+    message(FATAL_ERROR "bindings/ may include only <omnicore/och.h> from OmniCore Host:\n${found}")
 endif ()

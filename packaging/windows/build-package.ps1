@@ -15,7 +15,8 @@ if(!$InnoCompiler){$InnoCompiler=Join-Path $project 'third_party\inno-6.2.2\app\
 if(-not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)){throw 'Inno Setup compiler not found'}
 # CMake install merges into an existing directory. Refuse stale SDK/test/debug
 # payloads instead of silently including them in Inno's recursive file entry.
-$allowedRoots=@('bin','docs','examples','include','lib','licenses','README.md','LICENSE','PAYLOAD_SHA256.txt')
+# matlab: optional MATLAB toolbox (bindings/matlab/build_omnicore_mex.m with OutputDir <stage>\matlab).
+$allowedRoots=@('bin','docs','examples','include','lib','licenses','matlab','README.md','LICENSE','PAYLOAD_SHA256.txt')
 foreach($item in Get-ChildItem -LiteralPath $stage -Force){
     if($item.Name -notin $allowedRoots){throw "Unexpected stage entry '$($item.Name)'. Recreate a clean stage using CMake install."}
 }
@@ -43,6 +44,14 @@ $assistant=Join-Path $PSScriptRoot 'driver'
 foreach($f in @('och-driver.exe','libwdi.dll')){Copy-Item -LiteralPath (Join-Path $assistant $f) -Destination (Join-Path $stage 'bin') -Force}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'och-shell.cmd') -Destination (Join-Path $stage 'bin') -Force
 Copy-Item -LiteralPath (Join-Path $driver 'libusbK-3.1.0.0\libusbK-3.1.0.0-bin\bin\dll\amd64\libusbK.dll') -Destination (Join-Path $stage 'bin') -Force
+$matlab=Join-Path $stage 'matlab'
+if(Test-Path -LiteralPath $matlab){
+    # The MEX file loads omnicore.dll and libusbK.dll from its own folder (bindings/matlab/mex/LibraryLoader.cpp).
+    foreach($required in @('omnicore_mex.mexw64','+omnicore\Device.m')){
+        if(-not (Test-Path -LiteralPath (Join-Path $matlab $required))){throw "Missing MATLAB file: matlab\$required"}
+    }
+    Copy-Item -LiteralPath (Join-Path $stage 'bin\omnicore.dll'),(Join-Path $stage 'bin\libusbK.dll') -Destination $matlab -Force
+}
 & (Join-Path $PSScriptRoot 'build-msvc-import.ps1') -DllPath (Join-Path $stage 'bin\omnicore.dll') -OutputDir (Join-Path $stage 'lib')
 if($LASTEXITCODE -ne 0){throw 'MSVC import-library generation failed'}
 foreach($d in @('docs','licenses\libusbK','licenses\libwdi','licenses\mingw','licenses\sources','licenses\driver-build')){New-Item -ItemType Directory -Force (Join-Path $stage $d)|Out-Null}

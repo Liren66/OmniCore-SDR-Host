@@ -37,6 +37,9 @@ VersionInfoVersion={#AppVersion}.0
 [Tasks]
 Name: "driver"; Description: "Install/check libusbK for OmniCoreSDR (USB 1A86:5537 only)"; Flags: checkedonce
 Name: "path"; Description: "Add OmniCore Host commands to the system PATH"; Flags: checkedonce
+#if DirExists(StageDir + "\matlab")
+Name: "matlab"; Description: "Install the MATLAB toolbox (addpath the matlab folder in MATLAB R2018a+)"; Flags: unchecked
+#endif
 
 [Files]
 ; Explicit host payload roots keep legacy SDK/firmware directories out of releases.
@@ -46,6 +49,9 @@ Source: "{#StageDir}\lib\*"; DestDir: "{app}\lib"; Flags: ignoreversion recurses
 Source: "{#StageDir}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageDir}\examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
+#if DirExists(StageDir + "\matlab")
+Source: "{#StageDir}\matlab\*"; DestDir: "{app}\matlab"; Tasks: matlab; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 Source: "{#StageDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\PAYLOAD_SHA256.txt"; DestDir: "{app}"; Flags: ignoreversion
