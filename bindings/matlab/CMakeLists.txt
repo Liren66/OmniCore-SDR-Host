@@ -59,9 +59,20 @@ elseif (APPLE)
     # @loader_path first: the staged and installed copies sit next to libomnicore.
     set_target_properties(omnicore_mex PROPERTIES BUILD_RPATH "@loader_path;$<TARGET_FILE_DIR:OmniCore::omnicore>"
             INSTALL_RPATH "@loader_path")
+    # FindMatlab exports the C++ MEX API entry points (cppMexFunction.map) from every MEX file and
+    # lets them stay undefined (-U); the Xcode 26 linker rejects that. This is a C API MEX file, so
+    # export what `mex` exports for one: mexFunction and mexfilerequiredapiversion.
+    set_target_properties(omnicore_mex PROPERTIES
+            LINK_FLAGS "-Wl,-exported_symbols_list,${Matlab_EXTERN_LIBRARY_DIR}/c_exportsmexfileversion.map")
 elseif (UNIX)
     set_target_properties(omnicore_mex PROPERTIES BUILD_RPATH "$ORIGIN;$<TARGET_FILE_DIR:OmniCore::omnicore>"
             INSTALL_RPATH "$ORIGIN")
+    # MATLAB loads its own, older libstdc++ first, so a MEX file built with the system GCC fails with
+    # "GLIBCXX_3.4.xx not found". Link the C++ runtime statically; FindMatlab's version script keeps
+    # its symbols local. libomnicore does the same with OCH_STATIC_LIBSTDCXX.
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_link_options(omnicore_mex PRIVATE -static-libgcc -static-libstdc++)
+    endif ()
 endif ()
 
 # Stage a ready-to-use toolbox folder next to the MEX file in the build tree: the +omnicore package
