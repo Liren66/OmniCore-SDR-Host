@@ -176,7 +176,9 @@ jobs:
 
   windows:
     needs: version
-    runs-on: windows-latest
+    # Not windows-latest: that image ships Visual Studio 2026, which the R2023b mex command does not
+    # recognise, so the MATLAB MEX build below needs the Visual Studio 2022 image.
+    runs-on: windows-2022
     env:
       VERSION: ${{ needs.version.outputs.version }}
     defaults:

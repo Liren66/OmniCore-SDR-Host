@@ -45,6 +45,8 @@ addpath('<仓库>/bindings/matlab');
 build_omnicore_mex('<OCH 安装目录>', 'OutputDir', 'omnicore-matlab');
 ```
 
+`mex` 只认它发布时已有的 Visual Studio 版本：比如 R2023b 不认 Visual Studio 2026，会报 “Supported compiler not detected”。这时装一个 Visual Studio 2022（Build Tools 即可），或者换用更新的 MATLAB。发布包的 MEX 用 R2023b + Visual Studio 2022 编译。
+
 ## 快速上手
 
 ```matlab

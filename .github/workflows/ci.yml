@@ -121,8 +121,10 @@ jobs:
 
   # build_omnicore_mex.m with MSVC against the MinGW-built omnicore.dll through its MSVC import
   # library, as a user without CMake would (and as the release does).
+  # Not windows-latest: that image ships Visual Studio 2026, which the R2023b mex command does not
+  # recognise ("Supported compiler not detected"). Same image as the release build.
   matlab-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     defaults:
       run:
         shell: msys2 {0}
