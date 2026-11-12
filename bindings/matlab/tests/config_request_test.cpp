@@ -91,7 +91,7 @@ int main() {
         expect(c.rx_mask == 2 && c.tx_mask == 3, "channel masks");
         ConfigRequest off;
         off.rx_channels = std::vector<double>{};
-        expect(apply(base, off, w).rx_mask == 0, "empty channel list disables the direction");
+        expect(apply(c, off, w).rx_mask == 0, "empty channel list disables the direction (TX still on)");
         expect(mask_channels(3) == std::vector<double>({1, 2}) && mask_channels(0).empty(), "masks back to lists");
     }
     { // IQBits 8 forces both directions to both channels, and rejects anything else.
@@ -128,6 +128,16 @@ int main() {
         expect(one([](ConfigRequest &r) { r.rx_gain_mode = std::string("auto"); }), "unknown gain mode");
     }
 
+    {
+        // Both directions off: rejected before the device sees it.
+        ConfigRequest r;
+        r.rx_channels = std::vector<double>{};
+        expect(rejects(defaults(), r), "RxChannels [] with TxChannels []");
+        r.tx_channels = std::vector<double>{1};
+        Warnings w;
+        const och_config c = apply(defaults(), r, w);
+        expect(c.rx_mask == 0 && c.tx_mask == 1, "TX only");
+    }
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return EXIT_FAILURE;

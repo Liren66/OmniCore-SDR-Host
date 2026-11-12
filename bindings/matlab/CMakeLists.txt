@@ -17,17 +17,19 @@ if (NOT TARGET och_bindings_common)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../common ${CMAKE_CURRENT_BINARY_DIR}/common)
 endif ()
 
-# Offline test of the configuration mapping: needs neither MATLAB nor a device.
-add_executable(matlab_config_request_test tests/config_request_test.cpp)
-target_include_directories(matlab_config_request_test PRIVATE mex)
-target_link_libraries(matlab_config_request_test PRIVATE och_bindings_common)
-add_test(NAME matlab_config_request COMMAND matlab_config_request_test)
+# Offline tests of the configuration mapping and the RX gap report: need neither MATLAB nor a device.
+foreach (name config_request rx_gaps)
+    add_executable(matlab_${name}_test tests/${name}_test.cpp)
+    target_include_directories(matlab_${name}_test PRIVATE mex)
+    target_link_libraries(matlab_${name}_test PRIVATE och_bindings_common)
+    add_test(NAME matlab_${name} COMMAND matlab_${name}_test)
+endforeach ()
 
 # R2018a: the interleaved-complex C API, the oldest release supported.
 find_package(Matlab 9.4 REQUIRED COMPONENTS MX_LIBRARY)
 
 matlab_add_mex(NAME omnicore_mex
-        SRC mex/omnicore_mex.cpp mex/Registry.cpp mex/DeviceSession.cpp mex/LibraryLoader.cpp
+        SRC mex/omnicore_mex.cpp mex/Registry.cpp mex/DeviceSession.cpp mex/RxSession.cpp mex/LibraryLoader.cpp
         R2018a
         # C API only: no MATLAB Engine / Data Array (C++ API) libraries.
         NO_IMPLICIT_LINK_TO_MATLAB_LIBRARIES

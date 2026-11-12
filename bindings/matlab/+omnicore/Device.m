@@ -33,7 +33,13 @@ classdef Device < handle
     %
     %   Read only: Serial, TxAttenuation.
     %
-    %   Methods: configure, info, status, delete.
+    %   Methods: configure, info, status, receive, rxStream, delete.
+    %
+    %   Receiving:
+    %       [x, meta] = receive(DEV, N) captures N samples per enabled RX channel: an N x numel(
+    %       RxChannels) complex single array scaled to +-1. meta.Time is the hardware time of the
+    %       first sample and meta.Gaps lists lost samples; see help omnicore.Device.receive.
+    %       For continuous reception use RX = rxStream(DEV); see omnicore.RxStream.
     %
     %   Errors have identifiers omnicore:<reason>, for example omnicore:BUSY when the device is in
     %   use by another program, omnicore:NOT_FOUND, omnicore:InvalidArgument.
@@ -134,6 +140,46 @@ classdef Device < handle
             s = omnicore_mex('status', obj.requireId());
         end
 
+        function [x, meta] = receive(obj, n, varargin)
+            %RECEIVE Capture N samples per enabled RX channel in one finite burst.
+            %   [X, META] = receive(DEV, N) returns X, an N x numel(DEV.RxChannels) complex array (one
+            %   column per channel), and META, a struct:
+            %     Time          hardware time of the first sample, seconds (NaN if unknown)
+            %     TimeTicks     the same in samples (uint64), without rounding
+            %     Overflow      true if samples were lost (X then has fewer than N rows)
+            %     Gaps          K x 2, [row of the first sample after a loss, samples lost];
+            %                   the count is NaN when unknown
+            %     Late          a timed start was already past
+            %     Reconfigured  the device was reconfigured during the capture
+            %   [X, META] = receive(DEV, N, Name, Value) with
+            %     'OutputDataType'  'single' (default, +-1), 'double', 'int16' (12-bit samples
+            %                       left-aligned, +-32768) or 'int8' (IQBits 8 only)
+            %     'Timeout'         seconds to wait for each block, default 1
+            %     'BufferBytes'     host ring buffer, default 64 MiB
+            %   Memory: N x channels x 8 bytes for single, 16 for double, 4 for int16, 2 for int8;
+            %   1e8 samples on two channels in single take 1.6 GB.
+            %
+            %   Example:
+            %       dev.SampleRate = 30.72e6;
+            %       [x, meta] = receive(dev, 1e6);
+            %       pwelch(x(:, 1), [], [], [], dev.SampleRate, 'centered')
+            if ~(isnumeric(n) && isscalar(n))
+                error('omnicore:InvalidArgument', 'receive: N must be a numeric scalar');
+            end
+            opts = nameValueStruct({'OutputDataType', 'Timeout', 'BufferBytes'}, varargin, 'receive');
+            if nargout > 1
+                [x, meta] = omnicore_mex('receive', obj.requireId(), double(n), opts);
+            else
+                x = omnicore_mex('receive', obj.requireId(), double(n), opts);
+            end
+        end
+
+        function rx = rxStream(obj, varargin)
+            %RXSTREAM A continuous RX stream on this device; see omnicore.RxStream.
+            %   RX = rxStream(DEV, 'OutputDataType', 'int16', 'BufferBytes', 256*2^20, 'Timeout', 2)
+            rx = omnicore.RxStream(obj, varargin{:});
+        end
+
         function tf = isOpen(obj)
             %ISOPEN True until the object is deleted.
             tf = isvalid(obj) && obj.Id ~= 0;
@@ -206,14 +252,16 @@ classdef Device < handle
         function set.RxIQCorrection(obj, v), obj.setSetting('RxIQCorrection', v); end
     end
 
-    methods (Access = private)
+    methods (Access = {?omnicore.RxStream})
         function id = requireId(obj)
             if obj.Id == 0
                 error('omnicore:InvalidHandle', 'The OmniCore device was closed; create a new omnicore.Device');
             end
             id = obj.Id;
         end
+    end
 
+    methods (Access = private)
         function v = config(obj, field)
             c = omnicore_mex('config', obj.requireId());
             v = c.(field);

@@ -18,6 +18,7 @@ namespace omnicore_mex {
         DeviceSession &operator=(const DeviceSession &) = delete;
 
         const std::string &serial() const { return serial_; }
+        och_device *handle() const { return dev_; } // streams (RxSession)
         const och_device_info &info() const { return info_; }
         och_config config() const;
 

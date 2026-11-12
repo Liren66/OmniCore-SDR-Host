@@ -14,12 +14,19 @@
 //   omnicore_mex('configure', id, request)      request: struct of Device.configure fields
 //   v = omnicore_mex('get', id, name)           board settings (DeviceSession::get)
 //   omnicore_mex('set', id, name, value)
+//   [x, meta] = omnicore_mex('receive', id, n, options)   one finite RX command (RxSession::receive)
+//   sid = omnicore_mex('rx_create', id, options)           options: OutputDataType, BufferBytes
+//   omnicore_mex('rx_start' | 'rx_stop' | 'rx_destroy', sid)
+//   [x, meta] = omnicore_mex('rx_read', sid, n, timeout)
+//   tf = omnicore_mex('rx_running', sid)
 #include "DeviceSession.hpp"
 #include "Error.hpp"
 #include "LibraryLoader.hpp"
 #include "MxConvert.hpp"
 #include "Registry.hpp"
+#include "RxSession.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <mex.h>
@@ -92,6 +99,38 @@ namespace {
         return r;
     }
 
+    // receive / rx_create options. Timeout (seconds) only applies to receive.
+    RxOptions to_rx_options(const mxArray *s, double *timeout) {
+        RxOptions o;
+        if (!s || mxIsEmpty(s)) return o;
+        if (!mxIsStruct(s) || mxGetNumberOfElements(s) != 1) throw invalid_argument("options must be a scalar struct");
+        const int n = mxGetNumberOfFields(s);
+        for (int i = 0; i < n; ++i) {
+            const std::string name = mxGetFieldNameByNumber(s, i);
+            const mxArray *v = mxGetFieldByNumber(s, 0, i);
+            if (name == "OutputDataType") {
+                o.type = sample_type(to_string(v, "OutputDataType"));
+            } else if (name == "BufferBytes") {
+                const double b = to_scalar(v, "BufferBytes");
+                if (b < 1 << 20 || b > 4294967295.0 || b != std::floor(b))
+                    throw invalid_argument("BufferBytes must be a whole number from 1 MiB to 4 GiB");
+                o.buffer_bytes = uint32_t(b);
+            } else if (name == "Timeout" && timeout) {
+                *timeout = to_scalar(v, "Timeout");
+            } else {
+                throw invalid_argument("unknown RX option '" + name + "'");
+            }
+        }
+        return o;
+    }
+
+    size_t to_count(const mxArray *a, const char *what) {
+        const double v = to_scalar(a, what);
+        if (v < 0 || v != std::floor(v) || v > 9007199254740992.0)
+            throw invalid_argument(std::string(what) + " must be a whole number of samples");
+        return size_t(v);
+    }
+
     mxArray *device_list() {
         size_t count = 0;
         check(och_list(nullptr, 0, &count), "list");
@@ -155,6 +194,33 @@ namespace {
         } else if (command == "set") {
             need_args(nrhs, 4, "set");
             registry.device(to_id(prhs[1])).set(to_string(prhs[2], "setting name"), prhs[3]);
+        } else if (command == "receive") {
+            need_args(nrhs, 3, "receive");
+            DeviceSession &d = registry.device(to_id(prhs[1]));
+            const size_t n = to_count(prhs[2], "N");
+            double timeout = 1;
+            const RxOptions options = to_rx_options(nrhs > 3 ? prhs[3] : nullptr, &timeout);
+            RxSession::receive(d, options, n, timeout, &plhs[0], nlhs > 1 ? &plhs[1] : nullptr);
+        } else if (command == "rx_create") {
+            need_args(nrhs, 2, "rx_create");
+            const uint64_t device = to_id(prhs[1]);
+            plhs[0] = make_id(registry.create_rx(device, to_rx_options(nrhs > 2 ? prhs[2] : nullptr, nullptr)));
+        } else if (command == "rx_start") {
+            need_args(nrhs, 2, "rx_start");
+            registry.rx(to_id(prhs[1])).start();
+        } else if (command == "rx_stop") {
+            need_args(nrhs, 2, "rx_stop");
+            registry.rx(to_id(prhs[1])).stop();
+        } else if (command == "rx_destroy") {
+            need_args(nrhs, 2, "rx_destroy");
+            registry.destroy_stream(to_id(prhs[1]));
+        } else if (command == "rx_running") {
+            need_args(nrhs, 2, "rx_running");
+            plhs[0] = make_bool(registry.rx(to_id(prhs[1])).running());
+        } else if (command == "rx_read") {
+            need_args(nrhs, 4, "rx_read");
+            RxSession &rx = registry.rx(to_id(prhs[1]));
+            rx.read(to_count(prhs[2], "N"), to_scalar(prhs[3], "Timeout"), &plhs[0], nlhs > 1 ? &plhs[1] : nullptr);
         } else {
             throw invalid_argument("unknown command '" + command + "'");
         }

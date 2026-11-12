@@ -42,19 +42,47 @@ uint64_t Registry::open(const std::string &serial, const ConfigRequest &request,
 void Registry::close(uint64_t id) {
     const auto it = devices_.find(id);
     if (it == devices_.end()) return;
-    if (--it->second.references == 0) devices_.erase(it);
+    if (--it->second.references == 0) erase_device(it);
     update_lock();
 }
 
+void Registry::erase_device(std::map<uint64_t, Entry>::iterator it) {
+    for (auto s = streams_.begin(); s != streams_.end();) {
+        if (s->second.device == it->first)
+            s = streams_.erase(s);
+        else
+            ++s;
+    }
+    devices_.erase(it);
+}
+
 void Registry::close_all() {
+    streams_.clear();
     devices_.clear();
     update_lock();
 }
 
 void Registry::shutdown() {
+    streams_.clear();
     devices_.clear();
     locked_ = false;
 }
+
+uint64_t Registry::create_rx(uint64_t device_id, const RxOptions &options) {
+    DeviceSession &d = device(device_id);
+    const uint64_t id = next_id_++;
+    streams_[id] = StreamEntry{device_id, std::make_unique<RxSession>(d, options)};
+    return id;
+}
+
+RxSession &Registry::rx(uint64_t id) const {
+    const auto it = streams_.find(id);
+    if (it == streams_.end() || !it->second.rx)
+        throw Error("omnicore:InvalidHandle", "the OmniCore RX stream was closed (its device was closed)");
+    return *it->second.rx;
+}
+
+void Registry::destroy_stream(uint64_t id) { streams_.erase(id); }
 
 DeviceSession &Registry::device(uint64_t id) const {
     const auto it = devices_.find(id);

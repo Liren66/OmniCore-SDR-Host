@@ -5,10 +5,14 @@
 // reference, so several MATLAB objects (a Receiver and a Transmitter, M4) share one och_device
 // instead of colliding on its exclusive lock. The session closes when the last reference goes.
 //
+// Streams (RxStream) have ids of their own and belong to a device session: when the session
+// closes, its streams are stopped and destroyed first (och_close refuses a device with streams).
+//
 // While any session exists the MEX file is locked (mexLock), so `clear mex` / `clear all` cannot
 // unload it under live device handles; mexAtExit closes everything when MATLAB exits.
 #pragma once
 #include "DeviceSession.hpp"
+#include "RxSession.hpp"
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -32,14 +36,26 @@ namespace omnicore_mex {
         DeviceSession &device(uint64_t id) const;
         size_t size() const { return devices_.size(); }
 
+        uint64_t create_rx(uint64_t device_id, const RxOptions &options);
+        RxSession &rx(uint64_t id) const;
+        // Unknown ids are ignored, like close.
+        void destroy_stream(uint64_t id);
+        size_t stream_count() const { return streams_.size(); }
+
     private:
         struct Entry {
             std::unique_ptr<DeviceSession> session;
             size_t references = 0;
         };
+        struct StreamEntry {
+            uint64_t device;
+            std::unique_ptr<RxSession> rx;
+        };
         void update_lock();
+        void erase_device(std::map<uint64_t, Entry>::iterator it);
 
         std::map<uint64_t, Entry> devices_;
+        std::map<uint64_t, StreamEntry> streams_;
         uint64_t next_id_ = 1;
         bool locked_ = false;
     };

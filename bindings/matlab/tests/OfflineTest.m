@@ -54,6 +54,21 @@ classdef OfflineTest < matlab.unittest.TestCase
             tc.verifyEqual(omnicore_mex('count'), 0);
         end
 
+        function rxCommandsCheckHandles(tc)
+            bad = uint64(987654321);
+            tc.verifyError(@() omnicore_mex('receive', bad, 100), 'omnicore:InvalidHandle');
+            tc.verifyError(@() omnicore_mex('rx_create', bad), 'omnicore:InvalidHandle');
+            tc.verifyError(@() omnicore_mex('rx_start', bad), 'omnicore:InvalidHandle');
+            tc.verifyError(@() omnicore_mex('rx_read', bad, 100, 1), 'omnicore:InvalidHandle');
+            tc.verifyError(@() omnicore_mex('rx_running', bad), 'omnicore:InvalidHandle');
+            omnicore_mex('rx_destroy', bad); % harmless, like close
+        end
+
+        function rxStreamNeedsDevice(tc)
+            tc.verifyError(@() omnicore.RxStream(42), 'omnicore:InvalidArgument');
+            tc.verifyError(@() omnicore.RxStream([]), 'omnicore:InvalidArgument');
+        end
+
         function missingDeviceIsNotFound(tc)
             tc.verifyError(@() omnicore.Device('OmniCoreDOESNOTEXIST'), 'omnicore:NOT_FOUND');
             tc.verifyEqual(omnicore_mex('count'), 0);

@@ -94,6 +94,7 @@ namespace omnicore_mex {
                 if (!r.tx_channels) c.tx_mask = 3;
             }
         }
+        if (!c.rx_mask && !c.tx_mask) throw invalid_argument("RxChannels and TxChannels cannot both be empty");
         if (c.usb_iq_bits == 8 && (c.rx_mask != 3 || c.tx_mask != 3))
             throw invalid_argument("IQBits 8 needs RxChannels and TxChannels [1 2]");
 
