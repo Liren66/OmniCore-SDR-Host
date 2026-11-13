@@ -43,7 +43,7 @@ Homebrew 升级 SoapySDR 的次版本后（例如 0.8 → 0.9），需要重新�
 **只编插件**（已经安装了 OCH，例如 Linux 包或 Windows 安装包）：
 
 ```bash
-cmake -S bindings/soapy -B build-soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.7.2
+cmake -S bindings/soapy -B build-soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.8.0
 cmake --build build-soapy -j
 ```
 

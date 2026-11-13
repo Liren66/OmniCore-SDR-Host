@@ -1,4 +1,4 @@
-OmniCore Host (OCH) 0.7.2 — Windows 安装与驱动说明
+OmniCore Host (OCH) 0.8.0 — Windows 安装与驱动说明
 
 适用范围
   Windows 10 / Windows 11，原生 x64。当前发行包不支持 ARM64 或 32 位 Windows。
@@ -11,7 +11,7 @@ OmniCore Host (OCH) 0.7.2 — Windows 安装与驱动说明
   步骤见 docs\soapy.md。Windows 上的插件尚未实机验证。
 
 首次安装
-  1. 关闭其他访问 SDR 的软件，运行 OmniCoreHost-0.7.2-win64-setup.exe。
+  1. 关闭其他访问 SDR 的软件，运行 OmniCoreHost-0.8.0-win64-setup.exe。
   2. 接受 Windows 正常的管理员 UAC 提示。保留“Install/check libusbK”选项。
   3. 安装完成后打开一个新的终端，运行：
        och find

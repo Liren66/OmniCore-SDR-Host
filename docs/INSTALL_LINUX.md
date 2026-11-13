@@ -32,16 +32,16 @@ bash tools/build-linux.sh
 从工程目录完成上述构建后：
 
 ```bash
-sudo /usr/bin/cmake --install build/linux --prefix /opt/omnicore/0.7.2
-sudo ln -sfn /opt/omnicore/0.7.2/bin/och /usr/local/bin/och
+sudo /usr/bin/cmake --install build/linux --prefix /opt/omnicore/0.8.0
+sudo ln -sfn /opt/omnicore/0.8.0/bin/och /usr/local/bin/och
 cd /tmp
 och version
 och info
 ```
 
-或者解压发行归档后，将整个 `OmniCoreHost-linux/` 目录复制到 `/opt/omnicore/0.7.2/`，再创建同样的软链接。必须保留 `bin/` 与 `lib/` 的相对布局以及库的软链接。无需设置 `LD_LIBRARY_PATH`，无需用 sudo 运行应用。若检查动态库路径，应使用 `ldd "$(readlink -f /usr/local/bin/och)"`，使检查工具按真实 ELF 路径解析相对 RPATH。
+或者解压发行归档后，将整个 `OmniCoreHost-linux/` 目录复制到 `/opt/omnicore/0.8.0/`，再创建同样的软链接。必须保留 `bin/` 与 `lib/` 的相对布局以及库的软链接。无需设置 `LD_LIBRARY_PATH`，无需用 sudo 运行应用。若检查动态库路径，应使用 `ldd "$(readlink -f /usr/local/bin/och)"`，使检查工具按真实 ELF 路径解析相对 RPATH。
 
-README、SDK 与文档同安装在 `/opt/omnicore/0.7.2/`。运行库依赖系统 `libusb-1.0-0`。
+README、SDK 与文档同安装在 `/opt/omnicore/0.8.0/`。运行库依赖系统 `libusb-1.0-0`。
 
 ## 普通用户访问 USB
 
@@ -83,7 +83,7 @@ sudo /usr/bin/cmake --install build/soapy --prefix /usr/local
 SoapySDRUtil --find="driver=omnicore"
 ```
 
-插件装到 `/usr/local/lib/SoapySDR/modules<版本>/`。发行版自带的 SoapySDR 在 `/usr` 下，不一定会搜索这个目录；找不到插件时，设置 `SOAPY_SDR_PLUGIN_PATH` 指向它。已经把 OCH 装到 `/opt/omnicore/0.7.2` 时，也可以只编插件：`cmake -S bindings/soapy -B build/soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.7.2`。USB 权限沿用上面的 udev 规则，插件不需要 sudo。Linux 上目前只在 CI 中编译过，还没有实机验收；详细说明见 [SoapySDR 插件](soapy.md)。
+插件装到 `/usr/local/lib/SoapySDR/modules<版本>/`。发行版自带的 SoapySDR 在 `/usr` 下，不一定会搜索这个目录；找不到插件时，设置 `SOAPY_SDR_PLUGIN_PATH` 指向它。已经把 OCH 装到 `/opt/omnicore/0.8.0` 时，也可以只编插件：`cmake -S bindings/soapy -B build/soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.8.0`。USB 权限沿用上面的 udev 规则，插件不需要 sudo。Linux 上目前只在 CI 中编译过，还没有实机验收；详细说明见 [SoapySDR 插件](soapy.md)。
 
 ## SDK 集成与发布包
 

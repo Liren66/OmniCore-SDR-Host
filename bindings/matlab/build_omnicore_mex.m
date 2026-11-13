@@ -16,7 +16,7 @@ function build_omnicore_mex(prefix, varargin)
 %   Then: addpath(DIR); omnicore.findDevices()
 %
 %   Example:
-%       build_omnicore_mex('/opt/omnicore/0.7.2')
+%       build_omnicore_mex('/opt/omnicore/0.8.0')
 
 p = inputParser;
 p.addRequired('prefix', @(s) ischar(s) || isstring(s));
