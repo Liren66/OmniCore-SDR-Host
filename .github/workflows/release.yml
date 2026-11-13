@@ -68,7 +68,7 @@ jobs:
         run: |
           cmake -S . -B build/matlab -G Ninja -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_MATLAB=ON -DOCH_STATIC_LIBSTDCXX=ON
           cmake --build build/matlab --target omnicore_matlab_zip
-          mv build/matlab/omnicore-matlab-$VERSION-glnxa64.zip dist/
+          mv "build/matlab/omnicore-matlab-$VERSION-a64.zip" "dist/omnicore-matlab-$VERSION-glnxa64.zip"
       - name: Check the MATLAB toolbox loads
         uses: matlab-actions/run-command@v2
         with:
