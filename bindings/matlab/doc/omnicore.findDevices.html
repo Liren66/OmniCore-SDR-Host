@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omnicore.findDevices - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.findDevices</div>
+<h1>omnicore.findDevices</h1>
+<p class="purpose">列出已连接的 OmniCoreSDR 设备</p>
+
+<h2>语法</h2>
+<p class="syntax">devices = omnicore.findDevices()</p>
+
+<h2>说明</h2>
+<div class="desc"><div class="syntax">devices = omnicore.findDevices()</div>
+<p>返回 N × 1 结构体数组，按序列号排序；没有设备时为 0 × 1。已被打开的设备（本程序或其他程序）也会列出。</p></div>
+
+<h2>示例</h2>
+<pre><code>d = omnicore.findDevices();
+for k = 1:numel(d)
+    fprintf('%s  %s  固件 %s  USB %d Mbit/s\n', d(k).Serial, d(k).Name, d(k).Firmware, d(k).UsbSpeedMbps);
+end
+dev = omnicore.Device(d(1).Serial);</code></pre>
+
+<h2>输出参数</h2>
+<dl class="args"><dt>devices <span class="type">结构体数组</span></dt><dd>
+<table>
+<tr><td><code>Serial</code></td><td>序列号，用于 <code>omnicore.Device(serial)</code></td></tr>
+<tr><td><code>Name</code>, <code>Firmware</code></td><td>名称、固件版本</td></tr>
+<tr><td><code>UsbDriver</code>, <code>UsbSpeedMbps</code></td><td>USB 驱动、链路速度</td></tr>
+<tr><td><code>RxChannelCount</code>, <code>TxChannelCount</code></td><td>通道数</td></tr>
+</table></dd></dl>
+
+<h2>提示</h2>
+<ul><li>列表为空时：检查 USB 数据线；Windows 运行 <code>och-driver install</code> 安装驱动；Linux 安装 udev 规则。命令行 <code>och find</code> 给出同样的列表和诊断提示。</li></ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.html">omnicore.Device</a><a href="omnicore.Device.status.html">info</a></p>
+</body></html>

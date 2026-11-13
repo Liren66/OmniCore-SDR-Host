@@ -82,10 +82,13 @@ add_custom_command(TARGET omnicore_mex POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OCH_MATLAB_STAGE}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:omnicore_mex> ${OCH_MATLAB_STAGE}
         VERBATIM)
-# The .m files change without the MEX file relinking: copy them on every build.
+# The .m files and pages change without the MEX file relinking: copy them on every build.
 add_custom_target(omnicore_matlab_package ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OCH_MATLAB_STAGE}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/+omnicore ${OCH_MATLAB_STAGE}/+omnicore
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/examples ${OCH_MATLAB_STAGE}/examples
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/doc ${OCH_MATLAB_STAGE}/doc
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/info.xml ${OCH_MATLAB_STAGE}
         VERBATIM)
 if (WIN32)
     add_custom_command(TARGET omnicore_mex POST_BUILD
@@ -100,10 +103,11 @@ else ()
 endif ()
 
 # Install component "matlab": a self-contained folder <prefix>/matlab with the MEX file, the
-# +omnicore package, examples and the OmniCore Host runtime library next to the MEX file.
+# +omnicore package, examples, the reference pages (doc, registered by info.xml) and the
+# OmniCore Host runtime library next to the MEX file.
 install(TARGETS omnicore_mex DESTINATION matlab COMPONENT matlab)
-install(DIRECTORY +omnicore examples DESTINATION matlab COMPONENT matlab)
-install(FILES README.md DESTINATION matlab COMPONENT matlab)
+install(DIRECTORY +omnicore examples doc DESTINATION matlab COMPONENT matlab)
+install(FILES README.md info.xml DESTINATION matlab COMPONENT matlab)
 if (WIN32)
     install(FILES $<TARGET_FILE:OmniCore::omnicore> $<TARGET_FILE_DIR:OmniCore::omnicore>/libusbK.dll
             DESTINATION matlab COMPONENT matlab)

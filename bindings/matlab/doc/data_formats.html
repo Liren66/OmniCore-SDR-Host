@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>样点格式与缩放 - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › 样点格式与缩放</div>
+<h1>样点格式与缩放</h1>
+<p class="purpose">MATLAB 数组与设备样点之间的对应关系</p>
+
+<h2>数组形状</h2>
+<p>收发数据都是每通道一列：接收得到 N × <code>numel(dev.RxChannels)</code> 的复数数组，发射输入 N × <code>numel(dev.TxChannels)</code>。<code>RxChannels = [1 2]</code> 时第 1 列是 RX1、第 2 列是 RX2。单通道发射时行向量也可以。</p>
+
+<h2>类型</h2>
+<table>
+<tr><th>类型</th><th>接收</th><th>发射</th><th>每样点每通道</th></tr>
+<tr><td><code>single</code>（默认）</td><td>±1 满量程</td><td>±1 满量程，超出部分限幅（<code>omnicore:TxClipped</code>）；NaN 按 0</td><td>8 字节</td></tr>
+<tr><td><code>double</code></td><td>同上</td><td>同上</td><td>16 字节</td></tr>
+<tr><td><code>int16</code></td><td>12 位样点左对齐：±32768 满量程，低 4 位为 0</td><td>同样按左对齐解释，低 4 位被忽略</td><td>4 字节</td></tr>
+<tr><td><code>int8</code></td><td>只在 <code>IQBits = 8</code> 时可用，±128</td><td>只在 <code>IQBits = 8</code> 时可用</td><td>2 字节</td></tr>
+</table>
+<p>发射时实数数组按 Q = 0 处理。一次 <code>TxStream</code> 会话中的所有写入必须是同一类（single/double、int16 或 int8），由第一次写入决定。</p>
+
+<h2>满量程与 dBFS</h2>
+<p>±1 对应 ADC / DAC 满量程。幅度为 1 的复单音功率为 0 dBFS；接收时 I 或 Q 达到 ±1 说明已经饱和，应降低 <code>RxGain</code>。发射时幅度 0.5–0.7 留出余量，避免多音或调制信号的峰值被限幅。</p>
+<pre><code>p_dbfs = 10*log10(mean(abs(double(x)).^2));    % 平均功率，dBFS
+clipped = any(abs(real(x)) &gt;= 0.999 | abs(imag(x)) &gt;= 0.999);</code></pre>
+
+<h2>内存估算</h2>
+<table>
+<tr><th>采集</th><th>single</th><th>int16</th></tr>
+<tr><td>1e6 样点 × 1 通道</td><td>8 MB</td><td>4 MB</td></tr>
+<tr><td>1e8 样点 × 2 通道</td><td>1.6 GB</td><td>0.8 GB</td></tr>
+<tr><td>1 s，61.44 MSPS × 2 通道</td><td>0.98 GB</td><td>0.49 GB</td></tr>
+</table>
+<p>主机环形缓冲按 USB 线路格式存储：12 位每复样点 3 字节，8 位 2 字节，与 MATLAB 侧的类型无关。</p>
+
+<h2>8 位模式</h2>
+<p><code>IQBits = 8</code> 让每个样点在 USB 上只占一半，双通道收发都可以到 61.44 MSPS。代价是动态范围约 48 dB。要求 <code>RxChannels = TxChannels = [1 2]</code>；可以继续用 single 输出，<code>int8</code> 只是最省内存的选择。</p>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.receive.html">receive</a><a href="omnicore.Device.transmit.html">transmit</a><a href="omnicore.Device.html">omnicore.Device</a></p>
+</body></html>

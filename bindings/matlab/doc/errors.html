@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>错误与警告 - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › 错误与警告</div>
+<h1>错误与警告</h1>
+<p class="purpose"><code>omnicore:*</code> 标识符、原因与处理</p>
+
+<p>所有错误和警告的标识符都以 <code>omnicore:</code> 开头。错误消息包含 OmniCore Host 给出的原因。按标识符处理：</p>
+<pre><code>try
+    [x, meta] = read(rx, n);
+catch err
+    switch err.identifier
+        case 'omnicore:TIMEOUT'
+            x = [];                 % 这段时间没有数据
+        otherwise
+            rethrow(err);
+    end
+end</code></pre>
+
+<h2>错误</h2>
+<table>
+<tr><th>标识符</th><th>含义</th><th>处理</th></tr>
+<tr><td><code>omnicore:InvalidArgument</code></td><td>参数类型、名称或范围错误（在调用设备之前检查）</td><td>按消息修正参数</td></tr>
+<tr><td><code>omnicore:INVALID</code></td><td>OmniCore Host 拒绝了请求，例如连了多台设备却没给序列号</td><td>按消息修正</td></tr>
+<tr><td><code>omnicore:BUSY</code></td><td>设备被其他程序打开；同一方向已有流；有流时改通道；全双工中一个方向停止后重新开流</td><td>关闭其他程序；停止已有的流；见<a href="streaming.html#restart">全双工启停规则</a></td></tr>
+<tr><td><code>omnicore:NOT_FOUND</code></td><td>没有找到设备，或给的序列号不存在</td><td>检查连接、驱动、udev 规则；<code>omnicore.findDevices</code></td></tr>
+<tr><td><code>omnicore:TIMEOUT</code></td><td>在 <code>Timeout</code> 内没有数据或没有进展</td><td>检查定时开始的时间；加大 <code>Timeout</code></td></tr>
+<tr><td><code>omnicore:IO</code></td><td>USB 传输失败</td><td>检查数据线、供电、USB 口；重新打开设备</td></tr>
+<tr><td><code>omnicore:STOPPED</code></td><td>流已被停止（例如设备在调用期间关闭）</td><td>重新开始流</td></tr>
+<tr><td><code>omnicore:UNSUPPORTED</code></td><td>固件不支持该功能</td><td>升级固件</td></tr>
+<tr><td><code>omnicore:PROTOCOL</code>, <code>omnicore:BUFFER_SMALL</code></td><td>设备通信或内部缓冲问题</td><td>重新打开设备；持续出现时报告问题</td></tr>
+<tr><td><code>omnicore:InvalidHandle</code></td><td>对象对应的设备或流已关闭</td><td>重新创建对象</td></tr>
+<tr><td><code>omnicore:Interrupted</code></td><td>Ctrl+C 打断了长调用（需用 <code>OCH_MATLAB_CTRL_C</code> 编译）</td><td>对象仍可用</td></tr>
+<tr><td><code>omnicore:LibraryNotFound</code></td><td>Windows：MEX 旁边缺 <code>omnicore.dll</code> 或 <code>libusbK.dll</code></td><td>使用完整的发布包文件夹</td></tr>
+<tr><td><code>omnicore:OutOfMemory</code></td><td>MATLAB 内存不足</td><td>减少样点数，或用 int16 输出</td></tr>
+<tr><td><code>omnicore:Internal</code></td><td>内部错误</td><td>报告问题</td></tr>
+</table>
+
+<h2>警告</h2>
+<table>
+<tr><th>标识符</th><th>含义</th></tr>
+<tr><td><code>omnicore:GainLimited</code></td><td>RX 增益超过当前频段上限，已压到上限</td></tr>
+<tr><td><code>omnicore:TxClipped</code></td><td>发射样点超出 ±1，已限幅</td></tr>
+<tr><td><code>omnicore:TxLate</code></td><td>定时突发的开始时间已经过去</td></tr>
+<tr><td><code>omnicore:TxUnderflow</code></td><td>发射过程中设备样点用完</td></tr>
+<tr><td><code>omnicore:TxError</code></td><td>设备报告 TX 错误</td></tr>
+<tr><td><code>omnicore:TxNotSent</code></td><td>停止时有样点从未发出（不足一个 USB 传输又没有 EndBurst）</td></tr>
+<tr><td><code>omnicore:TimeInvalidated</code></td><td>改采样率让设定过的硬件时间失效</td></tr>
+<tr><td><code>omnicore:Transport</code></td><td>上次调用以来发生过 USB 传输错误（合并为一条）</td></tr>
+<tr><td><code>omnicore:CloseFailed</code></td><td>删除对象时关闭设备或流出错</td></tr>
+</table>
+<p>不需要的警告可以关闭，例如 <code>warning('off', 'omnicore:TxClipped')</code>。</p>
+
+<h2>安装问题</h2>
+<table>
+<tr><th>现象</th><th>原因与处理</th></tr>
+<tr><td>macOS：MEX 文件“无法打开，因为无法验证开发者”</td><td>运行 <code>xattr -dr com.apple.quarantine omnicore-matlab</code></td></tr>
+<tr><td>Linux：Invalid MEX-file …<code>GLIBCXX_3.4.xx</code> not found</td><td>MATLAB 先加载了自带的旧版 libstdc++。发布包已静态链接 C++ 运行库；自己编译时用发布包的 CMake 设置（<code>-DOCH_STATIC_LIBSTDCXX=ON</code>）</td></tr>
+<tr><td><code>omnicore.findDevices</code> 为空</td><td>检查 USB 数据线；Windows 安装驱动（<code>och-driver install</code>）；Linux 安装 udev 规则；命令行 <code>och find</code> 会给出诊断</td></tr>
+<tr><td>Windows 编译：Supported compiler not detected</td><td>MATLAB 不认识新版 Visual Studio，装 Visual Studio 2022 Build Tools 或换更新的 MATLAB</td></tr>
+</table>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="streaming.html">流、全双工与丢样</a><a href="omnicore.Device.status.html">events</a></p>
+</body></html>

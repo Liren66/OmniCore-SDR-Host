@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>info, status, events - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › status</div>
+<h1>info, status, events</h1>
+<p class="purpose">设备标识、实时状态和事件</p>
+
+<h2>语法</h2>
+<p class="syntax"><a href="#s1">s = info(dev)</a></p>
+<p class="syntax"><a href="#s2">s = status(dev)</a></p>
+<p class="syntax"><a href="#s3">e = events(dev)</a></p>
+
+<h2>说明</h2>
+<div class="desc" id="s1"><div class="syntax">s = info(dev)</div>
+<p>标识信息，打开期间不变：</p>
+<table>
+<tr><td><code>Serial</code>, <code>Name</code>, <code>Firmware</code></td><td>序列号、名称、固件版本</td></tr>
+<tr><td><code>UsbDriver</code>, <code>UsbSpeedMbps</code></td><td>USB 驱动与链路速度（USB 3.0 为 5000）</td></tr>
+<tr><td><code>RxChannelCount</code>, <code>TxChannelCount</code></td><td>通道数</td></tr>
+<tr><td><code>HardwareTimestamps</code></td><td>固件是否提供硬件时间戳</td></tr>
+<tr><td><code>MaxSampleRate</code></td><td>最高采样率，Hz</td></tr>
+<tr><td><code>LibraryVersion</code></td><td>OmniCore Host 运行库版本</td></tr>
+</table></div>
+<div class="desc" id="s2"><div class="syntax">s = status(dev)</div>
+<p>实时状态，每次调用读取一次：</p>
+<table>
+<tr><td><code>Temperature</code></td><td>°C，不可用时为 NaN</td></tr>
+<tr><td><code>RefLocked</code>, <code>PpsLocked</code>, <code>VcxoLocked</code></td><td>参考、PPS、VCXO 锁定；未知时为 false</td></tr>
+<tr><td><code>TimeValid</code></td><td>硬件时间是否设定过</td></tr>
+<tr><td><code>UsbSpeedMbps</code></td><td>USB 链路速度</td></tr>
+<tr><td><code>RxRssi</code></td><td>每通道相对 RSSI，dB；未接收或 <code>RssiEnable</code> 关闭时为 NaN</td></tr>
+</table></div>
+<div class="desc" id="s3"><div class="syntax">e = events(dev)</div>
+<p>取出上次调用以来的设备事件（最多保留最近 256 条），按时间先后排列的结构体数组：</p>
+<table>
+<tr><td><code>Type</code></td><td><code>'device'</code>、<code>'transport'</code>、<code>'host_overflow'</code>、<code>'rx_gap'</code>、<code>'rx_late'</code>、<code>'rx_sync'</code>、<code>'tx_burst_ack'</code>、<code>'tx_late'</code>、<code>'tx_underflow'</code>、<code>'tx_starved'</code>、<code>'tx_error'</code>、<code>'reconfigured'</code>、<code>'time_invalidated'</code>、<code>'sync_in'</code></td></tr>
+<tr><td><code>Message</code></td><td>说明文字</td></tr>
+<tr><td><code>HwTime</code>, <code>HwTicks</code></td><td>带时间的事件的硬件时间；其他为 NaN / 0</td></tr>
+<tr><td><code>Count</code></td><td>合并的设备事件数</td></tr>
+<tr><td><code>HostTime</code></td><td>主机单调时钟，秒</td></tr>
+</table></div>
+
+<h2>示例</h2>
+<pre><code>i = info(dev); fprintf('%s，固件 %s，USB %d Mbit/s\n', i.Serial, i.Firmware, i.UsbSpeedMbps);
+dev.RssiEnable = true;
+s = status(dev); s.RxRssi
+e = events(dev); {e.Type}</code></pre>
+
+<h2>提示</h2>
+<ul><li>USB 传输错误除了出现在 <code>events</code> 中，还会在下一次调用返回时合并成一条 <code>omnicore:Transport</code> 警告。</li></ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.html">omnicore.Device</a><a href="omnicore.findDevices.html">omnicore.findDevices</a><a href="errors.html">错误与警告</a></p>
+</body></html>

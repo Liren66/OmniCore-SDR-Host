@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>函数和类 - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › 函数和类</div>
+<h1>函数和类</h1>
+<p class="purpose">按类别列出的全部接口</p>
+
+<h2>设备</h2>
+<table>
+<tr><td><a href="omnicore.Device.html"><code>omnicore.Device</code></a></td><td>打开的 OmniCoreSDR：配置属性、板级设置与全部收发方法</td></tr>
+<tr><td><a href="omnicore.Device.configure.html"><code>configure</code></a></td><td>一次下发多个配置属性</td></tr>
+<tr><td><a href="omnicore.Device.status.html"><code>info</code>, <code>status</code>, <code>events</code></a></td><td>标识信息、实时状态、设备事件</td></tr>
+<tr><td><a href="omnicore.findDevices.html"><code>omnicore.findDevices</code></a></td><td>列出已连接的设备</td></tr>
+<tr><td><a href="omnicore.version.html"><code>omnicore.version</code></a></td><td>运行库、头文件与 ABI 版本</td></tr>
+</table>
+
+<h2>接收</h2>
+<table>
+<tr><td><a href="omnicore.Device.receive.html"><code>receive</code></a></td><td>一次采集 N 个样点（可定时开始）</td></tr>
+<tr><td><a href="omnicore.RxStream.html"><code>omnicore.RxStream</code></a></td><td>连续接收：<code>start</code>、<code>read</code>、<code>stop</code></td></tr>
+<tr><td><a href="omnicore.Receiver.html"><code>omnicore.Receiver</code></a></td><td>按帧接收的 System object，也是 Simulink 模块</td></tr>
+</table>
+
+<h2>发射</h2>
+<table>
+<tr><td><a href="omnicore.Device.transmit.html"><code>transmit</code></a></td><td>发一个突发并等待设备确认（可定时）</td></tr>
+<tr><td><a href="omnicore.Device.transmitRepeat.html"><code>transmitRepeat</code>, <code>stopTransmit</code>, <code>isTransmitting</code></a></td><td>后台循环发射</td></tr>
+<tr><td><a href="omnicore.TxStream.html"><code>omnicore.TxStream</code></a></td><td>分段写入与定时突发：<code>write</code>、<code>status</code>、<code>stop</code></td></tr>
+<tr><td><a href="omnicore.Transmitter.html"><code>omnicore.Transmitter</code></a></td><td>按帧发射的 System object，也是 Simulink 模块</td></tr>
+</table>
+
+<h2>时间</h2>
+<table>
+<tr><td><a href="omnicore.Device.time.html"><code>time</code>, <code>timeTicks</code>, <code>setTime</code>, <code>lastPPS</code></a></td><td>硬件时间（样点计数）与 PPS 对时</td></tr>
+</table>
+
+<h2>帮助</h2>
+<table>
+<tr><td><a href="omnicore.doc.html"><code>omnicore.doc</code></a></td><td>在帮助浏览器中打开本文档</td></tr>
+</table>
+</body></html>

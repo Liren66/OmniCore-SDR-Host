@@ -110,6 +110,8 @@ jobs:
         run: cmake --build build --parallel --target omnicore_matlab_zip matlab_config_request_test matlab_rx_gaps_test matlab_tx_events_test
       - name: Offline C++ tests
         run: ctest --test-dir build --output-on-failure -R '^matlab_'
+      # ExamplesTest runs the application examples against their simulated channel and checks
+      # that the reference pages (doc/, info.xml) are in the zip.
       - name: MATLAB tests without a device, from the release zip
         uses: matlab-actions/run-command@v2
         with:
@@ -117,7 +119,7 @@ jobs:
             z = dir('build/omnicore-matlab-*.zip'); unzip(fullfile(z(1).folder, z(1).name), 'zipcheck');
             addpath('zipcheck/omnicore-matlab'); addpath('bindings/matlab/tests');
             disp(which('omnicore_mex')); disp(omnicore.version());
-            assertSuccess(runtests('OfflineTest'));
+            assertSuccess(runtests({'OfflineTest', 'ExamplesTest'}));
 
   # build_omnicore_mex.m with MSVC against the MinGW-built omnicore.dll through its MSVC import
   # library, as a user without CMake would (and as the release does).

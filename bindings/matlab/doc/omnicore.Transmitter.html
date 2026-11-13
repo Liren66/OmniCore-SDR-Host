@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omnicore.Transmitter - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.Transmitter</div>
+<h1>omnicore.Transmitter <span class="kind">System object</span></h1>
+<p class="purpose">按帧向 OmniCoreSDR 发射；也可在 Simulink 的 MATLAB System 模块中使用</p>
+
+<h2>创建</h2>
+<p class="syntax">tx = omnicore.Transmitter</p>
+<p class="syntax">tx = omnicore.Transmitter(Name, Value)</p>
+
+<h2>用法</h2>
+<p class="syntax">underflow = tx(x)</p>
+<dl class="args">
+<dt>x</dt><dd>N × <code>numel(ChannelMapping)</code> 的帧：single / double 复数按 ±1 缩放、int16，或 int8（<code>IQBits</code> 8）。各帧连成一个不断开的突发；<code>x</code> 排入队列后立即返回。</dd>
+<dt>underflow</dt><dd>上次调用以来设备样点用完过时为 true：帧的到达速度必须不低于采样率。</dd>
+</dl>
+<p><code>release(tx)</code> 发完已排队的样点后停止。</p>
+
+<h2>属性</h2>
+<table>
+<tr><th>属性</th><th>默认值</th><th>说明</th></tr>
+<tr><td><code>Device</code></td><td><code>[]</code></td><td>同 <a href="omnicore.Receiver.html"><code>Receiver</code></a></td></tr>
+<tr><td><code>SerialNumber</code></td><td><code>''</code></td><td>同 Receiver</td></tr>
+<tr><td><code>ChannelMapping</code></td><td>1</td><td><code>1</code>、<code>2</code> 或 <code>[1 2]</code>；设置设备的 <code>TxChannels</code></td></tr>
+<tr><td><code>SampleRate</code></td><td>NaN</td><td>Hz；NaN 保持设备当前值</td></tr>
+<tr><td><code>CenterFrequency</code></td><td>NaN</td><td>Hz，<b>可调</b>。改 TX 本振会短暂暂停发射（core 丢弃已排队的样点）</td></tr>
+<tr><td><code>Gain</code></td><td>NaN</td><td>dB，0 – 89.75，<b>可调</b>，标量或每通道</td></tr>
+<tr><td><code>Latency</code></td><td>0.1</td><td>第一帧之前先发的零的秒数：设备落后于写入的时间，也就是 MATLAB 可以停顿多久而不欠流</td></tr>
+<tr><td><code>BufferBytes</code></td><td>NaN</td><td>主机环形缓冲；NaN 为 64 MiB</td></tr>
+<tr><td><code>Timeout</code></td><td>1</td><td>等待缓冲空间的秒数</td></tr>
+</table>
+
+<h2>示例</h2>
+<pre><code>tx = omnicore.Transmitter('CenterFrequency', 2.45e9, 'Gain', 20, 'SampleRate', 30.72e6);
+x = single(0.5 * exp(1j*2*pi*(0:30719).'/30.72));     % 1 ms，1 MHz 单音
+for k = 1:5000
+    if tx(x), disp('underflow'), end
+end
+release(tx);</code></pre>
+<p>只有 Transmitter、没有 Receiver 时，循环不受设备节拍限制：<code>tx(x)</code> 在缓冲满之前立即返回，之后等待设备取走数据。</p>
+
+<h2>提示</h2>
+<ul>
+<li>偶尔欠流时加大 <code>Latency</code>，并避免在循环中画图或打印。</li>
+<li>启动 MATLAB 后第一次运行 Simulink 模型时，编译会造成一次较长的停顿，可能报一次欠流；之后的运行没有。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Receiver.html">omnicore.Receiver</a><a href="omnicore.TxStream.html">omnicore.TxStream</a><a href="simulink.html">Simulink</a></p>
+</body></html>

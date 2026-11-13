@@ -2,7 +2,8 @@ function build_omnicore_mex(prefix, varargin)
 %BUILD_OMNICORE_MEX Build the OmniCore MEX gateway with MATLAB's mex command (no CMake needed).
 %   BUILD_OMNICORE_MEX(PREFIX) compiles omnicore_mex against an installed OmniCore Host under
 %   PREFIX (the folder that holds include/omnicore/och.h) and stages a ready-to-use folder:
-%   the MEX file, the +omnicore package, examples, README.md and the OmniCore Host runtime library.
+%   the MEX file, the +omnicore package, examples, the doc pages (with info.xml), README.md and
+%   the OmniCore Host runtime library.
 %
 %   BUILD_OMNICORE_MEX(PREFIX, 'OutputDir', DIR) stages into DIR (default: ./omnicore-matlab).
 %   BUILD_OMNICORE_MEX(PREFIX, 'LibDir', DIR) looks for the library in DIR (default: PREFIX/lib,
@@ -72,6 +73,8 @@ for k = 1:numel(runtime)
 end
 copyfile(fullfile(here, '+omnicore'), fullfile(out, '+omnicore'));
 copyfile(fullfile(here, 'examples'), fullfile(out, 'examples'));
+copyfile(fullfile(here, 'doc'), fullfile(out, 'doc'));
+copyfile(fullfile(here, 'info.xml'), out);
 copyfile(fullfile(here, 'README.md'), out);
 fprintf('OmniCore MEX gateway staged in %s\n  addpath(''%s'')\n', out, out);
 end

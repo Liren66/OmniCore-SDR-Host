@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>time, setTime, lastPPS - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › time</div>
+<h1>time, timeTicks, setTime, lastPPS</h1>
+<p class="purpose">读取和设置设备的硬件时间</p>
+
+<h2>语法</h2>
+<p class="syntax"><a href="#s1">t = time(dev)</a></p>
+<p class="syntax"><a href="#s2">ticks = timeTicks(dev)</a></p>
+<p class="syntax"><a href="#s3">setTime(dev, t)</a></p>
+<p class="syntax"><a href="#s4">setTime(dev, t, 'AtNextPPS', true)</a></p>
+<p class="syntax"><a href="#s5">[t, ticks] = lastPPS(dev)</a></p>
+
+<h2>说明</h2>
+<div class="desc" id="s1"><div class="syntax">t = time(dev)</div>
+<p>设备当前的硬件时间，秒。硬件时间是采样时钟的计数，1 tick = 1 个样点，<code>t = ticks / SampleRate</code>。</p></div>
+<div class="desc" id="s2"><div class="syntax">ticks = timeTicks(dev)</div><p>同上，<code>uint64</code> 样点数。</p></div>
+<div class="desc" id="s3"><div class="syntax">setTime(dev, t)</div><p>立即把硬件时间设为 <code>t</code> 秒。</p></div>
+<div class="desc" id="s4"><div class="syntax">setTime(dev, t, 'AtNextPPS', true)</div>
+<p>在 <code>TimeSource</code> 的下一个 PPS 沿把时间设为 <code>t</code>：那个沿上的样点时间为 <code>t</code>，此后整秒的硬件时间都落在 PPS 沿上。<code>TimeSource</code> 不能是 <code>'none'</code>。</p></div>
+<div class="desc" id="s5"><div class="syntax">[t, ticks] = lastPPS(dev)</div><p>最近一个 PPS 沿锁存的硬件时间。</p></div>
+
+<h2>示例</h2>
+<details open><summary>与外部 PPS 对齐，然后在整秒定时发射</summary>
+<pre><code>dev.ClockSource = 'external';        % 10 MHz 参考（可选）
+dev.TimeSource = 'external';         % PPS 输入
+setTime(dev, 0, 'AtNextPPS', true);
+pause(1.5);
+[tp, ticks] = lastPPS(dev)           % 约为 1（±1 样点）
+transmit(dev, x, 'StartTime', ceil(time(dev)) + 1);   % 下下个 PPS 沿</code></pre></details>
+
+<h2>提示</h2>
+<ul>
+<li>PPS 与采样时钟不同步，所以 PPS 锁存的时间有 ±1 样点抖动。</li>
+<li>改 <code>SampleRate</code> 会让硬件时间重新开始；如果时间设过，给 <code>omnicore:TimeInvalidated</code> 警告。</li>
+<li>“时间已设定”的状态在关闭再打开设备后仍然保留（<code>status(dev).TimeValid</code>）。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="time_pps.html">硬件时间与 PPS</a><a href="omnicore.Device.receive.html">receive</a><a href="omnicore.Device.transmit.html">transmit</a></p>
+</body></html>

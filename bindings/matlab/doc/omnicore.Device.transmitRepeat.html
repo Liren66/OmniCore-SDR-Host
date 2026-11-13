@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>transmitRepeat - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › transmitRepeat</div>
+<h1>transmitRepeat, stopTransmit, isTransmitting</h1>
+<p class="purpose">在后台循环发射一段波形</p>
+
+<h2>语法</h2>
+<p class="syntax"><a href="#s1">transmitRepeat(dev, x)</a></p>
+<p class="syntax"><a href="#s2">transmitRepeat(dev, x, 'BufferBytes', b)</a></p>
+<p class="syntax"><a href="#s3">s = stopTransmit(dev)</a></p>
+<p class="syntax"><a href="#s4">tf = isTransmitting(dev)</a></p>
+
+<h2>说明</h2>
+<div class="desc" id="s1"><div class="syntax">transmitRepeat(dev, x)</div>
+<p>立即返回，后台线程不断重复发射 <code>x</code>，直到 <code>stopTransmit</code> 或删除设备对象。<code>x</code> 会被复制，之后可以修改或清除。再次调用会替换波形（先停止再开始）。类型同 <a href="omnicore.Device.transmit.html"><code>transmit</code></a>。</p></div>
+<div class="desc" id="s2"><div class="syntax">transmitRepeat(dev, x, 'BufferBytes', b)</div><p>指定主机环形缓冲大小。</p></div>
+<div class="desc" id="s3"><div class="syntax">s = stopTransmit(dev)</div>
+<p>停止循环发射，返回开始以来的 TX 事件统计（字段同 <code>transmit</code>）；<code>Underflow</code> 不为 0 说明主机没跟上。没有在发射时返回 <code>[]</code>。</p></div>
+<div class="desc" id="s4"><div class="syntax">tf = isTransmitting(dev)</div><p>循环发射进行中为 true。</p></div>
+
+<h2>示例</h2>
+<details open><summary>循环发射单音，同时接收</summary>
+<pre><code>dev = omnicore.Device('RxChannels', 1, 'TxChannels', 1, 'TxGain', 20);
+fs = dev.SampleRate;
+x = single(0.5 * exp(1j*2*pi*1e6/fs*(0:30719).'));   % 整数个周期，首尾相接无跳变
+transmitRepeat(dev, x);
+y = receive(dev, 1e6);
+s = stopTransmit(dev)</code></pre></details>
+
+<h2>提示</h2>
+<ul>
+<li>波形首尾应能无缝相接（整数个周期），否则每次重复都有相位跳变。</li>
+<li>波形太短时会被复制拼接到至少一个 USB 传输长度，对结果没有影响。</li>
+<li>循环发射期间 RX 可以正常使用；但按<a href="streaming.html">全双工启停规则</a>，TX 运行时 RX 只能开始一次（一次 <code>receive</code> 或一个 <code>RxStream</code>）。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.transmit.html">transmit</a><a href="omnicore.TxStream.html">omnicore.TxStream</a></p>
+</body></html>

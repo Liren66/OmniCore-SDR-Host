@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>receive - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › receive</div>
+<h1>receive</h1>
+<p class="purpose">一次采集 N 个样点</p>
+
+<h2>语法</h2>
+<p class="syntax"><a href="#s1">x = receive(dev, n)</a></p>
+<p class="syntax"><a href="#s2">[x, meta] = receive(dev, n)</a></p>
+<p class="syntax"><a href="#s3">[x, meta] = receive(___, Name, Value)</a></p>
+
+<h2>说明</h2>
+<div class="desc" id="s1"><div class="syntax">x = receive(dev, n)</div>
+<p>从每个启用的 RX 通道采集 <code>n</code> 个样点，作为一个有限长度的突发：开始、采满、停止。<code>x</code> 是 <code>n</code> × <code>numel(dev.RxChannels)</code> 的复数数组，每通道一列，默认 complex single，满量程 ±1。</p></div>
+<div class="desc" id="s2"><div class="syntax">[x, meta] = receive(dev, n)</div>
+<p>同时返回第一个样点的硬件时间和丢样信息。丢样时 <code>x</code> 只含实际收到的样点，行数少于 <code>n</code>，缺口位置在 <code>meta.Gaps</code> 中。</p></div>
+<div class="desc" id="s3"><div class="syntax">[x, meta] = receive(___, Name, Value)</div>
+<p>指定输出类型、定时开始、超时或缓冲大小。</p></div>
+
+<h2>示例</h2>
+<details open><summary>采集并画频谱</summary>
+<pre><code>dev = omnicore.Device('SampleRate', 30.72e6, 'RxFrequency', 2.45e9, 'RxChannels', 1);
+[x, meta] = receive(dev, 1e6);
+if meta.Overflow
+    warning('丢了 %g 个样点', sum(meta.Gaps(:, 2)));
+end
+n = 4096; w = 0.5 - 0.5*cos(2*pi*(0:n-1).'/n);
+p = abs(fftshift(fft(double(x(1:n)) .* w))).^2 / sum(w)^2;
+plot((-n/2:n/2-1) * dev.SampleRate/n/1e6, 10*log10(p))</code></pre></details>
+<details><summary>在指定硬件时间开始</summary>
+<pre><code>t0 = time(dev);
+[x, meta] = receive(dev, 1e5, 'StartTime', t0 + 0.5);
+meta.Time - (t0 + 0.5)        % 0：第一个样点正好在 StartTime</code></pre></details>
+<details><summary>大数据量：用 int16 节省内存</summary>
+<pre><code>[x, meta] = receive(dev, 1e8, 'OutputDataType', 'int16');   % 1e8 x 2 占 0.8 GB
+y = single(x) / 32768;                                       % 需要时再转成 ±1</code></pre></details>
+
+<h2>输入参数</h2>
+<dl class="args">
+<dt>dev <span class="type">omnicore.Device</span></dt><dd>打开的设备，<code>RxChannels</code> 不能为空。</dd>
+<dt>n <span class="type">正整数标量</span></dt><dd>每个通道的样点数。</dd>
+</dl>
+<h3>名称-值参数</h3>
+<dl class="args">
+<dt>'OutputDataType' <span class="type">'single'（默认）| 'double' | 'int16' | 'int8'</span></dt>
+<dd>输出类型，见<a href="data_formats.html">样点格式与缩放</a>。<code>'int8'</code> 只在 <code>IQBits = 8</code> 时可用。</dd>
+<dt>'StartTime' <span class="type">秒</span></dt>
+<dd>第一个样点的硬件时间（见 <a href="omnicore.Device.time.html"><code>time</code></a>）。默认立即开始。已经过去时 <code>meta.Late</code> 为 true。</dd>
+<dt>'Timeout' <span class="type">秒，默认 1</span></dt>
+<dd>等待每一块数据的最长时间；定时开始时，第一块的等待时间自动加上到 <code>StartTime</code> 的延迟。</dd>
+<dt>'BufferBytes' <span class="type">字节，默认 64 MiB</span></dt>
+<dd>主机环形缓冲大小。</dd>
+</dl>
+
+<h2>输出参数</h2>
+<dl class="args">
+<dt>x <span class="type">复数矩阵</span></dt><dd><code>n</code> × 通道数（丢样时行数更少）。</dd>
+<dt>meta <span class="type">结构体</span></dt><dd>
+<table>
+<tr><th>字段</th><th>含义</th></tr>
+<tr><td><code>Time</code></td><td>第一个样点的硬件时间，秒；未知时为 NaN</td></tr>
+<tr><td><code>TimeTicks</code></td><td>同上，<code>uint64</code> 样点数，不损失精度</td></tr>
+<tr><td><code>Overflow</code></td><td>是否丢过样点</td></tr>
+<tr><td><code>Gaps</code></td><td>K × 2：<code>[丢样后第一个样点的行号, 丢失样点数]</code>；数量未知时为 NaN。数量由硬件时间戳算出，是精确值</td></tr>
+<tr><td><code>Late</code></td><td>定时开始时，开始时间已经过去</td></tr>
+<tr><td><code>Reconfigured</code></td><td>采集期间设备改过参数</td></tr>
+</table></dd>
+</dl>
+
+<h2>提示</h2>
+<ul>
+<li>内存：每样点每通道 single 8 字节、double 16、int16 4、int8 2。1e8 样点双通道 single 为 1.6 GB。</li>
+<li><code>RxStream</code> 运行时 <code>receive</code> 报 <code>omnicore:BUSY</code>；全双工中 TX 正在运行时，RX 停止后不能再开始，见<a href="streaming.html">流、全双工与丢样</a>。</li>
+<li>每次 <code>receive</code> 都会新建并停止一个 RX 流。需要反复取新鲜数据（例如示波器）时这很合适；需要连续不断的数据时用 <a href="omnicore.RxStream.html"><code>RxStream</code></a>。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.RxStream.html">omnicore.RxStream</a><a href="omnicore.Receiver.html">omnicore.Receiver</a><a href="omnicore.Device.time.html">time</a><a href="data_formats.html">样点格式</a></p>
+</body></html>

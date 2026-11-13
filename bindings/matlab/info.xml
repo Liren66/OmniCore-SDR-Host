@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Registers the OmniCoreSDR documentation with MATLAB's help browser (Supplemental Software)
+     while this folder is on the MATLAB path. doc/helptoc.xml holds the table of contents;
+     omnicore.doc opens the pages directly in any release. -->
+<productinfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:noNamespaceSchemaLocation="optional">
+  <?xml-stylesheet type="text/xsl" href="optional"?>
+  <matlabrelease>2018a</matlabrelease>
+  <name>OmniCoreSDR</name>
+  <type>toolbox</type>
+  <icon></icon>
+  <help_location>doc</help_location>
+</productinfo>

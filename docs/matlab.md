@@ -10,12 +10,12 @@
 | 状态 | 内容 |
 |---|---|
 | 已实机验证（macOS，MATLAB R2024b，Apple Silicon） | 设备与射频参数、单次采集与连续接收（含丢样报告）、突发 / 定时 / 循环发射、全双工、System object、Simulink、8bit 2T2R 61.44 MSPS、内部 PPS 对时 |
-| 已实现、待实机验证 | Windows（MSVC 编译的 MEX）、Linux、外部 10 MHz + PPS、Ctrl+C 打断长调用（`OCH_MATLAB_CTRL_C`）、R2018a 实际加载 |
+| 已实现、待实机验证 | Windows（MSVC 编译的 MEX）、Linux、外部 10 MHz + PPS、Ctrl+C 打断长调用（`OCH_MATLAB_CTRL_C`）、R2018a 实际加载；应用示例 `fm_radio`、`fm_loopback`、`video_link`、`sdr_scope` 接设备运行（模拟模式已验证） |
 | 不支持 | 多板同步、FIR 装载、时钟链手动配置（用 `och` 命令行）；Simulink 代码生成 |
 
 ## 安装
 
-发布页提供每个平台一个 zip：`omnicore-matlab-<版本>-<平台>.zip`，平台为 `win64`、`maca64`（Apple Silicon，MATLAB R2023b+）或 `glnxa64`。解压得到文件夹 `omnicore-matlab`，里面有 MEX 文件、`+omnicore` 包、OmniCore Host 运行库和示例，不需要另装 OmniCore Host。
+发布页提供每个平台一个 zip：`omnicore-matlab-<版本>-<平台>.zip`，平台为 `win64`、`maca64`（Apple Silicon，MATLAB R2023b+）或 `glnxa64`。解压得到文件夹 `omnicore-matlab`，里面有 MEX 文件、`+omnicore` 包、OmniCore Host 运行库、示例和参考文档，不需要另装 OmniCore Host。
 
 ```matlab
 addpath('<解压目录>/omnicore-matlab');   % 用 savepath 永久保存
@@ -61,10 +61,28 @@ if meta.Overflow, disp(meta.Gaps), end
 delete(dev)                                       % 或 clear dev：关闭设备
 ```
 
-`examples/` 里有完整示例：
+## 参考文档
+
+工具箱带有 MATLAB 帮助格式的参考页面（`doc/`，中文）：每个类、函数和方法都有语法、说明、示例、参数和提示，另有样点格式、流与全双工、硬件时间、Simulink、错误与警告等主题页。
+
+```matlab
+omnicore.doc                  % 首页
+omnicore.doc('receive')       % 某个函数、方法或主题
+help omnicore                 % 包内容列表
+```
+
+工具箱文件夹在路径上时，这些页面也出现在帮助浏览器首页的“补充软件”（Supplemental Software）中，由文件夹里的 `info.xml` 注册。
+
+## 示例
+
+`examples/` 里的应用示例都可以用 `'Simulate', true` 在不接设备时运行（软件模拟信道：延迟、衰减、本振差、噪声、ADC 限幅），只用 MATLAB 本体：
 
 | 文件 | 内容 |
 |---|---|
+| `fm_radio.m` | 调频广播收音机：偏置调谐、多相抽取、鉴相解调、去加重，实时播放并显示射频与 MPX 频谱 |
+| `fm_loopback.m` | FM 自发自收：同一循环里全双工收发，结束时对齐收发音频，给出端到端延迟和音频信噪比 |
+| `video_link.m` | 数字视频传输：JPEG 帧装进 QPSK 突发（Zadoff-Chu 前导、频偏估计、导频相位跟踪、校验和），按硬件时间定时发射、从 RX 流截取解码。默认 433.92 MHz：2.4 GHz 空中收发会被 Wi-Fi 帧打断 |
+| `sdr_scope.m` | 简易示波器与频谱仪：边沿触发、I/Q / 幅度 / 相位、平均与峰值保持，界面上实时改频率、采样率、增益 |
 | `rx_spectrum.m` | 采集 1e6 样点，画 RX1 频谱 |
 | `tx_tone_repeat.m` | 后台循环发射单音 10 s |
 | `duplex_system_objects.m` | `Receiver` + `Transmitter` 帧式全双工，运行中改频率 |
@@ -250,10 +268,10 @@ dev.ClockSource = 'external';           % 外部 10 MHz 参考，见 [参考时�
 | 现象 | 原因与处理 |
 |---|---|
 | `omnicore:BUSY`，`device already owned by another OmniCore Host process` | 其他程序（`och`、GNU Radio、另一个 MATLAB）开着设备 |
-| `omnicore:NOT_FOUND` | 没连设备，或驱动 / udev 规则没装好；先用 `och list` 检查 |
+| `omnicore:NOT_FOUND` | 没连设备，或驱动 / udev 规则没装好；先用 `och find` 检查 |
 | Windows：`omnicore:LibraryNotFound` | MEX 旁边缺 `omnicore.dll` / `libusbK.dll`，或者它们没在 PATH 上 |
 | macOS：MEX 文件“无法打开，因为无法验证开发者” | 运行 `xattr -dr com.apple.quarantine omnicore-matlab` |
-| Linux：`GLIBCXX_3.4.xx not found` | `libomnicore` 是用较新的 GCC 编的，而 MATLAB 先加载了自带的旧 libstdc++。发布包已静态链接 libstdc++；自己编译时加 `-DOCH_STATIC_LIBSTDCXX=ON`，或者临时用 `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6 matlab` 启动 |
+| Linux：`GLIBCXX_3.4.xx not found` | MEX 文件或 `libomnicore` 用较新的 GCC 编译，而 MATLAB 先加载了自带的旧 libstdc++。MEX 文件在 Linux 上总是静态链接 C++ 运行库；`libomnicore` 要加 `-DOCH_STATIC_LIBSTDCXX=ON`（发布包已加）。也可以临时用 `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6 matlab` 启动 |
 | 连续接收时 `meta.Overflow` 频繁 | MATLAB 处理太慢：加大 `BufferBytes`、减少每帧处理，或改用 `receive` 一次采完 |
 | `Transmitter` 偶尔欠流 | 加大 `Latency`；不要在循环里画图或打印 |
 | 改了 `RxChannels` 报 `omnicore:BUSY` | 先 `stop` 或 `release` 所有流 |

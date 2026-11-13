@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>示例 - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › 示例</div>
+<h1>示例</h1>
+<p class="purpose">工具箱 <code>examples</code> 文件夹中的完整程序</p>
+
+<p>先把示例文件夹加到路径：</p>
+<pre><code>addpath(fullfile(fileparts(which('omnicore_mex')), 'examples'))</code></pre>
+<p>应用示例都有 <code>'Simulate', true</code> 选项：不连设备，用软件模拟的信道运行，便于先看懂流程。每个示例的完整说明用 <code>help</code> 查看，例如 <code>help fm_radio</code>。示例只用 MATLAB 本体，不需要任何工具箱。</p>
+<div class="warn">自发自收示例默认在 433.92 MHz 用很低的发射功率（<code>fm_loopback</code> 的 <code>TxGain</code> 30 dB、<code>video_link</code> 40 dB，即衰减 59.75 / 49.75 dB）。最好用衰减器把 TX1 连到 RX1（30–60 dB）；使用天线时遵守当地无线电规定。2.4 GHz 空中收发会被 Wi-Fi 帧（几毫秒、比本信号强）打断，<code>video_link</code> 因此大量丢帧，用线缆或 433.92 MHz 可以避开。</div>
+
+<h2>应用</h2>
+
+<h3>fm_radio — 调频广播收音机</h3>
+<p>收听 88–108 MHz 调频广播（单声道），实时显示射频频谱、复合信号（MPX）频谱和音频波形。演示：偏置调谐与数字混频、多相抽取滤波、鉴相器解调、去加重、连续接收时的实时处理。</p>
+<pre><code>fm_radio(98.7e6)                                   % RX1 接 FM 天线，播放 30 s
+a = fm_radio(98.7e6, 'Seconds', 10, 'Audio', false);
+fm_radio(98.7e6, 'Simulate', true)                 % 两个模拟电台</code></pre>
+
+<h3>fm_loopback — FM 自发自收</h3>
+<p>同一块板上 TX1 在 433.92 MHz 发射调频音频（默认 MATLAB 自带的 handel），RX1 接收、解调并播放；结束后把收到的音频与发出的对齐，给出端到端延迟和音频信噪比。演示：一个循环里全双工收发、TX 余量、TX/RX 本振错开、链路测量。</p>
+<pre><code>r = fm_loopback('Seconds', 5);
+fprintf('延迟 %.1f ms，SNR %.1f dB\n', 1e3*r.DelaySeconds, r.SnrDb);
+fm_loopback('Simulate', true, 'Channel', struct('Loss', 70))</code></pre>
+
+<h3>video_link — 数字视频传输</h3>
+<p>逐帧读取视频（默认 MATLAB 自带的 xylophone.mp4），压缩成 JPEG，用 QPSK 突发从 TX1 发出，在 RX1 解码显示，同时显示星座图、EVM、频偏和吞吐率。演示：根升余弦成形与匹配滤波、Zadoff-Chu 前导同步、频偏估计、导频相位跟踪、校验和、按硬件时间戳定时发射并从 RX 流中截取。一帧要全部比特正确，需要约 15 dB 信噪比。</p>
+<pre><code>r = video_link('Seconds', 10);
+video_link('Simulate', true)
+video_link('Simulate', true, 'Channel', struct('Loss', 64))   % 低信噪比下的丢帧</code></pre>
+
+<h3>sdr_scope — 简易示波器与频谱仪</h3>
+<p>图形界面：I/Q、幅度或相位波形（上升/下降沿触发、电平、时间跨度），平均频谱与峰值保持，右侧控件实时修改中心频率、采样率、增益/AGC、通道。演示：用 <code>receive</code> 反复取新鲜快照、在界面回调中修改设备参数。</p>
+<pre><code>sdr_scope
+sdr_scope('Frequency', 433.92e6, 'SampleRate', 5e6)
+sdr_scope('Simulate', true)                        % 单音 + 周期性线性调频脉冲</code></pre>
+
+<h2>基础</h2>
+<table>
+<tr><th>文件</th><th>内容</th></tr>
+<tr><td><code>rx_spectrum.m</code></td><td>采集 1e6 样点，画 RX1 频谱</td></tr>
+<tr><td><code>tx_tone_repeat.m</code></td><td>后台循环发射单音 10 s</td></tr>
+<tr><td><code>duplex_system_objects.m</code></td><td><code>Receiver</code> + <code>Transmitter</code> 按帧全双工，运行中改频率</td></tr>
+<tr><td><code>timed_burst_loopback.m</code></td><td>定时 TX 突发 + 运行中的 RX 流，测回环延迟</td></tr>
+<tr><td><code>simulink_duplex_example.m</code></td><td>用脚本搭建并运行 Simulink 全双工模型</td></tr>
+</table>
+
+<h2>示例的结构</h2>
+<p>应用示例共用 <code>examples/private</code> 中的几个小函数。私有函数只能被 <code>examples</code> 里的文件调用；要在自己的程序里使用，把它们复制到你的文件夹：</p>
+<table>
+<tr><td><code>sdr_link</code></td><td>RX1/TX1 的统一接口：真实设备（RxStream、TxStream、硬件时间）或模拟信道（延迟、衰减、本振差、噪声、ADC 限幅）</td></tr>
+<tr><td><code>fir_lowpass</code>, <code>fir_decimator</code>, <code>fir_decimate</code></td><td>加窗 sinc 低通设计，多相抽取（分块调用，结果与 <code>filter</code> 后抽取完全相同）</td></tr>
+<tr><td><code>fm_transmitter</code>, <code>fm_modulate</code>, <code>fm_receiver</code>, <code>fm_demodulate</code></td><td>宽带 FM 调制与解调链</td></tr>
+<tr><td><code>psd_db</code></td><td>平均功率谱（dBFS）</td></tr>
+<tr><td><code>audio_sink</code></td><td>边收边放：有 Audio Toolbox / DSP System Toolbox 时用 <code>audioDeviceWriter</code> 无缝播放，否则用 <code>audioplayer</code> 分段播放</td></tr>
+</table>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="getting_started.html">入门</a><a href="streaming.html">流、全双工与丢样</a><a href="time_pps.html">硬件时间与 PPS</a></p>
+</body></html>

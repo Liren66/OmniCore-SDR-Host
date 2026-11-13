@@ -413,6 +413,8 @@ delete(dev)
 
 提供 `omnicore.Device`（射频参数、一次性采集、突发 / 定时 / 循环发射、硬件时间与 PPS、事件）、`RxStream` / `TxStream`（连续收发），以及 `omnicore.Receiver` / `omnicore.Transmitter` 两个 System object（可作为 Simulink 的 MATLAB System 模块）。从源码编译用 `-DOCH_BUILD_MATLAB=ON`，或者在 MATLAB 里运行 `build_omnicore_mex`。
 
+工具箱自带 MATLAB 帮助格式的中文参考文档（`omnicore.doc` 打开，也出现在帮助浏览器的“补充软件”中），以及几个完整的应用示例：调频广播收音机 `fm_radio`、FM 自发自收 `fm_loopback`、QPSK 数字视频传输 `video_link`、简易示波器 `sdr_scope`；它们都可以用 `'Simulate', true` 在不接设备时运行。
+
 macOS（R2024b，Apple Silicon）上已做实机验收：收发、10 分钟帧式全双工、8bit 2T2R 61.44 MSPS、Simulink、内部 PPS 对时。Windows、Linux 由 CI 编译并做不接设备的测试。用法、参数和排错见 [MATLAB 工具箱](docs/matlab.md)。
 
 ## 从源码构建与打包
@@ -453,7 +455,7 @@ OmniCoreHost/
 │   └── transport/      libusbK (Windows) / libusb (Linux) 传输层
 ├── bindings/
 │   ├── common/         各插件共用的映射、交织、RX 时间与 TX 突发逻辑及其离线测试
-│   ├── matlab/         MATLAB 工具箱：MEX 网关（mex/）、+omnicore 包、示例、测试与实机验收脚本
+│   ├── matlab/         MATLAB 工具箱：MEX 网关（mex/）、+omnicore 包、参考文档（doc/）、示例、测试与实机验收脚本
 │   └── soapy/          SoapySDR 插件（driver=omnicore）与实机验收脚本（hwtest/）
 ├── examples/           C++ 示例、FTR 示例、GNU Radio 流图（soapy/）
 ├── tests/              成帧解析单元测试、硬件时间戳板上测试

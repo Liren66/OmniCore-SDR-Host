@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omnicore.doc - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.doc</div>
+<h1>omnicore.doc</h1>
+<p class="purpose">在帮助浏览器中打开 OmniCoreSDR 文档</p>
+
+<h2>语法</h2>
+<p class="syntax">omnicore.doc</p>
+<p class="syntax">omnicore.doc(topic)</p>
+<p class="syntax">file = omnicore.doc(___)</p>
+
+<h2>说明</h2>
+<div class="desc"><div class="syntax">omnicore.doc</div><p>打开文档首页。</p></div>
+<div class="desc"><div class="syntax">omnicore.doc(topic)</div>
+<p>打开某个类、函数、方法或主题的页面。<code>topic</code> 可以是 <code>'Device'</code>、<code>'omnicore.RxStream'</code>、方法名 <code>'receive'</code>、<code>'setTime'</code>，或主题 <code>'examples'</code>、<code>'errors'</code>、<code>'streaming'</code>、<code>'time'</code>、<code>'formats'</code>、<code>'simulink'</code>，不区分大小写。</p></div>
+<div class="desc"><div class="syntax">file = omnicore.doc(___)</div><p>只返回页面文件的完整路径，不打开。</p></div>
+
+<h2>示例</h2>
+<pre><code>omnicore.doc('receive')
+omnicore.doc examples</code></pre>
+
+<h2>提示</h2>
+<ul><li>工具箱文件夹在 MATLAB 路径上时，文档也出现在帮助浏览器首页的“补充软件”中（由工具箱文件夹里的 <code>info.xml</code> 注册）。<code>omnicore.doc</code> 在所有 MATLAB 版本中都能直接打开页面。</li></ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="index.html">文档首页</a><a href="functions.html">函数和类</a></p>
+</body></html>

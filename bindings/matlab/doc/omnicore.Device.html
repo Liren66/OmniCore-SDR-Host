@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omnicore.Device - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.Device</div>
+<h1>omnicore.Device <span class="kind">句柄类</span></h1>
+<p class="purpose">一台打开的 OmniCoreSDR（AD9361，2RX + 2TX，70 MHz – 6 GHz）</p>
+
+<h2>创建</h2>
+<p class="syntax"><a href="#c1">dev = omnicore.Device()</a></p>
+<p class="syntax"><a href="#c2">dev = omnicore.Device(serial)</a></p>
+<p class="syntax"><a href="#c3">dev = omnicore.Device(___, Name, Value)</a></p>
+
+<div class="desc" id="c1"><div class="syntax">dev = omnicore.Device()</div>
+<p>打开唯一连接的设备。连了多台时报 <code>omnicore:INVALID</code>（“multiple devices; specify a serial number”），此时按序列号打开；一台都没有时报 <code>omnicore:NOT_FOUND</code>。</p></div>
+<div class="desc" id="c2"><div class="syntax">dev = omnicore.Device(serial)</div>
+<p>打开序列号为 <code>serial</code> 的设备（见 <a href="omnicore.findDevices.html"><code>omnicore.findDevices</code></a>）。</p></div>
+<div class="desc" id="c3"><div class="syntax">dev = omnicore.Device(___, Name, Value)</div>
+<p>打开时同时设定配置属性，例如 <code>omnicore.Device('IQBits', 8)</code>。先套用默认配置（30.72 MSPS、1 GHz、RX <code>[1 2]</code>、TX 关闭、AGC slow），再叠加这些值，一次下发。</p></div>
+
+<p>设备由本对象独占，直到 <code>delete(dev)</code> 或 <code>clear dev</code>。在同一 MATLAB 会话中再次打开同一台设备，会得到指向同一设备的第二个对象；最后一个对象删除时才关闭设备。退出 MATLAB 时自动关闭所有设备。</p>
+
+<h2 id="props">属性</h2>
+<h3>配置属性</h3>
+<p>每次赋值下发一次配置；读回的是设备实际采用的值。超出范围报 <code>omnicore:InvalidArgument</code>，配置不变。</p>
+<table>
+<tr><th>属性</th><th>值</th><th>说明</th></tr>
+<tr><td><code>SampleRate</code></td><td>2.5e6 – 61.44e6 Hz</td><td>RX、TX 和两个通道共用。时钟链做不到的速率取最近值，读回可得实际值。改采样率会让<a href="time_pps.html">硬件时间</a>重新开始。</td></tr>
+<tr><td><code>RxFrequency</code><br><code>TxFrequency</code></td><td>70e6 – 6e9 Hz</td><td>本振频率；两个 RX 通道共用一个本振，TX 同理。运行中可改，改 TX 本振时 core 会丢弃已排队的 TX 样点。</td></tr>
+<tr><td><code>RxBandwidth</code><br><code>TxBandwidth</code></td><td>200e3 – 56e6 Hz</td><td>模拟滤波器带宽。</td></tr>
+<tr><td><code>RxGain</code></td><td>dB，1×2</td><td>每通道一个值，标量同时设两个。下限 −3；上限随 RX 本振：≤ 1.3 GHz 为 73，≤ 4 GHz 为 71，更高为 62。超过时压到上限，给 <code>omnicore:GainLimited</code> 警告。只在 <code>'manual'</code> 模式下起作用。</td></tr>
+<tr><td><code>RxGainMode</code></td><td><code>'manual'</code> | <code>'fast'</code> | <code>'slow'</code> | <code>'hybrid'</code></td><td>AD9361 增益控制模式，默认 <code>'slow'</code>。</td></tr>
+<tr><td><code>TxGain</code></td><td>dB，1×2，0 – 89.75</td><td>步进 0.25。<code>TxGain = 89.75 − 衰减</code>，与 SoapySDR 插件、Pluto 的约定一致。</td></tr>
+<tr><td><code>RxChannels</code><br><code>TxChannels</code></td><td><code>1</code> | <code>2</code> | <code>[1 2]</code> | <code>[]</code></td><td>启用的通道，<code>[]</code> 关闭该方向。只能在没有流时修改。</td></tr>
+<tr><td><code>IQBits</code></td><td><code>12</code> | <code>8</code></td><td>USB 样点位宽。8 位让 USB 带宽翻倍（2T2R 61.44 MSPS），要求 <code>RxChannels = TxChannels = [1 2]</code>。</td></tr>
+</table>
+
+<h3>时钟与板级设置</h3>
+<table>
+<tr><th>属性</th><th>值</th><th>说明</th></tr>
+<tr><td><code>ClockSource</code></td><td><code>'internal'</code> | <code>'external'</code></td><td>板上 40 MHz 振荡器，或外部 10 MHz 参考输入。</td></tr>
+<tr><td><code>TimeSource</code></td><td><code>'none'</code> | <code>'external'</code> | <code>'internal'</code> | <code>'sync'</code></td><td>PPS 来源：无、外部 PPS 输入、板上生成的 PPS、多板共享的 TRIG。见<a href="time_pps.html">硬件时间与 PPS</a>。</td></tr>
+<tr><td><code>RxLOSource</code>, <code>TxLOSource</code></td><td><code>'internal'</code> | <code>'external'</code></td><td>本振来源。</td></tr>
+<tr><td><code>PpsEnable</code>, <code>RssiEnable</code>, <code>RgbEnable</code>, <code>FanEnable</code></td><td>逻辑值</td><td>PPS 输出、RSSI 上报、状态灯、风扇。</td></tr>
+<tr><td><code>RxDCCorrection</code>, <code>RxIQCorrection</code></td><td>逻辑值</td><td>AD9361 的 RX 直流和 IQ 失衡校正。</td></tr>
+</table>
+
+<h3>只读属性</h3>
+<table>
+<tr><td><code>Serial</code></td><td>序列号</td></tr>
+<tr><td><code>TxAttenuation</code></td><td>TX 衰减，dB，<code>89.75 − TxGain</code></td></tr>
+</table>
+
+<h2>对象函数</h2>
+<table>
+<tr><td><a href="omnicore.Device.configure.html"><code>configure</code></a></td><td>一次下发多个配置属性</td></tr>
+<tr><td><a href="omnicore.Device.status.html"><code>info</code>, <code>status</code>, <code>events</code></a></td><td>标识信息、实时状态、设备事件</td></tr>
+<tr><td><a href="omnicore.Device.receive.html"><code>receive</code></a></td><td>一次采集</td></tr>
+<tr><td><a href="omnicore.RxStream.html"><code>rxStream</code></a></td><td>创建 <code>omnicore.RxStream</code></td></tr>
+<tr><td><a href="omnicore.Device.transmit.html"><code>transmit</code></a></td><td>发一个突发</td></tr>
+<tr><td><a href="omnicore.Device.transmitRepeat.html"><code>transmitRepeat</code>, <code>stopTransmit</code>, <code>isTransmitting</code></a></td><td>后台循环发射</td></tr>
+<tr><td><a href="omnicore.TxStream.html"><code>txStream</code></a></td><td>创建 <code>omnicore.TxStream</code></td></tr>
+<tr><td><a href="omnicore.Device.time.html"><code>time</code>, <code>timeTicks</code>, <code>setTime</code>, <code>lastPPS</code></a></td><td>硬件时间</td></tr>
+<tr><td><code>isOpen</code></td><td>对象删除前为 true</td></tr>
+<tr><td><code>delete</code></td><td>关闭（同一设备的最后一个对象删除时才真正关闭）</td></tr>
+</table>
+
+<h2>示例</h2>
+<details open><summary>配置并查看状态</summary>
+<pre><code>dev = omnicore.Device();
+configure(dev, 'SampleRate', 30.72e6, 'RxFrequency', 2.45e9, 'RxBandwidth', 20e6);
+dev.RxGainMode = 'manual';
+dev.RxGain = [40 40];
+dev                       % 显示当前配置
+status(dev)               % 温度、锁定状态、RSSI</code></pre></details>
+<details><summary>8 位模式下的 2T2R 61.44 MSPS</summary>
+<pre><code>dev = omnicore.Device('IQBits', 8, 'RxChannels', [1 2], 'TxChannels', [1 2], ...
+                      'SampleRate', 61.44e6, 'RxBandwidth', 56e6, 'TxBandwidth', 56e6);
+[x, meta] = receive(dev, 1e7, 'OutputDataType', 'int8');   % 1e7 x 2 complex int8</code></pre></details>
+<details><summary>处理“设备被占用”</summary>
+<pre><code>try
+    dev = omnicore.Device();
+catch err
+    if strcmp(err.identifier, 'omnicore:BUSY')
+        disp('设备被其他程序（och、GNU Radio、另一个 MATLAB）占用');
+    else
+        rethrow(err);
+    end
+end</code></pre></details>
+
+<h2>提示</h2>
+<ul>
+<li>改采样率和带宽等多个参数时用 <code>configure</code>：只重配一次，正在运行的流只暂停一次。</li>
+<li>频率和增益可以在流运行时修改（接收数据的 <code>meta.Reconfigured</code> 为 true）；通道和 <code>IQBits</code> 需要先停掉所有流。</li>
+<li>对象删除时关闭设备；关闭出错只给 <code>omnicore:CloseFailed</code> 警告。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.findDevices.html">omnicore.findDevices</a><a href="omnicore.RxStream.html">omnicore.RxStream</a><a href="omnicore.TxStream.html">omnicore.TxStream</a><a href="omnicore.Receiver.html">omnicore.Receiver</a></p>
+</body></html>

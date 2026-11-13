@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulink - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › Simulink</div>
+<h1>Simulink</h1>
+<p class="purpose">在 Simulink 模型中实时收发</p>
+
+<h2>添加模块</h2>
+<ol>
+<li>从库浏览器 Simulink › User-Defined Functions 拖入 <b>MATLAB System</b> 模块。</li>
+<li>System object 名称填 <code>omnicore.Receiver</code> 或 <code>omnicore.Transmitter</code>。</li>
+<li>在模块对话框中设置属性（与 MATLAB 中相同，见 <a href="omnicore.Receiver.html">Receiver</a>、<a href="omnicore.Transmitter.html">Transmitter</a>）。</li>
+</ol>
+<p>模块以“解释执行”方式运行，不支持代码生成。Receiver 有三个输出（帧、valid、overflow），Transmitter 有一个输入（帧）和一个输出（underflow）。</p>
+
+<h2>时序</h2>
+<ul>
+<li>设定了 <code>SampleRate</code> 时，Receiver 的采样时间为 <code>SamplesPerFrame / SampleRate</code>；<code>SampleRate</code> 为 NaN 时继承。</li>
+<li>仿真由 Receiver 等待每一帧来定速，也就是实时运行；模型的停止时间就是运行的秒数。</li>
+<li>只有 Transmitter 的模型不受设备节拍限制，需要用 Receiver 或其他方式定速。</li>
+</ul>
+
+<h2>全双工</h2>
+<p>Simulink 在仿真开始前初始化所有模块，所以 Receiver 和 Transmitter 两个模块使用同一个 <code>SerialNumber</code>（例如都为 <code>''</code>）即可共用一台设备、同时收发。</p>
+<p>示例 <code>simulink_duplex_example.m</code> 用脚本搭建并运行一个全双工模型（Receiver → 增益 → Transmitter）；<code>save_system('omnicore_duplex')</code> 可以保存它。</p>
+
+<h2>已知现象</h2>
+<ul>
+<li>启动 MATLAB 后第一次运行模型时，编译造成一次较长的停顿，Transmitter 可能报一次欠流；之后的运行没有。可加大 <code>Latency</code>。</li>
+<li>Simulink 不允许字符型参数可调，所以 <code>GainMode</code> 只能在仿真前设定；<code>CenterFrequency</code> 和 <code>Gain</code> 可在仿真中修改。</li>
+<li>R2024b 对 <code>matlab.system.mixin.Propagates</code>、<code>SampleTime</code> 给出“不推荐使用”提示；为了支持 R2018a 保留。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Receiver.html">omnicore.Receiver</a><a href="omnicore.Transmitter.html">omnicore.Transmitter</a><a href="examples.html">示例</a></p>
+</body></html>

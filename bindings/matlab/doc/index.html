@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniCoreSDR for MATLAB</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs">OmniCoreSDR for MATLAB</div>
+<h1>OmniCoreSDR for MATLAB</h1>
+<p class="purpose">在 MATLAB 和 Simulink 中使用 OmniCoreSDR：采集、发射、定时收发与全双工</p>
+
+<p>OmniCoreSDR 基于 AD9361：2 路接收、2 路发射，70 MHz – 6 GHz，采样率 2.5 – 61.44 MSPS，带硬件时间戳和 PPS 对时。本工具箱通过 MEX 文件直接调用 OmniCore Host 运行库，不依赖 SoapySDR，也不需要任何 MATLAB 工具箱，支持 MATLAB R2018a 及以后版本。</p>
+
+<ul class="cards">
+  <li><b><a href="getting_started.html">入门</a></b>安装、第一次采集、第一次发射。</li>
+  <li><b><a href="examples.html">示例</a></b>FM 收音机、FM 自发自收、数字视频传输、简易示波器等。</li>
+  <li><b><a href="functions.html">函数和类</a></b><code>omnicore.Device</code>、流、System object 的完整参考。</li>
+</ul>
+
+<h2>选择接口</h2>
+<table>
+<tr><th>需要</th><th>使用</th></tr>
+<tr><td>采一段数据再处理</td><td><a href="omnicore.Device.receive.html"><code>receive</code></a></td></tr>
+<tr><td>连续接收、边收边处理</td><td><a href="omnicore.RxStream.html"><code>omnicore.RxStream</code></a></td></tr>
+<tr><td>发一个突发（可定时）</td><td><a href="omnicore.Device.transmit.html"><code>transmit</code></a></td></tr>
+<tr><td>后台循环发射一段波形</td><td><a href="omnicore.Device.transmitRepeat.html"><code>transmitRepeat</code></a></td></tr>
+<tr><td>边算边发、多个定时突发</td><td><a href="omnicore.TxStream.html"><code>omnicore.TxStream</code></a></td></tr>
+<tr><td>按帧处理的收发循环，或 Simulink</td><td><a href="omnicore.Receiver.html"><code>omnicore.Receiver</code></a>、<a href="omnicore.Transmitter.html"><code>omnicore.Transmitter</code></a></td></tr>
+<tr><td>按硬件时间对齐收发、多次测量</td><td><a href="time_pps.html">硬件时间与 PPS</a></td></tr>
+</table>
+
+<h2>概念</h2>
+<ul>
+  <li><a href="data_formats.html">样点格式与缩放</a>：single / double / int16 / int8，±1 满量程，内存估算。</li>
+  <li><a href="streaming.html">流、全双工与丢样</a>：每台设备一个 RX 流、一个 TX 流，全双工的启停规则，丢样如何报告。</li>
+  <li><a href="time_pps.html">硬件时间与 PPS</a>：样点计数时钟、定时开始、PPS 对时。</li>
+  <li><a href="simulink.html">Simulink</a>：MATLAB System 模块中的 Receiver / Transmitter。</li>
+  <li><a href="errors.html">错误与警告</a>：<code>omnicore:*</code> 标识符及处理方法。</li>
+</ul>
+
+<h2>在 MATLAB 中查看帮助</h2>
+<pre><code>omnicore.doc                 % 打开本页
+omnicore.doc('receive')      % 打开某个函数或方法的页面
+help omnicore.Device         % 命令行帮助
+help omnicore                % 包内容列表</code></pre>
+<p class="small">工具箱文件夹在 MATLAB 路径上时，这些页面也出现在帮助浏览器的“补充软件”（Supplemental Software）中。</p>
+</body></html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>硬件时间与 PPS - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › 硬件时间与 PPS</div>
+<h1>硬件时间与 PPS</h1>
+<p class="purpose">用设备的样点时钟安排和标记收发</p>
+
+<h2>硬件时间</h2>
+<p>设备有一个 64 位的样点计数器：1 tick = 1 个样点，时间（秒）= ticks / <code>SampleRate</code>。每块接收数据都带有第一个样点的计数值，发射可以指定开始的计数值，所以收发的时间关系精确到样点，与 USB 和 MATLAB 的延迟无关。</p>
+<table>
+<tr><th>操作</th><th>时间</th></tr>
+<tr><td><code>time(dev)</code>, <code>timeTicks(dev)</code></td><td>读取当前时间</td></tr>
+<tr><td><code>receive(..., 'StartTime', t)</code>, <code>start(rx, 'StartTime', t)</code></td><td>在 <code>t</code> 开始接收</td></tr>
+<tr><td><code>meta.Time</code>, <code>meta.TimeTicks</code></td><td>每块接收数据第一个样点的时间</td></tr>
+<tr><td><code>transmit(..., 'StartTime', t)</code>, <code>write(tx, x, 'StartTime', t)</code></td><td>在 <code>t</code> 开始一个突发</td></tr>
+<tr><td><code>s.AckTime</code>, <code>s.AckTicks</code></td><td>设备确认突发结束的时间</td></tr>
+</table>
+<p>需要精确到样点时用 ticks（<code>uint64</code>）计算，最后再除以采样率；<code>StartTime</code> 用秒给出时会四舍五入到最近的样点。</p>
+
+<h2>定时收发的模式</h2>
+<pre><code>fs = dev.SampleRate;
+t = round((time(dev) + 0.05) * fs);                     % 50 ms 之后，按样点取整
+write(tx, burst, 'StartTime', t / fs, 'EndBurst', true);
+% 在运行中的 RX 流里，按 meta.TimeTicks 截取 [t, t + numel(burst)) 附近的样点</code></pre>
+<p>提前量要够设备收到数据：一般 30–100 ms。来不及时设备报告 Late。示例 <code>video_link</code> 用这个模式逐帧发送；<code>timed_burst_loopback</code> 用它测量 TX→RX 延迟。</p>
+
+<h2>PPS 对时</h2>
+<table>
+<tr><th><code>TimeSource</code></th><th>PPS 来自</th></tr>
+<tr><td><code>'none'</code></td><td>不用 PPS</td></tr>
+<tr><td><code>'external'</code></td><td>外部 PPS 输入（GPS 接收机等）</td></tr>
+<tr><td><code>'internal'</code></td><td>板上由参考时钟生成的 PPS</td></tr>
+<tr><td><code>'sync'</code></td><td>多板共享的 TRIG 信号</td></tr>
+</table>
+<pre><code>dev.ClockSource = 'external';              % 外部 10 MHz（可选，让采样时钟与参考同源）
+dev.TimeSource = 'external';
+setTime(dev, 0, 'AtNextPPS', true);        % 下一个 PPS 沿的样点时间为 0
+pause(1.5);
+[tp, ticks] = lastPPS(dev)                 % 1 秒，±1 样点</code></pre>
+<p>之后整秒的硬件时间落在 PPS 沿上，多台设备（各自接同一 PPS 和 10 MHz）按同一个 <code>StartTime</code> 收发即可对齐。</p>
+
+<h2>注意</h2>
+<ul>
+<li>PPS 与采样时钟异步，锁存值有 ±1 样点抖动。</li>
+<li>改 <code>SampleRate</code> 会让硬件时间重新开始；时间设过时给 <code>omnicore:TimeInvalidated</code> 警告，需要重新 <code>setTime</code>。</li>
+<li>“时间已设定”的状态在关闭、重新打开设备后保留（<code>status(dev).TimeValid</code>）。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.time.html">time, setTime, lastPPS</a><a href="omnicore.TxStream.html">omnicore.TxStream</a><a href="streaming.html">流、全双工与丢样</a></p>
+</body></html>

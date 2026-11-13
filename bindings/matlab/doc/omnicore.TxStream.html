@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omnicore.TxStream - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.TxStream</div>
+<h1>omnicore.TxStream <span class="kind">句柄类</span></h1>
+<p class="purpose">分段写入和定时突发</p>
+
+<h2>创建</h2>
+<p class="syntax">tx = txStream(dev)</p>
+<p class="syntax">tx = txStream(dev, Name, Value)</p>
+<p class="syntax">tx = omnicore.TxStream(dev, Name, Value)</p>
+<p>设备的 <code>TxChannels</code> 不能为空。流在第一次 <code>write</code> 时开始。</p>
+<h3>名称-值参数</h3>
+<dl class="args">
+<dt>'BufferBytes' <span class="type">字节，默认 64 MiB</span></dt><dd>主机环形缓冲。</dd>
+<dt>'Timeout' <span class="type">秒，默认 1</span></dt><dd><code>write</code> 没有进展时的最长等待，之后可改 <code>tx.Timeout</code>。</dd>
+</dl>
+
+<h2>属性</h2>
+<table>
+<tr><td><code>Device</code>, <code>BufferBytes</code></td><td>只读</td></tr>
+<tr><td><code>Timeout</code></td><td>秒，可修改</td></tr>
+<tr><td><code>IsActive</code></td><td>从第一次 <code>write</code> 到 <code>stop</code> 为 true</td></tr>
+</table>
+
+<h2>对象函数</h2>
+<div class="desc"><div class="syntax">write(tx, x)</div><p>把 <code>x</code>（每个 TX 通道一列）排入队列，全部被接受后返回。类型同 <a href="omnicore.Device.transmit.html"><code>transmit</code></a>；直到 <code>stop</code> 为止，所有写入必须是同一种（single/double、int16 或 int8）。</p></div>
+<div class="desc"><div class="syntax">write(tx, x, 'StartTime', t)</div><p><code>x</code> 在硬件时间 <code>t</code>（秒）开始一个新突发。</p></div>
+<div class="desc"><div class="syntax">write(tx, x, 'EndBurst', true)</div><p><code>x</code> 结束当前突发（<code>x</code> 可以为空）。下一次写入开始新突发。</p></div>
+<div class="desc"><div class="syntax">s = status(tx)</div><p>上次调用以来的 TX 事件，字段同 <code>transmit</code> 的返回值：<code>Underflow</code>、<code>Starved</code>、<code>Late</code>、<code>BurstAck</code>、<code>AckTime</code>、<code>AckTicks</code>、<code>Errors</code>、<code>LastError</code>、<code>Dropped</code>。</p></div>
+<div class="desc"><div class="syntax">stop(tx)</div><p>把已排队的样点发完（未结束的突发补零结束）并停止；下一次写入重新开始。</p></div>
+
+<h2>示例</h2>
+<details open><summary>一串定时突发</summary>
+<pre><code>dev = omnicore.Device('TxChannels', 1, 'TxGain', 20);
+fs = dev.SampleRate;
+tx = txStream(dev);
+x = single(0.5 * exp(1j*2*pi*1e6/fs*(0:19999).'));
+t0 = ceil(time(dev)) + 1;
+for k = 0:9
+    write(tx, x, 'StartTime', t0 + 0.1*k, 'EndBurst', true);   % 每 100 ms 一个突发
+end
+pause(2);
+s = status(tx)          % BurstAck = 10
+stop(tx);</code></pre></details>
+<details><summary>边算边发的连续突发</summary>
+<pre><code>tx = txStream(dev);
+for k = 1:1000
+    write(tx, next_block());       % 一个不断开的突发：要以不低于采样率的速度写入
+end
+write(tx, [], 'EndBurst', true);
+s = status(tx); stop(tx);</code></pre></details>
+
+<h2>提示</h2>
+<ul>
+<li>队列里有一个完整的 USB 传输（单通道 65472、双通道 32736 样点）或突发已结束时，设备才开始发射。</li>
+<li>一个突发之内要持续喂数据，否则 <code>status</code> 报 <code>Underflow</code>。</li>
+<li>每台设备只有一个 TX 流：活动期间 <code>transmit</code>、<code>transmitRepeat</code> 和第二个流报 <code>omnicore:BUSY</code>。</li>
+<li>写入不足一个 USB 传输又没有 <code>EndBurst</code> 时设备从未开始发射；这时 <code>stop</code> 给 <code>omnicore:TxNotSent</code> 警告。短突发请带 <code>'EndBurst', true</code>。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.transmit.html">transmit</a><a href="omnicore.Transmitter.html">omnicore.Transmitter</a><a href="time_pps.html">硬件时间与 PPS</a></p>
+</body></html>

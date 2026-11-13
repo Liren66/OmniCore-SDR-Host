@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omnicore.version - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.version</div>
+<h1>omnicore.version</h1>
+<p class="purpose">MATLAB 接口使用的 OmniCore Host 版本</p>
+
+<h2>语法</h2>
+<p class="syntax">v = omnicore.version()</p>
+
+<h2>说明</h2>
+<div class="desc"><div class="syntax">v = omnicore.version()</div>
+<p>返回结构体：</p>
+<table>
+<tr><td><code>Library</code></td><td>实际加载的 OmniCore Host 运行库版本</td></tr>
+<tr><td><code>Header</code></td><td>编译 MEX 文件时使用的 <code>och.h</code> 版本</td></tr>
+<tr><td><code>Abi</code></td><td>C ABI 版本</td></tr>
+</table>
+<p><code>Library</code> 与 <code>Header</code> 应一致。不一致说明 MEX 文件旁边或系统路径上有另一个版本的运行库。</p></div>
+
+<h2>示例</h2>
+<pre><code>v = omnicore.version();
+assert(strcmp(v.Library, v.Header), 'OmniCore 运行库版本不匹配');</code></pre>
+
+<h2>提示</h2>
+<ul><li>这是检查安装是否正确的第一步：能返回就说明 MEX 文件和运行库都已加载。加载失败时，Windows 报 <code>omnicore:LibraryNotFound</code>，其他平台报 “Invalid MEX-file”，见<a href="errors.html">错误与警告</a>。</li></ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.findDevices.html">omnicore.findDevices</a><a href="getting_started.html">入门</a></p>
+</body></html>

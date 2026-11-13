@@ -47,7 +47,7 @@ Copy-Item -LiteralPath (Join-Path $driver 'libusbK-3.1.0.0\libusbK-3.1.0.0-bin\b
 $matlab=Join-Path $stage 'matlab'
 if(Test-Path -LiteralPath $matlab){
     # The MEX file loads omnicore.dll and libusbK.dll from its own folder (bindings/matlab/mex/LibraryLoader.cpp).
-    foreach($required in @('omnicore_mex.mexw64','+omnicore\Device.m')){
+    foreach($required in @('omnicore_mex.mexw64','+omnicore\Device.m','info.xml','doc\index.html','examples\private\sdr_link.m')){
         if(-not (Test-Path -LiteralPath (Join-Path $matlab $required))){throw "Missing MATLAB file: matlab\$required"}
     }
     Copy-Item -LiteralPath (Join-Path $stage 'bin\omnicore.dll'),(Join-Path $stage 'bin\libusbK.dll') -Destination $matlab -Force

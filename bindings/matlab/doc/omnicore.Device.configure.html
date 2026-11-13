@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>configure - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › configure</div>
+<h1>configure</h1>
+<p class="purpose">一次下发多个配置属性</p>
+
+<h2>语法</h2>
+<p class="syntax">configure(dev, Name, Value, ...)</p>
+
+<h2>说明</h2>
+<div class="desc"><div class="syntax">configure(dev, Name, Value, ...)</div>
+<p>把给出的配置属性合并成一次重配置下发。效果与逐个给属性赋值相同，但设备只重配一次：例如同时改采样率和带宽时，正在运行的流只暂停一次。任一值无效时整个请求被拒绝，配置保持不变。</p></div>
+
+<h2>示例</h2>
+<pre><code>configure(dev, 'SampleRate', 61.44e6, 'RxBandwidth', 56e6, 'TxBandwidth', 56e6);
+configure(dev, 'RxFrequency', 915e6, 'RxGainMode', 'manual', 'RxGain', [30 30]);</code></pre>
+
+<h2>输入参数</h2>
+<dl class="args">
+<dt>Name, Value</dt>
+<dd>配置属性 <code>SampleRate</code>、<code>RxFrequency</code>、<code>TxFrequency</code>、<code>RxBandwidth</code>、<code>TxBandwidth</code>、<code>RxGain</code>、<code>RxGainMode</code>、<code>TxGain</code>、<code>RxChannels</code>、<code>TxChannels</code>、<code>IQBits</code>，取值见 <a href="omnicore.Device.html#props"><code>omnicore.Device</code> 属性</a>。名称区分大小写。</dd>
+</dl>
+
+<h2>提示</h2>
+<ul>
+<li>运行中可以改：频率、增益、增益模式、带宽、采样率（采样率改变时流暂停后继续，硬件时间重新开始）。</li>
+<li>需要先停掉所有流才能改：<code>RxChannels</code>、<code>TxChannels</code>、<code>IQBits</code>，否则报 <code>omnicore:BUSY</code>。</li>
+<li>板级设置（<code>ClockSource</code>、<code>TimeSource</code> 等）不经过 <code>configure</code>，直接给属性赋值。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.html">omnicore.Device</a><a href="omnicore.Device.status.html">status</a></p>
+</body></html>

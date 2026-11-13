@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>流、全双工与丢样 - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › 流、全双工与丢样</div>
+<h1>流、全双工与丢样</h1>
+<p class="purpose">接收和发射如何共用一台设备，丢样如何报告</p>
+
+<h2>每台设备一个 RX 流、一个 TX 流</h2>
+<table>
+<tr><th>方向</th><th>占用这个流的操作</th></tr>
+<tr><td>RX</td><td><code>receive</code>（调用期间）、运行中的 <code>RxStream</code>、<code>Receiver</code>（第一次调用到 <code>release</code>）</td></tr>
+<tr><td>TX</td><td><code>transmit</code>（调用期间）、<code>transmitRepeat</code>（到 <code>stopTransmit</code>）、活动的 <code>TxStream</code>（第一次 <code>write</code> 到 <code>stop</code>）、<code>Transmitter</code></td></tr>
+</table>
+<p>同一方向同时有第二个操作时报 <code>omnicore:BUSY</code>。RX 和 TX 可以同时运行（全双工）。</p>
+
+<h2 id="restart">全双工的启停规则</h2>
+<div class="warn">任何一个流停止之后，只有在<b>两个方向都停止</b>时才能开新流。也就是说，TX 正在发射时，RX 可以开始一次，但停了就不能再开；反过来也一样。违反时报 <code>omnicore:BUSY</code>（“stop both directions before reopening a stream”）。</div>
+<p>原因是 core 要在两个方向都停下时才复位 USB 管道。实际做法：</p>
+<ul>
+<li>全双工测量用一个一直运行的 <code>RxStream</code>（或 <code>Receiver</code>）配一个 <code>TxStream</code>（或 <code>Transmitter</code>），而不是每次测量调用一次 <code>receive</code>。</li>
+<li>在运行的 RX 流里按硬件时间戳截取需要的部分，见示例 <code>video_link</code> 和 <code>timed_burst_loopback</code>。</li>
+<li>要换一种用法时，先停掉两个方向（<code>stop</code>、<code>stopTransmit</code>、<code>release</code>）。</li>
+</ul>
+
+<h2>一个循环里收发</h2>
+<pre><code>dev = omnicore.Device('RxChannels', 1, 'TxChannels', 1, 'TxGain', 20);
+rx = rxStream(dev); tx = txStream(dev);
+start(rx);
+write(tx, complex(zeros(0.1 * dev.SampleRate, 1, 'single')));   % 100 ms 余量
+for k = 1:1000
+    write(tx, make_block(k));          % 立即返回（缓冲有空间时）
+    [y, meta] = read(rx, 122880);      % 等设备：循环按采样率运行
+    process(y);
+end
+stop(tx); stop(rx);</code></pre>
+<p><code>read</code> 等待设备的数据，所以循环自然按采样率运行；先写入的一段零让 TX 领先于循环，MATLAB 偶尔停顿时不会欠流。<code>omnicore.Transmitter</code> 的 <code>Latency</code> 属性做的是同一件事。</p>
+
+<h2>RX 丢样</h2>
+<p>设备把样点连续写入主机环形缓冲（默认 64 MiB）；MATLAB 两次读取之间缓冲满了才丢样。丢样会被精确报告：</p>
+<ul>
+<li><code>meta.Overflow</code> 为 true；</li>
+<li><code>meta.Gaps</code> 每行 <code>[行号, 丢失数]</code>：数据在该行之前缺了多少样点（由硬件时间戳算出）；两次 <code>read</code> 之间丢的样点记在第 1 行；</li>
+<li>丢失的样点不补零，数组只含实际收到的样点，时间戳 <code>meta.TimeTicks</code> 指向第一个样点。</li>
+</ul>
+<p>避免丢样：加大 <code>BufferBytes</code>；减少每块的处理和绘图（<code>drawnow limitrate</code>、隔几块画一次）；高速率时用 <code>receive</code> 一次采完再处理。</p>
+
+<h2>TX 欠流</h2>
+<p>突发进行中设备没有样点可发时报 <code>Underflow</code>（<code>status</code> / <code>Transmitter</code> 的输出），这是射频上的中断。<code>Starved</code> 只表示主机队列暂时为空：定时突发等待开始时间时也会出现，此时无害。</p>
+
+<h2>运行中修改参数</h2>
+<table>
+<tr><th>参数</th><th>运行中</th></tr>
+<tr><td>频率、增益、增益模式、带宽</td><td>可以，流不停；接收数据 <code>meta.Reconfigured</code> 为 true。改 TX 本振时 core 丢弃已排队的 TX 样点</td></tr>
+<tr><td>采样率</td><td>可以，流暂停后继续；硬件时间重新开始</td></tr>
+<tr><td>通道、<code>IQBits</code></td><td>不可以，先停止所有流（<code>omnicore:BUSY</code>）</td></tr>
+</table>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.RxStream.html">omnicore.RxStream</a><a href="omnicore.TxStream.html">omnicore.TxStream</a><a href="time_pps.html">硬件时间与 PPS</a><a href="examples.html">示例</a></p>
+</body></html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>transmit - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
+<body>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › transmit</div>
+<h1>transmit</h1>
+<p class="purpose">发射一个突发，等待设备确认发完</p>
+
+<h2>语法</h2>
+<p class="syntax"><a href="#s1">transmit(dev, x)</a></p>
+<p class="syntax"><a href="#s2">transmit(dev, x, Name, Value)</a></p>
+<p class="syntax"><a href="#s3">s = transmit(___)</a></p>
+
+<h2>说明</h2>
+<div class="desc" id="s1"><div class="syntax">transmit(dev, x)</div>
+<p>把 <code>x</code> 作为一个突发发出，设备报告突发结束（BurstAck）后返回。<code>x</code> 为 N × <code>numel(dev.TxChannels)</code>，单通道时行向量也可以。</p></div>
+<div class="desc" id="s2"><div class="syntax">transmit(dev, x, Name, Value)</div>
+<p>指定开始的硬件时间、超时或缓冲大小。</p></div>
+<div class="desc" id="s3"><div class="syntax">s = transmit(___)</div>
+<p>返回这个突发的 TX 事件统计。</p></div>
+
+<h2>示例</h2>
+<details open><summary>一个单音突发</summary>
+<pre><code>dev = omnicore.Device('TxChannels', 1, 'TxFrequency', 2.45e9, 'TxGain', 20);
+x = single(0.5 * exp(1j*2*pi*1e6/dev.SampleRate*(0:30719).'));
+s = transmit(dev, x);
+fprintf('突发结束于硬件时间 %.6f s\n', s.AckTime);</code></pre></details>
+<details><summary>定时突发</summary>
+<pre><code>t = time(dev) + 0.5;
+s = transmit(dev, x, 'StartTime', t);
+(s.AckTime - t) * dev.SampleRate        % 突发长度加上设备流水线延迟，样点</code></pre></details>
+
+<h2>输入参数</h2>
+<dl class="args">
+<dt>x <span class="type">single | double | int16 | int8，复数或实数</span></dt>
+<dd>single / double 按 ±1 满量程，超出部分限幅并给 <code>omnicore:TxClipped</code> 警告；实数按 Q = 0 发射。int16 为 12 位样点左对齐；int8 只在 <code>IQBits = 8</code> 时可用。见<a href="data_formats.html">样点格式与缩放</a>。</dd>
+</dl>
+<h3>名称-值参数</h3>
+<dl class="args">
+<dt>'StartTime' <span class="type">秒</span></dt><dd>第一个样点的硬件时间。已经过去时设备报告 Late，并给 <code>omnicore:TxLate</code> 警告。</dd>
+<dt>'Timeout' <span class="type">秒，默认 1</span></dt><dd>没有进展的最长时间，超过报 <code>omnicore:TIMEOUT</code>。定时突发的等待时间自动加上到 <code>StartTime</code> 的延迟。</dd>
+<dt>'BufferBytes' <span class="type">字节，默认 64 MiB</span></dt><dd>主机环形缓冲大小。</dd>
+</dl>
+
+<h2>输出参数</h2>
+<dl class="args"><dt>s <span class="type">结构体</span></dt><dd>
+<table>
+<tr><th>字段</th><th>含义</th></tr>
+<tr><td><code>Underflow</code></td><td>设备发射时样点用完的次数（射频欠流），另有 <code>omnicore:TxUnderflow</code> 警告</td></tr>
+<tr><td><code>Starved</code></td><td>突发进行中主机队列为空的次数。定时突发等待开始时也会出现，此时无害</td></tr>
+<tr><td><code>Late</code></td><td>开始时间已过的次数</td></tr>
+<tr><td><code>BurstAck</code></td><td>设备确认的突发结束次数</td></tr>
+<tr><td><code>AckTime</code>, <code>AckTicks</code></td><td>突发结束的硬件时间（秒 / <code>uint64</code> 样点）</td></tr>
+<tr><td><code>Errors</code>, <code>LastError</code>, <code>Dropped</code></td><td>设备报告的 TX 错误数、最后一条错误、事件队列满时丢掉的事件数</td></tr>
+</table></dd></dl>
+
+<h2>提示</h2>
+<ul>
+<li>每台设备只有一个 TX 流：<code>transmitRepeat</code> 或 <code>TxStream</code> 活动时，<code>transmit</code> 报 <code>omnicore:BUSY</code>。</li>
+<li>多个连续的定时突发、或边算边发时，用 <a href="omnicore.TxStream.html"><code>TxStream</code></a>，不必每次都等确认。</li>
+</ul>
+
+<h2>另请参阅</h2>
+<p class="seealso"><a href="omnicore.Device.transmitRepeat.html">transmitRepeat</a><a href="omnicore.TxStream.html">omnicore.TxStream</a><a href="omnicore.Transmitter.html">omnicore.Transmitter</a></p>
+</body></html>
