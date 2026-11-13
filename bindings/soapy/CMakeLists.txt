@@ -1,6 +1,6 @@
 # SoapySDR module for OmniCoreSDR (driver=omnicore). Built from the top-level project with
 # -DOCH_BUILD_SOAPY=ON, or on its own against an installed OmniCore Host:
-#   cmake -S bindings/soapy -B build-soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.7.2
+#   cmake -S bindings/soapy -B build-soapy -DCMAKE_PREFIX_PATH=/opt/omnicore/0.8.0
 cmake_minimum_required(VERSION 3.20)
 if (NOT TARGET OmniCore::omnicore)
     project(SoapyOmniCore LANGUAGES CXX)

@@ -1,6 +1,6 @@
 # MATLAB MEX gateway for OmniCoreSDR (MEX_PLAN.md). Built from the top-level project with
 # -DOCH_BUILD_MATLAB=ON, or on its own against an installed OmniCore Host:
-#   cmake -S bindings/matlab -B build-matlab -DCMAKE_PREFIX_PATH=/opt/omnicore/0.7.2
+#   cmake -S bindings/matlab -B build-matlab -DCMAKE_PREFIX_PATH=/opt/omnicore/0.8.0
 # Matlab_ROOT_DIR selects the MATLAB installation when several are present. Without CMake, see
 # build_omnicore_mex.m.
 cmake_minimum_required(VERSION 3.20)
