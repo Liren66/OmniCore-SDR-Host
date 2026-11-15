@@ -365,7 +365,7 @@ och_send_burst(tx, samples, n, &md, &accepted, 1000);   // 在样点时间 T2 �
 
 RX 元数据的 `time_ticks` 是每批第一个样点的时间；突发完成、迟到、欠流以带 `hw_time` 的事件上报。详见 [硬件时间戳](docs/timestamps.md)。
 
-示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp)。接口与生命周期详见 [API 参考](docs/api.md)。
+示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp) · [扫频瀑布图与实时演示界面](docs/sweep.md)。接口与生命周期详见 [API 参考](docs/api.md)。
 
 从源码构建时示例默认一起编译（`-DOCH_BUILD_EXAMPLES=OFF` 可关闭），可执行文件在构建目录的 `examples/` 下（Windows 与 `omnicore.dll` 同目录）。已安装的 OCH 也可以单独编译示例：
 
@@ -478,7 +478,7 @@ OmniCoreHost/
 | [Linux 安装](docs/INSTALL_LINUX.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
 | [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
 | [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | [多板同步](docs/multi-board-sync.md) |
-| [SoapySDR 插件](docs/soapy.md) | | |
+| [SoapySDR 插件](docs/soapy.md) | [扫频瀑布图](docs/sweep.md) | |
 | [MATLAB 工具箱](docs/matlab.md) | | |
 
 ## 许可证

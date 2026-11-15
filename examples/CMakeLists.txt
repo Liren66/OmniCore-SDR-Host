@@ -16,7 +16,7 @@ if(NOT TARGET OmniCore::omnicore)
 endif()
 find_package(Threads REQUIRED)
 
-foreach(name receive transmit reconfigure duplex_iq8)
+foreach(name receive transmit reconfigure duplex_iq8 sweep)
   add_executable(${name} ${name}.cpp)
   target_link_libraries(${name} PRIVATE OmniCore::omnicore Threads::Threads)
   if(MINGW)
