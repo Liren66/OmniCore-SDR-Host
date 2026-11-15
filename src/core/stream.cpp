@@ -353,20 +353,38 @@ void Stream::start() {
             // one played, so the count can stay just below a whole block.
             bool filled = false;
             unsigned threshold = unsigned(frame_groups()) - 16;
+            const uint64_t gate_started = now_ns();
+            long last_groups = -1, peak_groups = -1; // -1: field never seen in usb_status?
+            unsigned polls = 0;
             while (now_ns() < deadline && running) {
                 auto reply = dev->command("usb_status?");
+                ++polls;
                 auto i = reply.find("tx_main_fifo_groups=");
                 if (i != std::string::npos) {
                     unsigned groups = 0;
                     auto first = reply.c_str() + i + 20;
-                    if (sscanf(first, "%u", &groups) == 1 && groups >= threshold) {
-                        filled = true;
-                        break;
+                    if (sscanf(first, "%u", &groups) == 1) {
+                        last_groups = long(groups);
+                        peak_groups = std::max(peak_groups, last_groups);
+                        if (groups >= threshold) {
+                            filled = true;
+                            break;
+                        }
                     }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
-            require(filled, OCH_TIMEOUT, "TX prefill did not reach FPGA threshold: " + error());
+            // Say what the FPGA reported: 0 means no block arrived, just below the threshold means
+            // the gate is too strict for this mode.
+            require(filled, OCH_TIMEOUT,
+                    "TX prefill did not reach FPGA threshold: tx_main_fifo_groups last " + std::to_string(last_groups) +
+                            ", peak " + std::to_string(peak_groups) + ", need " + std::to_string(threshold) + " (" +
+                            std::to_string(wire_bytes == 2 ? 8 : 12) + "-bit, " +
+                            std::to_string(nchan) + " channel(s)), " +
+                            std::to_string(polls) + " polls in " +
+                            std::to_string((now_ns() - gate_started) / 1000000) + " ms" +
+                            (running ? std::string() : std::string(", USB worker stopped")) +
+                            (error().empty() ? std::string() : "; " + error()));
             dev->command("tx_enable=1");
         }
         require(running && !stop_requested, OCH_IO, "USB worker stopped during startup: " + error());
