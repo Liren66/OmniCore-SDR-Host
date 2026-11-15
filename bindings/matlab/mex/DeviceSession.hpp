@@ -5,7 +5,7 @@
 #pragma once
 #include "ConfigRequest.hpp"
 #include "Error.hpp"
-#include "TxEvents.hpp"
+#include "common/TxEvents.hpp"
 #include <atomic>
 #include <deque>
 #include <mex.h>
@@ -15,6 +15,10 @@
 #include <string>
 
 namespace omnicore_mex {
+    using omnicore_bindings::TxEvent;
+    using omnicore_bindings::TxEvents;
+    using omnicore_bindings::TxStatus;
+
     struct DeviceTime {
         uint64_t now = 0;       // sample ticks
         uint64_t last_pps = 0;  // time latched at the last PPS edge

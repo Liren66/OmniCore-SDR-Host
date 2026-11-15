@@ -11,7 +11,7 @@
 // or clear the input meanwhile.
 #pragma once
 #include "DeviceSession.hpp"
-#include "TxEvents.hpp"
+#include "common/TxEvents.hpp"
 #include "common/TxBurst.hpp"
 #include <atomic>
 #include <cstdint>

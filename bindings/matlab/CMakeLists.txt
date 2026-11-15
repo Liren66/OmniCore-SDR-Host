@@ -17,8 +17,9 @@ if (NOT TARGET och_bindings_common)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../common ${CMAKE_CURRENT_BINARY_DIR}/common)
 endif ()
 
-# Offline tests of the configuration mapping and the RX gap report: need neither MATLAB nor a device.
-foreach (name config_request rx_gaps tx_events)
+# Offline tests of the MATLAB configuration names and the TX input conversion: need neither MATLAB
+# nor a device.
+foreach (name config_request tx_convert)
     add_executable(matlab_${name}_test tests/${name}_test.cpp)
     target_include_directories(matlab_${name}_test PRIVATE mex)
     target_link_libraries(matlab_${name}_test PRIVATE och_bindings_common)

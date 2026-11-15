@@ -234,7 +234,7 @@ mxArray *RxSession::meta_struct(const RxReport &r) const {
     mxArray *gaps = mxCreateDoubleMatrix(r.gaps.size(), 2, mxREAL);
     double *g = mxGetDoubles(gaps);
     for (size_t i = 0; i < r.gaps.size(); ++i) {
-        g[i] = r.gaps[i].index;
+        g[i] = double(r.gaps[i].row) + 1; // MATLAB rows are 1-based
         g[i + r.gaps.size()] = r.gaps[i].lost;
     }
     return StructBuilder()

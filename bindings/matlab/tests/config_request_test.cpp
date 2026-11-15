@@ -1,4 +1,5 @@
-// Offline test of the MATLAB configuration mapping (bindings/matlab/mex/ConfigRequest.hpp).
+// Offline test of the MATLAB configuration mapping (bindings/matlab/mex/ConfigRequest.hpp, on top of
+// bindings/common/ConfigRequest.hpp).
 #include "ConfigRequest.hpp"
 #include <cstdio>
 #include <cstdlib>

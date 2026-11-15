@@ -1,9 +1,9 @@
-// Offline test of the RX loss report (bindings/matlab/mex/RxGaps.hpp).
-#include "RxGaps.hpp"
+// Offline test of the RX loss report (bindings/common/RxGaps.hpp).
+#include "common/RxGaps.hpp"
 #include <cmath>
 #include <cstdio>
 
-using namespace omnicore_mex;
+using namespace omnicore_bindings;
 
 namespace {
     int failures = 0;
@@ -41,18 +41,18 @@ int main() {
         RxReport r;
         t.observe(block(0), 100, 0, r);
         t.observe(block(150), 100, 100, r);
-        expect(r.gaps.size() == 1 && r.gaps[0].index == 101 && r.gaps[0].lost == 50, "gap inside a call");
+        expect(r.gaps.size() == 1 && r.gaps[0].row == 100 && r.gaps[0].lost == 50, "gap inside a call");
         expect(r.overflow() && r.lost() == 50, "overflow and lost count");
     }
     {
-        // A loss between two calls shows at index 1 of the second.
+        // A loss between two calls shows at row 0 of the second.
         RxGapTracker t;
         RxReport first, second;
         t.observe(block(0), 100, 0, first);
         t.observe(block(30720100), 100, 0, second);
         expect(first.gaps.empty(), "first call clean");
-        expect(second.gaps.size() == 1 && second.gaps[0].index == 1 && second.gaps[0].lost == 30720000,
-               "loss between calls at index 1");
+        expect(second.gaps.size() == 1 && second.gaps[0].row == 0 && second.gaps[0].lost == 30720000,
+               "loss between calls at row 0");
         expect(second.time_ticks == 30720100, "second call time");
     }
     {
@@ -70,7 +70,7 @@ int main() {
         RxReport r;
         t.observe(block(1000), 100, 0, r);
         t.observe(block(10, OCH_META_HAS_TIME | OCH_META_RECONFIGURED | OCH_META_DISCONTINUITY), 100, 100, r);
-        expect(r.gaps.size() == 1 && std::isnan(r.gaps[0].lost) && r.gaps[0].index == 101, "time reset gap");
+        expect(r.gaps.size() == 1 && std::isnan(r.gaps[0].lost) && r.gaps[0].row == 100, "time reset gap");
         expect(r.reconfigured, "reconfigured flag");
     }
     {
@@ -91,8 +91,8 @@ int main() {
         m.host_dropped_samples = 7;
         t.observe(m, 100, 100, r);
         t.observe(block(0, OCH_META_DEVICE_OVERFLOW), 100, 200, r);
-        expect(r.gaps.size() == 2 && r.gaps[0].lost == 7 && r.gaps[0].index == 101, "host dropped count");
-        expect(r.gaps.size() == 2 && std::isnan(r.gaps[1].lost) && r.gaps[1].index == 201, "overflow without count");
+        expect(r.gaps.size() == 2 && r.gaps[0].lost == 7 && r.gaps[0].row == 100, "host dropped count");
+        expect(r.gaps.size() == 2 && std::isnan(r.gaps[1].lost) && r.gaps[1].row == 200, "overflow without count");
     }
     {
         // A timeless block after timed ones keeps extrapolating the time.

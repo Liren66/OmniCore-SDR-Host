@@ -107,7 +107,7 @@ jobs:
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DOCH_BUILD_MATLAB=ON -DOCH_STATIC_LIBSTDCXX=ON
       - name: Build
-        run: cmake --build build --parallel --target omnicore_matlab_zip matlab_config_request_test matlab_rx_gaps_test matlab_tx_events_test
+        run: cmake --build build --parallel --target omnicore_matlab_zip matlab_config_request_test matlab_tx_convert_test
       - name: Offline C++ tests
         run: ctest --test-dir build --output-on-failure -R '^matlab_'
       # ExamplesTest runs the application examples against their simulated channel and checks

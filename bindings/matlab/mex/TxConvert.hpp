@@ -1,5 +1,5 @@
 // MATLAB TX input -> interleaved och samples (MEX_PLAN.md 5.2). Pure C++ on raw pointers, tested
-// offline in tests/tx_events_test.cpp.
+// offline in tests/tx_convert_test.cpp.
 //
 // The input is an N x channels array, column-major; complex data is interleaved (re, im) as in
 // the R2018a API, real data has Q = 0. single / double go to fc32 and are limited to +-1 (NaN

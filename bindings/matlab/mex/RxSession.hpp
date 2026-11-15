@@ -10,7 +10,7 @@
 // (and double) go through a bounce buffer and are split into the columns.
 #pragma once
 #include "DeviceSession.hpp"
-#include "RxGaps.hpp"
+#include "common/RxGaps.hpp"
 #include <cstdint>
 #include <mex.h>
 #include <omnicore/och.h>
@@ -18,6 +18,9 @@
 #include <vector>
 
 namespace omnicore_mex {
+    using omnicore_bindings::RxGapTracker;
+    using omnicore_bindings::RxReport;
+
     enum class SampleType { Single, Double, Int16, Int8 };
     SampleType sample_type(const std::string &name); // OutputDataType
     const char *sample_type_name(SampleType);

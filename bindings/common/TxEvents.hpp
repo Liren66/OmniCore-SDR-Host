@@ -1,6 +1,6 @@
-// TX events from the device event thread to the MATLAB calls (MEX_PLAN.md 5.4). The event thread
-// pushes; transmit / TxStream.status drain. Pure C++ (no MATLAB), tested offline in
-// tests/tx_events_test.cpp.
+// TX events from the device event thread to the binding calls (MEX_PLAN.md 5.4, PYTHON_PLAN.md
+// 5.3). The event thread pushes; transmit / the TX stream status call drain. Pure C++ (no MATLAB
+// or Python), tested offline in tests/tx_events_test.cpp.
 //
 // The core emits TX_STARVED whenever its host TX queue runs empty with no USB transfer pending,
 // including the normal idle time after a burst ended. Starvation outside an open burst is dropped
@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-namespace omnicore_mex {
+namespace omnicore_bindings {
     struct TxEvent {
         uint32_t type;    // OCH_EVENT_TX_*
         uint64_t hw_time; // sample ticks, 0 if none
@@ -142,4 +142,4 @@ namespace omnicore_mex {
         bool listening_ = false;
         std::atomic<bool> burst_open_{false};
     };
-} // namespace omnicore_mex
+} // namespace omnicore_bindings
