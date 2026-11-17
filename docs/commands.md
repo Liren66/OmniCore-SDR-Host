@@ -59,7 +59,7 @@ RX/TX 共用采样时钟。`rx.sample-rate`、`tx.sample-rate` 和 `clock.sample
 
 布尔值接受 `off`/`false`/`0` 和 `on`/`true`/`1`。通道掩码不是通道数量：`2` 表示第二通道，`3` 或 `both` 才表示两个通道。TX 关闭时 SDK 会保持实际硬件最大衰减，衰减查询返回保存的发送目标值。
 
-两项 RX correction 规范命令要求 `system_info?` 中 `rx_correction=1`，不支持的旧 SDK 会明确报错。设置使用 typed API，保留另一项开关并回读验证；返回的 `raw_reply` 保留设置后查询的原始状态字段。DC 是 AD9361 的 RF/BBDC 跟踪，IQ 是 RX 正交跟踪；不是软件滤波或 TX IQ 校准。`off` 只关闭连续跟踪更新，不清除已有系数；IQ 关闭时仍启用硬件相位/增益校正路径。原始 SDK 写命令要求流已停止；持续收发应用使用同进程 C/C++ setter，由 OCH 协调暂停/恢复。独立 CLI 仍需要设备独占所有权。
+两项 RX correction 命令要求 `system_info?` 中 `rx_correction=1`；设置时保留另一项并回读验证。`off` 只停止跟踪更新、不清除已有系数，完整语义见 [API：RX 直流与 IQ 校正](api.md#rx-直流与-iq-校正)。原始 SDK 写命令要求流已停止，持续收发的应用请用同进程 C/C++ setter。
 
 ## DDS
 

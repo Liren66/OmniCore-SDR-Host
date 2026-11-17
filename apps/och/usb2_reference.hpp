@@ -4,7 +4,7 @@
 #include <cstring>
 
 // Host-specific measurements, not device capabilities or enforced limits.
-// Evidence and reproduction commands: docs/usb2.md.
+// Evidence and reproduction commands: docs/benchmarks.md, section "USB 2.0 High-Speed".
 namespace och_cli::usb2_reference {
     struct entry {
         const char *id;

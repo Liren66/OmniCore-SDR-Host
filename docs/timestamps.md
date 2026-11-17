@@ -1,4 +1,4 @@
-# 硬件时间戳与定时收发（OCH 0.6.0）
+# 硬件时间戳与定时收发
 
 需要 FPGA CH32H417_IP 1.3 和配套 SDK（`SDK_CMD_1.1` 及以上）。0.6.0 起成帧是唯一的 USB 传输格式：每个 16 KiB 块带 16 字节头和样点时间，不再有 16 KiB 递增起始头；`och_config.usb_framing` 被忽略。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`。
 

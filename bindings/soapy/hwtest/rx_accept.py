@@ -88,7 +88,7 @@ def throughput(sdr, channels, fmt, rate, seconds):
     rx = sdr.setupStream(SOAPY_SDR_RX, fmt, channels)
     r = Reader(sdr, rx, len(channels), fmt)
     sdr.activateStream(rx)
-    # Drop the first second: startup overflow is allowed (docs/usb2.md test conditions).
+    # Drop the first second: startup overflow is allowed (docs/benchmarks.md, USB2 test conditions).
     r.run(rate, 1.0)
     r.reset()
     got = r.run(rate, seconds)

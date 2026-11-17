@@ -25,7 +25,7 @@ omnicore.findDevices()                  % 列出已连接的设备
 
 - **Windows**：USB 驱动仍需安装一次：装 OmniCore Host 安装包并运行 `och-driver install`。安装包里勾选 “Install the MATLAB toolbox” 时，同样的文件夹会装到 `C:\Program Files\OmniCore Host\matlab`，`addpath` 这个目录即可。
 - **macOS**：从浏览器下载的 zip 会被 Gatekeeper 隔离，MEX 文件会被拒绝加载。解压后运行一次：`xattr -dr com.apple.quarantine omnicore-matlab`。
-- **Linux**：需要 udev 规则，见 [Linux 安装](INSTALL_LINUX.md)。发布包里的 `libomnicore.so.1` 静态链接了 libstdc++，以避开 MATLAB 自带的旧版 libstdc++（见[排错](#排错)）。
+- **Linux**：需要 udev 规则，见 [Linux 与 macOS 安装](install.md)。发布包里的 `libomnicore.so.1` 静态链接了 libstdc++，以避开 MATLAB 自带的旧版 libstdc++（见[排错](#排错)）。
 
 设备同一时间只能被一个进程打开：MATLAB 持有设备时，`och`、GNU Radio 等其他程序打不开它，反之亦然。
 

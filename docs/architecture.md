@@ -43,7 +43,7 @@ AD9361 硬件 FIR 和时钟链也属于控制面。CLI 在打开设备前解析 
 
 当前 CH32 跨会话清理约束仍存在，因此一次参数修改可能中断双方收发；这里没有声称无缝 LO 跳频或独立方向的时钟。调用方应把停顿作为正常数据间断处理。大缓冲保持分配可以避免每次调谐重新分配大块内存，但硬件校准、USB 调度和 SDK 响应仍决定实际恢复时间。单通道实机测试已验证原流继续收发及间断标记，不承诺固定毫秒延迟。
 
-例外是只改 LO、RX 增益或 TX 衰减的请求（有 TX 流时，TX LO 变化除外）。这类请求跳过第 2、3、5 步，直接写参数，流不停；下一个 RX 块带 RECONFIGURED | DISCONTINUITY，见 [API 快速调谐](api.md#快速调谐046)。
+例外是只改 LO、RX 增益或 TX 衰减的请求（有 TX 流时，TX LO 变化除外）。这类请求跳过第 2、3、5 步，直接写参数，流不停；下一个 RX 块带 RECONFIGURED | DISCONTINUITY，见 [API 快速调谐](api.md#快速调谐)。
 
 RX 在恢复后的第一个成帧块开启下一个单调递增的 epoch，首块额外带 RECONFIGURED，并带 START、DISCONTINUITY 与 HAS_TIME。已知的主机队列丢弃计入 host_dropped_samples，重配原因不冒充设备溢出。块头时间戳照常给出；但改变采样率会使硬件时间作废（`OCH_EVENT_TIME_INVALIDATED`），需要重新对时。
 

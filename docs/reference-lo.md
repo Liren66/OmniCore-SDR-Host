@@ -1,4 +1,4 @@
-# ADF4002 参考与外部 LO（OCH 0.3.2）
+# ADF4002 参考与外部 LO
 
 原理图 `AD9361_MIX(3).pdf` 上的 ADF4002 以外部 10 MHz 为参考，调节板载 40 MHz 振荡器。AD9361 仍接收 **40 MHz**，`clock.chain` / `och_get_clock().reference_hz` 也仍为 40000000。选择外部参考不会把 AD9361 的时钟链改成 10 MHz。
 

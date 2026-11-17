@@ -22,14 +22,13 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 1. [功能](#功能)
 2. [快速上手](#快速上手)
 3. [命令行](#命令行)
-4. [Linux 与 macOS 配置](#linux-与-macos-配置)
-5. [测试结果](#测试结果)
-6. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
-7. [GNU Radio 与 SoapySDR](#gnu-radio-与-soapysdr)
-8. [MATLAB](#matlab)
-9. [从源码构建与打包](#从源码构建与打包)
-10. [工程目录](#工程目录)
-11. [文档索引](#文档索引)
+4. [测试结果](#测试结果)
+5. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
+6. [GNU Radio 与 SoapySDR](#gnu-radio-与-soapysdr)
+7. [MATLAB](#matlab)
+8. [从源码构建与打包](#从源码构建与打包)
+9. [工程目录](#工程目录)
+10. [文档索引](#文档索引)
 
 ## 功能
 
@@ -83,7 +82,7 @@ sudo mkdir -p /opt/omnicore && sudo mv OmniCoreHost-macos /opt/omnicore/0.8.0
 sudo ln -sfn /opt/omnicore/0.8.0/bin/och /usr/local/bin/och
 ```
 
-运行无需 sudo。USB 权限、目录布局与性能参数见 [Linux 与 macOS 配置](#linux-与-macos-配置)；完整说明见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt) / [Linux 安装](docs/INSTALL_LINUX.md)。
+运行无需 sudo。USB 权限、目录布局、源码构建与性能参数见 [Linux 与 macOS 安装](docs/install.md)；Windows 见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt)。
 
 ### 2. 连接设备
 
@@ -207,128 +206,20 @@ och set fan.enabled on
 
 完整参数见 [命令行参考](docs/cli.md)。
 
-## Linux 与 macOS 配置
-
-Linux 与 macOS 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，底层共用 libusb 1.0 异步传输（`src/transport/posix`）。
-
-- **Linux**：已在 Ubuntu 24.04.3 x86_64 + USB3 上验证；其他发行版建议从源码构建，ARM64 与 Linux 下的 USB2 性能尚未测试。下表为 Linux 的配置项。
-- **macOS**：发布包为 macOS 12+ 通用二进制，不需要驱动或 udev 规则；流运行期间程序会阻止系统空闲睡眠。已在 Apple Silicon + USB3 上实机使用（SoapySDR 插件、MATLAB 工具箱与 [扫频示例](docs/sweep.md) 的验收均在 macOS 上完成）。双通道 61.44 MSPS 接收在测试用的 Mac 上偶有设备端溢出，需要零溢出时先用 `och bench --json` 确认。从源码构建：`brew install cmake ninja pkg-config libusb`，再 `cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/macos`。
-
-| 项目 | 配置 |
-|---|---|
-| 依赖 | `build-essential cmake ninja-build pkg-config libusb-1.0-0-dev`；运行时只需 `libusb-1.0-0` |
-| USB 权限 | 安装 `packaging/linux/60-omnicore.rules`（只匹配 `1a86:5537`）。桌面会话经 uaccess 授权；SSH 用户执行 `sudo usermod -aG plugdev "$USER"` 后重新登录，并重新插拔设备 |
-| 安装布局 | 推荐 `/opt/omnicore/<版本>`，再把 `bin/och` 软链接到 `/usr/local/bin`。程序使用相对 RPATH，无需 `LD_LIBRARY_PATH`；需保持 `bin/` 与 `lib/` 的相对位置 |
-| 发布归档 | 解压 `OmniCoreHost-<版本>-linux-x86_64.tar.gz` 后整体复制到安装目录；udev 规则同时位于 `share/omnicore/60-omnicore.rules` |
-| USB 队列 | 默认每方向 32 × 196608 B，在系统默认 `usbfs_memory_mb=16` 下即可满速。仅在增大 `--queue` / `--block` 后出现 `LIBUSB_ERROR_NO_MEM` 时才需调高该内核参数，程序不会自动修改 |
-| 主机缓冲 | `--buffer-mib` 调整用户态环形缓冲（默认 64 MiB），与内核 USB 队列预算无关 |
-| 构建参数 | `tools/build-linux.sh` 支持 `OCH_JOBS`（并发数）、`OCH_BUILD_DIR`、`OCH_INSTALL_DIR`；脚本优先使用 `/usr/bin` 下的工具，避免被其他 SDK 的旧版 CMake 覆盖 |
-
-```bash
-och info                     # 若报 LIBUSB_ERROR_ACCESS，检查 udev 规则与 plugdev 组
-ldd "$(readlink -f /usr/local/bin/och)"   # 按真实路径检查动态库解析
-och bench --rx --tx --iq-bits 8 --channels 1,2 --sample-rate 61.44M \
-  --seconds 60 --amplitude 0 --attenuation 89.75 --json   # 检查 stability.pass
-```
-
 ## 测试结果
 
-### 0.6.x 成帧传输 · Windows · USB3
+`och bench` 零错误的最高采样率（OCH 0.6.1，固件 v2026.11.07.1，Windows 11，USB 3.0；更高档位以 300 秒长测确认）：
 
-固件 v2026.11.07.1（`CH32H417_IP` 1.3，位流与 v2026.11.07 相同），OCH 0.6.1，Windows 11，USB 3.0，2026-11-07。`och bench` 零错误的最高采样率：先按 0.5 MS/s 细扫（每档 10 秒 × 2–3 次），再在最高档做 300 秒长测。USB MB/s 含每块 16 B 头，理论值不含块头。
+| 配置 | 采样率 / 通道 | RX / TX MB/s |
+|---|---:|---:|
+| 1 RX 或 2 RX | 61.44 MSPS | 184.1 / — 或 368.5 / — |
+| 1 RX + 1 TX | 61.44 MSPS | 183.9 / 183.8 |
+| 1 RX + 2 TX | 58 MSPS | 174.2 / 348.3 |
+| 2 RX + 1 TX | 58.5 MSPS | 351.3 / 175.7 |
+| 2 RX + 2 TX · 12bit | 44 MSPS | 264.2 / 264.2 |
+| 2 RX + 2 TX · 8bit | 61.44 MSPS | 245.2 / 245.1 |
 
-| 配置 | 采样率 / 通道 | 测试 | RX / TX MB/s | 理论 MB/s | 错误 |
-|---|---:|---|---:|---:|---:|
-| 1 RX | 61.44 MSPS | 5 秒 | 184.1 / — | 184.3 | 0 |
-| 2 RX | 61.44 MSPS | 60 秒 | 368.5 / — | 368.6 | 0 |
-| 1 RX + 1 TX | 61.44 MSPS | 5 秒 | 183.9 / 183.8 | 184.3 | 0 |
-| 1 RX + 2 TX | **58 MSPS** | 300 秒 | 174.2 / 348.3 | 174.0 / 348.0 | 0 |
-| 2 RX + 1 TX | **58.5 MSPS** | 300 秒 × 2 | 351.3 / 175.7 | 351.0 / 175.5 | 0 |
-| 2 RX + 2 TX · 12bit | **44 MSPS** | 300 秒 × 2 | 264.2 / 264.2 | 264.0 | 0 |
-| 2 RX + 2 TX · 8bit | 61.44 MSPS | 60 秒 | 245.2 / 245.1 | 245.8 | 0 |
-
-上限来自 FPGA 与 CH32 之间的 UHSIF 总线：RX 与 TX 共享约 533 MB/s，总流量 522–528 MB/s 时稳定。高一档的结果：2T2R 12bit 44.5 MSPS、1T2R 59 MSPS 出现 RX 溢出 / TX 欠流；2T1R 58.5 MSPS 10 秒通过，但 300 秒内有 1 次 RX 溢出和 3 次 TX 欠流。0.6.0 发布时的档位搜索（61.44 / 56 / 50 / 46 / 42）跳过了这些中间速率，因此当时记为 56 与 42 MSPS。块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响。`tools/bench_sweep.py` 已改为细扫档位，可复现这张表。
-
-下面各节为 0.4.x（起始头模式、固件 `SDK_CMD_1.0_20261024_IQ8`）的历史测量，Linux 与 USB2 尚未在 0.6.x 成帧传输下复测。
-
-吞吐使用 `och bench` 测量，取整个流生命周期的平均值（含启停开销），MB/s 为十进制。理论 wire 速率 = 采样率 × 通道数 × 每样本字节（12bit 为 3，8bit 为 2）。“错误”指主机丢样、USB 传输错误、设备溢出 / 欠流、事件丢失与 TX 断供的合计。
-
-### 测试环境
-
-| | Windows | Linux |
-|---|---|---|
-| 主机 | ThinkPad E14 Gen 7，Core Ultra 7 255H，32 GB | AMD Ryzen 5 5500U，6 核 12 线程 |
-| 系统 | Windows 11 25H2（build 26200） | Ubuntu 24.04.3，Linux 7.0 x86_64 |
-| USB 驱动 | libusbK 3.1.0.0 | libusb 1.0.27（usbfs） |
-| 编译器 | MinGW-w64 GCC，Release | GCC 13.3，Release |
-| 板卡固件 | `SDK_CMD_1.0_20261024_IQ8` | `SDK_CMD_1.0_20261024_IQ8` |
-| 缓冲配置 | 每方向 32 × 196608 B USB 请求，64 MiB 环形缓冲 | 同左，`usbfs_memory_mb=16`（系统默认） |
-
-### USB 3.0 · Windows
-
-![USB3 吞吐实测（Windows）](docs/images/throughput.svg)
-
-| 配置 | USB IQ | 时长 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
-|---|---:|---:|---:|---:|---:|---:|
-| 2 RX · 61.44 MSPS | 12bit | 5 秒 | 367.2 / — | 368.6 | 99.6% / — | 0 |
-| 1 RX · 61.44 MSPS | 12bit | 5 秒 | 183.6 / — | 184.3 | 99.6% / — | 0 |
-| 2 TX · 61.44 MSPS | 12bit | 5 秒 | — / 362.0 | 368.6 | — / 98.2% | 0 |
-| 2 RX + 2 TX · 30.72 MSPS | 12bit | 5 秒 | 183.4 / 180.9 | 184.3 | 99.5% / 98.1% | 0 |
-| 1 RX + 1 TX · 61.44 MSPS | 12bit | 5 秒 | 183.8 / 180.7 | 184.3 | 99.7% / 98.1% | 0 |
-| 2 RX + 2 TX · 50 MSPS | 8bit | 5 秒 | 199.2 / 196.3 | 200.0 | 99.6% / 98.1% | 0 |
-| 2 RX + 2 TX · 61.44 MSPS | 8bit | 300 秒 | 245.7 / 245.7 | 245.8 | 100.0% / 100.0% | 0 |
-
-### USB 3.0 · Linux
-
-![USB3 吞吐实测（Linux）](docs/images/linux-throughput.svg)
-
-| 配置 | USB IQ | 时长 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
-|---|---:|---:|---:|---:|---:|---:|
-| 2 RX · 61.44 MSPS | 12bit | 60 秒 | 368.6 / — | 368.6 | 99.98% / — | 0 |
-| 1 RX · 61.44 MSPS | 12bit | 60 秒 | 184.3 / — | 184.3 | 99.98% / — | 0 |
-| 2 TX · 61.44 MSPS | 12bit | 60 秒 | — / 368.1 | 368.6 | — / 99.85% | 0 |
-| 2 RX + 2 TX · 30.72 MSPS | 12bit | 60 秒 | 184.3 / 184.0 | 184.3 | 99.98% / 99.85% | 0 |
-| 1 RX + 1 TX · 61.44 MSPS | 12bit | 60 秒 | 184.3 / 184.0 | 184.3 | 99.98% / 99.85% | 0 |
-| 2 RX + 2 TX · 50 MSPS | 8bit | 300 秒 | 200.0 / 199.9 | 200.0 | 100.0% / 99.97% | 0 |
-| 2 RX + 2 TX · 61.44 MSPS | 8bit | 300 秒 | 245.8 / 245.7 | 245.8 | 100.0% / 99.97% | 0 |
-
-Linux 测试的 TX 发送零 IQ、衰减 89.75 dB；所有档位 `stability.pass=true`，未调整内核 USB 内存配额、实时调度或 CPU 电源策略。
-
-### USB 2.0 High-Speed · Windows
-
-USB2 下 RX 与 TX 共享 480 Mbit/s 链路预算，下表为按 0.5 MSPS 步进得到的稳定采样率（每通道），每项连续运行 300 秒：
-
-![USB2 吞吐实测](docs/images/usb2-throughput.svg)
-
-| 配置 | USB IQ | 时长 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
-|---|---:|---:|---:|---:|---:|---:|
-| 1 RX · **14** MSPS | 12bit | 300 秒 | 42.0 / — | 42.0 | 100.0% / — | 0 |
-| 2 RX · **7** MSPS | 12bit | 300 秒 | 42.0 / — | 42.0 | 100.0% / — | 0 |
-| 1 TX · **14** MSPS | 12bit | 300 秒 | — / 42.0 | 42.0 | — / 99.97% | 0 |
-| 2 TX · **6.5** MSPS | 12bit | 300 秒 | — / 39.0 | 39.0 | — / 99.97% | 0 |
-| 1 RX + 1 TX · **7** MSPS | 12bit | 300 秒 | 21.0 / 21.0 | 21.0 | 100.0% / 99.97% | 0 |
-| 2 RX + 2 TX · **3.5** MSPS | 12bit | 300 秒 | 21.0 / 21.0 | 21.0 | 100.0% / 99.97% | 0 |
-| 2 RX + 2 TX · **5** MSPS | 8bit | 300 秒 | 20.0 / 20.0 | 20.0 | 100.0% / 99.97% | 0 |
-
-USB2 测试的 TX 为 1 MHz 正弦、幅度 0.25、衰减 60 dB。启动后 1 秒内允许 RX 溢出并完成重同步（1 RX、1 RX + 1 TX 与 8bit 全双工各出现 1–2 次），之后零新增错误。USB2 需要支持 USBHS 的 CH32 固件，详见 [USB2 稳定传输](docs/usb2.md)。
-
-### 功能测试
-
-| 项目 | 平台 | 结果 |
-|---|---|---|
-| 硬件时间戳（0.6.0） | Windows | `hw_timestamp_test` 6 项通过：内部 PPS 间隔恰为采样率（61.44 / 30.72 / 7.68 MSPS）、PPS 装载精确、RX 时间戳连续、定时 RX 首样点精确、定时 TX 经数据口回环延迟逐突发恒定、迟到突发不发射 |
-| 数字接口自检 | Windows / Linux | RX PRBS 与 TX 数字回环通过 |
-| CLI 功能检查 | Linux | 20 / 20 通过：设备信息、时钟、FIR、温度、SC16 / FC32 / packed12 采集与元数据、独占访问、Ctrl+C 退出与重开、文件保护、循环回放、非法参数 |
-| 运行中改参 | Windows / Linux | RX、零 IQ TX、双向及 FIR / 时钟操作后原流恢复收发，以新 epoch 标记间断 |
-| 参考与外部 LO | Windows | 参考 / LO 11 项检查与 3 次运行中切换通过；ADF4002 D5 自检闪烁序列确认 |
-| RX 校正 | Windows | DC / IQ 跟踪 18 项检查与 6 次运行中切换通过 |
-| PPS 监控 | Windows | 真实 PPS 下 30.72 MSPS 读数 122880000–122880001 Hz，频偏收敛至 0–0.008 ppm |
-| PPS 驯服晶振 | Windows | 4 种调谐模式与 300 次参考切换握手零丢失；空闲、RX 2×2 与 IQ8 全双工各 2 分钟全程锁定，相位 ≤ 158 ns，频偏 ≤ 0.016 ppm |
-| SDK 集成 | Linux | 独立 C / C++ CMake 工程链接发布包并运行；移动安装目录后仍可运行 |
-| 桥接固件 USB 升级 | Windows | USB3：连续 15 次成功，约 5 秒/次；USB2（480 Mbit/s）：连续 6 次成功，约 10 秒/次（Bootloader 先尝试 USB3）。两种链路下写入中途结束进程后设备停在 Bootloader，重新升级恢复；升级后 SDK 控制与 IQ 收发正常 |
-
-> [!NOTE]
-> 以上结果来自所列主机，USB 吞吐与主机控制器、端口和线材有关，更换环境后建议用 `och bench --json` 复核 `stability.pass`。测试只覆盖数据链路与控制功能，不包含 RF 功率、EVM、灵敏度等射频指标。
+上限来自 FPGA 与 CH32 之间约 533 MB/s 的 UHSIF 总线（RX + TX 共享）。USB 2.0 High-Speed 下的稳定档位为单通道 14 MSPS、2T2R 12bit 3.5 MSPS、2T2R 8bit 5 MSPS。完整数据、Linux 测量、测试条件与功能测试见 [测试结果](docs/benchmarks.md)。结果与主机 USB 控制器、端口和线材有关，换环境后用 `och bench --json` 复核 `stability.pass`。
 
 ## C/C++ 开发
 
@@ -356,7 +247,7 @@ rx.start();
 // rx.recv(...) 或 och::rx_lease 零拷贝读取；元数据中的 epoch / flags 标记数据间断
 ```
 
-运行中改参由同进程管理线程发起，流句柄保持不变，RX 以新 epoch 标记间断。只改频率、增益或衰减时不暂停流，同频段单次切频约 4 ms（见 [快速调谐](docs/api.md#快速调谐046)）：
+运行中改参由同进程管理线程发起，流句柄保持不变，RX 以新 epoch 标记间断。只改频率、增益或衰减时不暂停流，同频段单次切频约 4 ms（见 [快速调谐](docs/api.md#快速调谐)）：
 
 ![运行中改参](docs/images/reconfigure.svg)
 
@@ -391,7 +282,7 @@ cmake --build build-examples
 
 `bindings/soapy/` 是 OmniCoreSDR 的 [SoapySDR](https://github.com/pothosware/SoapySDR) 插件，驱动名 `omnicore`。装好后，GNU Radio（gr-soapy）、SDR++、SDRangel 以及 SoapySDR 的 Python / C++ 接口都能直接使用这块板。插件只调用公开的 C 接口（`omnicore/och.h`），和 `och` 命令行用的是同一套库。
 
-插件需要和机器上的 SoapySDR 用同一版本、同一种编译器编译，所以只提供源码，Windows 安装包和 Linux / macOS 发布包里都不带。Linux / macOS 编译：
+插件需要和机器上的 SoapySDR 用同一版本、同一种编译器编译，所以只提供源码，各平台的发布包里都不带：
 
 ```bash
 # 先装 SoapySDR 开发包：Debian/Ubuntu 为 libsoapysdr-dev，macOS 为 brew install soapysdr
@@ -401,17 +292,7 @@ sudo cmake --install build --prefix /usr/local     # macOS（Homebrew）用 --pr
 SoapySDRUtil --find="driver=omnicore"              # 能列出设备即装好
 ```
 
-已安装 OCH 时也可以只编插件：`cmake -S bindings/soapy -B build-soapy -DCMAKE_PREFIX_PATH=<OCH 安装目录>`。
-
-使用要点：
-
-- **GNU Radio**：用 Soapy Custom Source / Sink，Driver 填 `omnicore`。全双工时 source 和 sink 的 Device Arguments 要写相同的 `rx_mask`、`tx_mask`（如 `rx_mask=1,tx_mask=1`）。示例流图在 `examples/soapy/`：接收频谱、全双工回环。
-- **Python**：`SoapySDR.Device("driver=omnicore")`，参数用字符串传，不要用 dict。
-- **增益**：RX 增益上限随频段变化（≤ 1.3 GHz 为 73 dB，≤ 4 GHz 为 71 dB，更高频段为 62 dB）；TX 增益按 Pluto 的约定，等于 89.75 − 衰减。
-- **8bit**：设备参数 `iq_bits=8`，此时两个通道都要开，原生格式为 CS8。
-- **时间**：支持定时接收、定时突发发射和 `setHardwareTime`；gr-soapy 本身不支持定时发射，需要时请用 SoapySDR API。
-
-macOS 上已经做过实机验收：收发、全双工 2T2R（12bit 30.72 MSPS、8bit 61.44 MSPS）、GNU Radio 流图。Linux、Windows 目前只在 CI 中编译。设备参数、格式、运行中改参的影响和排错见 [SoapySDR 插件](docs/soapy.md)。
+GNU Radio 用 Soapy Custom Source / Sink，Driver 填 `omnicore`；全双工时 source 和 sink 的 Device Arguments 要写相同的 `rx_mask`、`tx_mask`。示例流图在 `examples/soapy/`。已在 macOS 上实机验收（收发、全双工 2T2R、8bit 61.44 MSPS、GNU Radio 流图），Linux、Windows 只在 CI 中编译。设备参数、增益约定、定时收发、Windows 编译方法和排错见 [SoapySDR 插件](docs/soapy.md)。
 
 ## MATLAB
 
@@ -442,17 +323,7 @@ powershell -File tools/build.ps1 -Configuration Release
 powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/stage
 ```
 
-```bash
-# Linux：编译并安装到 dist/OmniCoreHost-linux
-bash tools/build-linux.sh
-
-# macOS：先 brew install cmake ninja pkg-config libusb
-cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/macos
-cmake --install build/macos --prefix dist/OmniCoreHost-macos
-```
-
-发布用的 Linux / macOS 归档由 `.github/workflows/release.yml` 生成；macOS 版在流水线里静态链接 libusb 并编成通用二进制，本机按上面的方法编译时动态链接 Homebrew 的 libusb。
+Linux 用 `bash tools/build-linux.sh`（安装到 `dist/OmniCoreHost-linux`），macOS 用 CMake + Ninja，依赖与步骤见 [Linux 与 macOS 安装](docs/install.md#从源码构建)。三个平台的发布包都由 `.github/workflows/release.yml` 生成。
 
 加 `-DOCH_BUILD_SOAPY=ON` 会同时编译 SoapySDR 插件（需要 SoapySDR 开发包，见上一节）。默认关闭，`tools/build.ps1`、`tools/build-linux.sh` 和安装包都不包含插件。
 
@@ -495,11 +366,11 @@ OmniCoreHost/
 | [命令行参考](docs/cli.md) | [API 参考](docs/api.md) | [FIR 与时钟](docs/fir.md) |
 | [命令目录](docs/commands.md) | [架构与性能](docs/architecture.md) | [参考时钟与外部 LO](docs/reference-lo.md) |
 | [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt) | [设备协议](docs/protocol.md) | [PPS 监控](docs/pps.md) |
-| [Linux 安装](docs/INSTALL_LINUX.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
-| [排错与能力边界](docs/troubleshooting.md) | | [8bit USB IQ](docs/iq8.md) · [USB2](docs/usb2.md) |
+| [Linux 与 macOS 安装](docs/install.md) | [固件兼容性](docs/firmware-compatibility.md) | [板级控制](docs/board-control.md) |
+| [排错与能力边界](docs/troubleshooting.md) | [测试结果](docs/benchmarks.md) | [8bit USB IQ](docs/iq8.md) |
 | [桥接固件升级](docs/firmware-update.md) | [硬件时间戳](docs/timestamps.md) | [多板同步](docs/multi-board-sync.md) |
 | [SoapySDR 插件](docs/soapy.md) | [扫频瀑布图](docs/sweep.md) | |
-| [MATLAB 工具箱](docs/matlab.md) | | |
+| [MATLAB 工具箱](docs/matlab.md) | [更新记录](CHANGELOG.md) | |
 
 ## 许可证
 

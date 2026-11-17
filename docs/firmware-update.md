@@ -1,4 +1,4 @@
-# 桥接固件升级（0.5.0）
+# 桥接固件升级
 
 OCH 0.5.0 起可以通过 USB 升级 CH32H417 桥接固件，不需要 WCH-Link，也不依赖 Zynq SDK。
 升级包 `OmniCore-Bridge-<版本>.ocfw` 随 [OmniCore-SDR-Firmware Releases](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) 发布。

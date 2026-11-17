@@ -41,7 +41,7 @@ get_config 返回该句柄最近一次成功应用的配置请求，仅在该句
 
 open 会取得设备所有权、确认协议版本、停止旧 USB 数据会话并使用现有 CH32 诊断接口清理跨会话数据。它不是完全无副作用的旁路观察接口。独立 CLI 的 info/get/config 也需要 open；如果已有 OCH 进程持有设备，第二个进程会被拒绝。list/find 仅枚举，不接管数据流。
 
-## 运行中修改参数（0.3）
+## 运行中修改参数
 
 在持有设备的**同一进程**中，管理线程可直接调用 och_configure / device.configure，或 typed FIR、clock、sample-rate、RX correction、reference、LO source 设置接口。核心协调暂停 RX/TX、等待当前 IO 操作退出临界区、应用参数、清理跨会话数据，再恢复修改前正在运行的方向。原 och_stream 句柄、格式、USB 请求缓冲和主机大缓冲保持稳定，调用方继续使用同一个流对象。
 
@@ -56,7 +56,7 @@ RX 重配时丢弃旧队列，已知的本地主机丢样计入 host_dropped_sam
 
 TX 重配时丢弃旧排队数据并取消旧 USB 请求，避免把旧配置下的样本重放到新配置。原本正在 TX 的方向恢复前自动预填 4 个 transfer_bytes 大小的零 IQ 块，样本数计入 tx_padding_samples；新配置与零块提交后，先放行原生产者继续 send，在硬件启动过程中补充队列，再先恢复 RX、最后启动 TX。生产者应在 TIMEOUT 后继续重试，不必等待管理线程的配置调用返回；若恢复失败，核心重新阻止 TX 数据操作并停止双方。尚未启动或已经停止的 TX 不会因此启动。此前 send 接受的样本不保证已从 DAC 发出，也可能在重配中丢弃。
 
-### 快速调谐（0.4.6）
+### 快速调谐
 
 如果相对上次成功的配置，只改了 rx_frequency、tx_frequency、rx_gain、tx_attenuation 中的若干项，configure 会**直接下发命令，不暂停流**：不清队列，不重置 USB 传输，不预填 TX 零块，epoch 不变。完成后，下一个 RX 块带 OCH_META_RECONFIGURED | OCH_META_DISCONTINUITY。这个边界是近似的：命令返回时还在 USB 队列里的样本（约 usb_queue_depth × transfer_bytes）可能已是新频率，也可能是 PLL 稳定过程中的数据。需要精确边界的应用应在标记附近丢弃一小段样本。
 
@@ -66,7 +66,7 @@ TX 重配时丢弃旧排队数据并取消旧 USB 请求，避免把旧配置下
 - 成功后发出 OCH_EVENT_RECONFIGURED，消息为 `retune complete streams_continued=1 ...`。
 - 能力表（system_info?）在 open 时读取并缓存；外部 LO 选择也会缓存，直到 set_lo_source 或 raw 修改命令使它失效。
 
-实测（USB3，RX 流运行中，控制串口 3.125 MBd）：同频段切频约 4 ms，跨增益表切频约 25 ms（主要是 SPI 写增益表），期间 RX 不中断。时间主要花在控制串口往返和 AD9361 的 VCO 校准与锁定等待上；各命令的往返时间见 [固件兼容性](firmware-compatibility.md#rx-rssi-与控制串口波特率)，连续扫频的分项耗时见 [扫频示例](sweep.md#实测2026-11-14)。控制串口还是 115200 波特的旧固件上，同频段切频约 11 ms。
+实测（USB3，RX 流运行中，控制串口 3.125 MBd）：同频段切频约 4 ms，跨增益表切频约 25 ms（主要是 SPI 写增益表），期间 RX 不中断。时间主要花在控制串口往返和 AD9361 的 VCO 校准与锁定等待上；各命令的往返时间见 [设备协议：控制串口](protocol.md#控制串口)，连续扫频的分项耗时见 [扫频示例](sweep.md#实测2026-11-14)。控制串口还是 115200 波特的旧固件上，同频段切频约 11 ms。
 
 OCH_EVENT_RECONFIGURED（新增值 6）报告成功重配的恢复方向、间断/丢弃及主机测得的耗时，失败通过 OCH_EVENT_TRANSPORT 报告。事件是控制操作的观察记录，IQ 边界以 RX 元数据为准。单通道 RX、零 IQ TX 和双向模式已完成实机改参恢复测试。其中耗时属于主机 API 和观察时间，不是硬件采样间断，也没有固定的毫秒级延迟保证。
 
@@ -176,7 +176,7 @@ send 可能只接受部分样本；一旦接受了样本就返回 OCH_OK，调�
 
 start 前 send 只预填不发射。停止后不会因为后来提交数据自动开启。flush 对齐补零并等待主机队列与 OUT 完成；补零数量见 tx_padding_samples。连续流的 send/flush 不带时间；需要在指定样点发射或得到播放完成时刻时，使用 `och_send_burst`（HAS_TIME/SOB/EOB），突发完成产生带样点时间的 `OCH_EVENT_TX_BURST_ACK`。硬件时间、PPS 对时与定时 RX 见 [硬件时间戳](timestamps.md)；跨设备 LO 相位相干同步不提供。独立的 PPS 接口为 `och_set_pps_enabled`、`och_get_pps_status` 和 `och_get_vcxo_status`（内部参考时 PPS 经 CH32 PA4 驯服 40 MHz），详见 [PPS API](pps.md)。
 
-有限文件 EOF 的 flush 完成与 stop 关闭硬件之间没有设备端 end-of-burst 握手。此时 FIFO 排空可能触发 tx_underflow，应用队列已结束也可能触发 TX_STARVED；事件及计数原样保留。调用方应把“已结束供应后的尾部欠供”和“预期连续供应期间的欠供”分开记录，不能仅据错误计数判定持续流中段丢样，也不能把全部 USB 完成解释为精确定长 DAC 播放成功。若业务需要精确 burst 结束点，请改用 `och_send_burst`，以 `OCH_EVENT_TX_BURST_ACK` 的 `hw_time` 为准。
+有限数据 flush 之后、stop 关闭硬件之前，FIFO 排空可能产生 `tx_underflow` 和 `TX_STARVED`，这些尾部事件原样保留，应与连续供应期间的欠供分开看待，原因见 [架构：TX 的显式启动与停止](architecture.md#tx-的显式启动与停止)。需要精确的 burst 结束点时用 `och_send_burst`，以 `OCH_EVENT_TX_BURST_ACK` 的 `hw_time` 为准。
 
 ## 事件与线程
 
@@ -194,19 +194,19 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 - device_overflows、device_underflows、event_drops 属于该设备对象的观察期；RX/TX stats 会看到相同设备计数，不要把两份相加。device_overflows 按收到的 GAP 块计数，精确丢样量见 RX 元数据的 device_dropped_samples；device_underflows 按 TX 欠流事件计数（合并记录按 `count` 累加）。
 - 最大采样率 61.44 MSPS 是单通道的射频能力，不表示 USB 可同时承载四通道都满速。四通道 61.44 MSPS 总 wire 需求 737.28 MB/s；应按共享 USB 带宽选定双向速率，常用四通道测试使用 30.72 MSPS。
 
-## RX RSSI（0.4.7）
+## RX RSSI
 
 `och_get_rx_rssi(device, &rssi)` 返回 `och_rx_rssi`，包含 `enabled`、`usb_rx_mask`、`valid[2]` 和 `rssi_db[2]`；`och_set_rx_rssi_enabled(device, 0|1)` 用于开关。C++ 接口为 `device.rx_rssi()` 和 `device.set_rx_rssi_enabled(bool)`。RSSI 上报在 SDK 冷启动后默认关闭，此时 `enabled=0`，两路都无效。数值是 AD9361 symbol RSSI，单位为相对 dB，越大越强，不是校准过的输入功率。ENSM 不在 RX/FDD 状态时 `valid=0`、`rssi_db=0`；`usb_rx_mask` 只表示 USB 上传掩码，2R2T 下两路接收机都在测量。这是纯查询，可以在 RX/TX 流运行时调用，不会暂停流，实测双通道 30.72 MSPS 接收时无间断。新 SDK（`rssi=1`）使用 `rx_rssi?`；旧 SDK 从 `system_status?` 中解析，同样可用，但较慢。
 
-## 0.3.5 板级 RGB 与风扇温控
+## 板级 RGB、风扇与温度
 
-新增 RGB 开关/状态、风扇温控开关/状态和 Zynq 核心温度查询。使用新 FPGA BOARD_CTRL_AXI 及新版 SDK，能力标志为 `board_rgb=1 fan_control=1 core_temp=1`。当前 SDK 默认 RGB 开启、亮度 15%，风扇温控关闭；OCH 0.3.6 同时兼容旧版 25% 固件，亮度以设备回报为准；不改变已有 C ABI 结构或停止 IQ 流。详见 [板级控制及接口](board-control.md)。
+`och_get_rgb_status`、`och_set_rgb_enabled`、`och_get_fan_status`、`och_set_fan_enabled`、`och_get_core_temperature`（C++：`rgb_status()`、`fan_status()`、`core_temperature()` 等），能力与用法见 [板级控制](board-control.md)。这些调用不停止 IQ 流。
 
-## 桥接固件（0.5.0）
+## 桥接固件
 
 `och_firmware_query`、`och_firmware_read_image`、`och_firmware_update`、`och_firmware_enter_bootloader`、`och_firmware_start_app` 只使用 EP0 厂商请求，不打开 SDK 控制通道，可在 Bootloader 模式下使用；设备被其他句柄占用时返回 `OCH_BUSY`。`och_get_firmware_info` 返回已打开设备的桥接固件信息。设备处于 Bootloader 时 `och_open` 返回 `OCH_UNSUPPORTED`。用法和恢复流程见 [桥接固件升级](firmware-update.md)。
 
-## 硬件时间（0.6.0）
+## 硬件时间
 
 | 函数 | 作用 |
 |---|---|
@@ -219,6 +219,6 @@ och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象
 
 新增字段均追加在结构末尾或占用原 reserved 位置，按 `struct_size` 兼容旧调用方，C ABI 仍为 1。0.6.1 在 `och_event` 末尾追加 `count`、`reserved_event`，0.6.0 及更早布局的 `struct_size` 仍被接受（读不到 `count`）。时序图与示例见 [硬件时间戳](timestamps.md)。
 
-## 多板同步（0.7.0）
+## 多板同步
 
 需要固件能力 `sync=1`（SDK_CMD_1.2，FPGA 带 OC_SYNC_AXI）。单板接口：`och_get_sync_status`、`och_set_sync`、`och_sync_trigger`、`och_sync_clear`、`och_mcs_step`；`och_set_time_source` 增加 `OCH_TIME_SOURCE_SYNC`；事件 `OCH_EVENT_SYNC_IN`。多板编排：`och_multi_sync(devices, n, &args, results)`，`devices[0]` 为主板，`args.mode` 为 `OCH_SYNC_CHAIN`（菊花链，无需外部参考）或 `OCH_SYNC_COMMON`（公共 10 MHz + PPS）。新结构体都带 `struct_size`，用 `och_default_sync_config` / `och_default_multi_sync_args` 初始化。流程、接线与限制见 [多板同步](multi-board-sync.md)。
