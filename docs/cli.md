@@ -1,25 +1,25 @@
-# 命令行参考
+# Command-Line Reference
 
-统一入口为 `och`。全局选项：
+The single entry point is `och`. Global options:
 
-| 选项 | 含义 |
+| Option | Meaning |
 |---|---|
-| `--serial SERIAL` | 指定设备；未指定时只允许唯一匹配设备 |
-| `--json` | stdout 输出 JSON 结果，stderr 输出事件 / 错误 JSON 行 |
-| `--no-color` | 关闭颜色；也可设置环境变量 `NO_COLOR` |
-| `--help` | 显示帮助 |
+| `--serial SERIAL` | Select a device; without it, only a single matching device is allowed |
+| `--json` | Print JSON results on stdout, and event / error JSON lines on stderr |
+| `--no-color` | Turn off color; setting the environment variable `NO_COLOR` also works |
+| `--help` | Show help |
 
-## 终端输出与脚本
+## Terminal output and scripting
 
-默认输出供人阅读，按三层组织：
+The default output is meant for people and is organized in three levels:
 
-1. **标题**：每个功能区一条整行标题，例如 `DEVICE`、`RF CONFIGURATION`、`RX STREAM SUMMARY`。
-2. **分组**：标题下的小节，例如 `Identity`、`Throughput`、`Faults`。
-3. **字段**：标签左对齐、数值统一从第 31 列开始；长数值按词换行并与数值列对齐。
+1. **Title**: one full-width title line per functional area, e.g. `DEVICE`, `RF CONFIGURATION`, `RX STREAM SUMMARY`.
+2. **Group**: subsections under a title, e.g. `Identity`, `Throughput`, `Faults`.
+3. **Field**: labels are left-aligned and values all start at column 31; long values wrap at word boundaries and stay aligned with the value column.
 
-结论性信息使用状态标记：`OK`（成功 / 无故障）、`INFO`、`WARN`（设备事件或需关注的计数）、`FAIL`（主机丢样、传输错误或命令失败）。故障计数为零时以灰色显示，非零时高亮。说明性备注统一放在每个功能区末尾，以 `·` 开头并以灰色显示。设备返回的状态（如 `get system.status`）按状态组分组，字段较短的组以两列显示，便于浏览。
+Conclusions use status tags: `OK` (success / no faults), `INFO`, `WARN` (device events or counts that need attention), and `FAIL` (host drops, transfer errors, or command failures). Fault counts are shown in gray when zero and highlighted when non-zero. Explanatory notes always go at the end of each functional area, start with `·`, and are shown in gray. Status returned by the device (such as `get system.status`) is grouped by status group, and groups with short fields are shown in two columns for easier scanning.
 
-`och info` 一屏给出设备身份、三类固件版本、RF 能力、时间基准和电源摘要（下例数值为示意）：
+`och info` shows on one screen the device identity, the three firmware versions, RF capabilities, time base, and power summary (the values below are illustrative):
 
 ~~~text
      ____                  _ ______                 _____ ____  ____
@@ -58,7 +58,7 @@
   · Link speed is negotiated; RX and TX share one USB link and sample clock.
 ~~~
 
-流命令运行中每个事件占一行：相对时间、严重程度、来源和一句说明；带硬件时间的事件附 `t=` 样点时间：
+While a streaming command runs, each event takes one line: relative time, severity, source, and a one-sentence description; events with hardware time add the sample time as `t=`:
 
 ~~~text
     +1.092s  [WARN]  RX GAP      FIFO overflow, next block GAP  t=33,521,664
@@ -67,143 +67,143 @@
     +3.500s  [WARN]  TIME        Rate 30.720 -> 15.360 MSPS, time invalid
 ~~~
 
-<p align="center"><img src="images/cli-status.png" width="640" alt="get system.status 的分组两列视图"></p>
+<p align="center"><img src="images/cli-status.png" width="640" alt="Grouped two-column view of get system.status"></p>
 
-输出形式随终端自动选择：
+The output style is chosen automatically based on the terminal:
 
-| 场景 | 输出 |
+| Situation | Output |
 |---|---|
-| stdout / stderr 为支持 VT 序列的交互式控制台 | 彩色、Unicode 分隔线；流命令每秒刷新一行进度条 |
-| `--no-color` 或设置了 `NO_COLOR` | 保留 Unicode 布局，不输出颜色 |
-| 输出被重定向到文件或管道 | 纯 7-bit ASCII，每行不超过 78 列，不刷新进度 |
-| `--json` | 只输出 JSON，不含标题、颜色或进度 |
+| stdout / stderr is an interactive console that supports VT sequences | Color and Unicode rules; streaming commands refresh a progress bar line every second |
+| `--no-color` or `NO_COLOR` set | Unicode layout kept, no color |
+| Output redirected to a file or pipe | Plain 7-bit ASCII, at most 78 columns per line, no progress refresh |
+| `--json` | JSON only, no titles, color, or progress |
 
-正文、配置和最终统计写入 stdout；运行状态（`RUN` / `STOP`）、异步事件、进度和错误写入 stderr。流命令开始时显示会话、传输和射频配置；结束时先输出各方向的吞吐汇总表（实测 MB/s、理论 wire MB/s、比例和故障数），再分别给出 RX / TX 的分组统计：
+The body, configuration, and final statistics go to stdout; run state (`RUN` / `STOP`), asynchronous events, progress, and errors go to stderr. A streaming command shows the session, transport, and RF configuration at the start; at the end it first prints a throughput summary table per direction (measured MB/s, theoretical wire MB/s, ratio, and fault count), then the grouped statistics for RX / TX:
 
-| 分组 | 内容 |
+| Group | Contents |
 |---|---|
-| Overview | 通道数 × 采样率、运行时长、交付（RX）/ 接受（TX）样本数、启动窗口内接受的 GAP 数 |
-| Throughput | USB 平均吞吐、占理论 wire 速率的比例、数据量、主机队列峰值 |
-| Faults | RX：设备溢出（GAP）、主机丢样、块头错误；TX：设备欠流、主机断供、补零样本；两者都有 USB 传输错误和事件队列丢弃 |
+| Overview | Channels × sample rate, run time, samples delivered (RX) / accepted (TX), GAPs accepted within the start-up window |
+| Throughput | Average USB throughput, ratio to the theoretical wire rate, data volume, host queue peak |
+| Faults | RX: device overflows (GAP), host drops, header errors; TX: device underflows, host starvation, zero-padded samples; both: USB transfer errors and event queue drops |
 
-事件来源标签：`RX GAP`、`RX LATE`、`TX ACK`、`TX LATE`、`TX UNDERRUN`、`TX BLOCK`、`TIME`、`HOST`、`USB`、`TX FEED`、`RECONFIG`、`DEVICE`。序号、epoch 和主机时间戳不显示在终端里，需要时用 `--json` 读取。
+Event source tags: `RX GAP`, `RX LATE`, `TX ACK`, `TX LATE`, `TX UNDERRUN`, `TX BLOCK`, `TIME`, `HOST`, `USB`, `TX FEED`, `RECONFIG`, `DEVICE`. Sequence numbers, epochs, and host timestamps are not shown in the terminal; read them with `--json` when needed.
 
-过载时设备可能每秒上报数千条事件。终端里每类事件只逐条列出前 3 条，之后每秒为每类汇总一行（如 `TX UNDERRUN  +3,072 more (summarized)`），结束时 `Events` 字段给出总数与逐条列出的条数；`--json` 仍逐条输出全部事件。RX + TX wire 需求超过 FPGA 与 CH32 之间 UHSIF 总线的约 533 MB/s 时，流开始前会给出 `WARN`。
+Under overload the device may report thousands of events per second. The terminal lists only the first 3 events of each kind individually, then summarizes each kind in one line per second (e.g. `TX UNDERRUN  +3,072 more (summarized)`), and at the end the `Events` field gives the total and the number listed individually; `--json` still outputs every event. When the RX + TX wire demand exceeds the roughly 533 MB/s of the UHSIF bus between the FPGA and the CH32, a `WARN` is shown before the stream starts.
 
-默认文本布局可能随版本改进，自动化程序应使用 `--json` 或公开 C/C++ API。`--json` 的结果字段和结构与旧版本兼容。读取 JSON 时仍需分别处理标准输出、标准错误和进程退出码；有事件不必然表示命令失败。
+The default text layout may improve from version to version; automation should use `--json` or the public C/C++ API. The result fields and structure of `--json` stay compatible with older versions. When reading JSON, you still need to handle standard output, standard error, and the process exit code separately; having events does not necessarily mean the command failed.
 
-### USB2 采样率与稳定性判定
+### USB2 sample rates and stability verdict
 
-`info` 在 USB2 与 USB3 下使用相同的分组。USB2 显示 `480 Mbit/s High-Speed (USB 2.0)`，`Max sample rate` 仍表示射频能力。实测采样率、测试主机与时长见 [测试结果](benchmarks.md#usb-20-high-speed)；`info --json` 保留 `usb2_reference` 供脚本读取。
+`info` uses the same groups on USB2 and USB3. USB2 shows `480 Mbit/s High-Speed (USB 2.0)`, and `Max sample rate` still means the RF capability. For measured sample rates, test hosts, and durations, see [Benchmarks](benchmarks.md#usb-20-high-speed); `info --json` keeps `usb2_reference` for scripts.
 
-流开始时新增 `USB link`、`RX + TX wire demand` 和匹配配置的参考值。超过参考采样率会提示 `WARN`，但不自动改参或限制 SDK 的射频范围。单通道参考只测过 CH1；CH2-only、非对称全双工及其他固件组合显示未测。已测点也不能保证另一台主机的结果。
+At stream start, `USB link`, `RX + TX wire demand`, and the reference value matching the configuration are shown. Exceeding the reference sample rate gives a `WARN`, but parameters are not changed automatically and the SDK's RF range is not restricted. The single-channel reference was only measured on CH1; CH2-only, asymmetric full duplex, and other firmware combinations are shown as untested. Even measured points cannot guarantee the result on another host.
 
-稳定性判定允许**前 1 秒内的 RX 溢出**：成帧传输下每次溢出产生一个 `RX GAP` 事件，下一块自动恢复，不需要重启 RX。窗口内的 GAP 数（不超过设备溢出计数）计入 `Startup gaps accepted`。所有原始统计不清零；1 秒后的 GAP，以及任何阶段的块头错误、欠流、主机丢样、传输错误、事件丢失、TX 断供或补零仍导致警告 / 失败。这个“启动后稳定”结论不表示启动数据无损，丢失的样点数可由 metadata 中的 `device_dropped_samples` 精确得到。
+The stability verdict allows **RX overflows within the first second**: with framed transport, each overflow produces one `RX GAP` event and the next block recovers automatically without restarting RX. The number of GAPs within the window (no more than the device overflow count) is counted in `Startup gaps accepted`. No raw statistics are reset; GAPs after 1 second, and header errors, underflows, host drops, transfer errors, lost events, TX starvation, or zero padding at any stage still cause a warning / failure. This "stable after start-up" verdict does not mean the start-up data is lossless; the number of lost samples is given exactly by `device_dropped_samples` in the metadata.
 
-观察时间至少 1 秒、无剩余错误计数但吞吐低于理论值 98% 时也显示 `WARN`；平均值包含启停开销，短测试尤其需要结合时长解释。退出码仍表示命令是否完成，不能替代这些验收条件。启动窗口从流启动调用返回后计时，事件时间是 CLI 取出事件的主机观察时间。
+A `WARN` is also shown when the observation time is at least 1 second and there are no remaining error counts, but throughput is below 98% of theoretical; the average includes start/stop overhead, so short tests in particular must be interpreted together with their duration. The exit code still only says whether the command completed and cannot replace these acceptance conditions. The start-up window is timed from the return of the stream start call, and event times are the host observation time when the CLI picked up the event.
 
-`bench --fail-fast` 用于扫描失败档位：第 1 秒之后，RX 设备溢出计数（数据通路里的 GAP 块）两次增加且相隔不超过 2 秒，即提前正常停流、保存统计并返回退出码 `3`。它看数据块的 GAP 标志而不是 `RX GAP` 事件：TX 欠流事件密集时 FPGA 事件 FIFO 会溢出丢事件，数据块里的标志不会丢。启动窗口内的溢出不触发提前停止。stdout JSON 的 `stopped_early=true`、`stability.pass=false` 标明未完成请求时长；无连续溢出的候选仍运行完整时长。USB2 扫描脚本默认启用此选项。
+`bench --fail-fast` is for scanning for failing settings: after the first second, if the RX device overflow count (GAP blocks in the data path) increases twice no more than 2 seconds apart, it stops the stream early and normally, saves the statistics, and returns exit code `3`. It looks at the GAP flag in data blocks rather than `RX GAP` events: when TX underflow events are dense, the FPGA event FIFO overflows and drops events, but the flags in data blocks are never lost. Overflows within the start-up window do not trigger an early stop. `stopped_early=true` and `stability.pass=false` in the stdout JSON indicate that the requested duration was not completed; candidates without consecutive overflows still run for the full duration. The USB2 scan script enables this option by default.
 
-JSON 保持旧字段，新增内容如下：
+The JSON keeps the old fields; the additions are:
 
-| 位置 | 新字段 | 含义 |
+| Location | New field | Meaning |
 |---|---|---|
-| `info` stdout | `sample_rate_scope: "rf_capability"` | 原 `max_sample_rate` 的语义，未改值 |
-| `info` stdout，USB2 且固件匹配 | `usb2_reference` | `scope: "single_host_observation"`、测试日期、`profiles` 数组；各行包含 `mode`、`iq_bits`、`rx_mask`、`tx_mask`、`sample_rate_hz`、`test_seconds` |
-| 流 stderr，超过已测参考 | `type: "warning"`、`code: "usb2_reference_exceeded"` | 同时提供 `reference_rate_hz`、`test_seconds`、`scope` |
-| 流 stderr 事件 | `host_monotonic_ns`、`observed_seconds` | 主机事件时间戳与 CLI 取出事件时距运行开始的秒数；后者是观察时间，不是硬件事件发生时间 |
-| 流 stderr 事件（0.6.1） | `count` | 该记录代表的设备事件数；固件合并的欠流/GAP 汇总大于 1 |
-| 流 stdout（0.6.1） | `device_events` | 各事件记录 `count` 之和；`events` 仍为记录条数 |
-| 流 stdout | `stability` | `startup_window_seconds`、`policy`、`accepted_startup_overflows`、各方向剩余故障计数，以及本次观察的 `pass`；原 `rx` / `tx` 统计完整保留 |
+| `info` stdout | `sample_rate_scope: "rf_capability"` | The meaning of the existing `max_sample_rate`; the value is unchanged |
+| `info` stdout, USB2 with matching firmware | `usb2_reference` | `scope: "single_host_observation"`, test date, and a `profiles` array; each row contains `mode`, `iq_bits`, `rx_mask`, `tx_mask`, `sample_rate_hz`, `test_seconds` |
+| Stream stderr, beyond the measured reference | `type: "warning"`, `code: "usb2_reference_exceeded"` | Also provides `reference_rate_hz`, `test_seconds`, `scope` |
+| Stream stderr events | `host_monotonic_ns`, `observed_seconds` | Host event timestamp, and seconds since the start of the run when the CLI picked up the event; the latter is observation time, not when the hardware event occurred |
+| Stream stderr events (0.6.1) | `count` | Number of device events the record stands for; greater than 1 for underflow/GAP summaries merged by the firmware |
+| Stream stdout (0.6.1) | `device_events` | Sum of `count` over all event records; `events` is still the number of records |
+| Stream stdout | `stability` | `startup_window_seconds`, `policy`, `accepted_startup_overflows`, remaining fault counts per direction, and `pass` for this observation; the original `rx` / `tx` statistics are kept in full |
 
-## 发现与控制
+## Discovery and control
 
-| 命令 | 含义 |
+| Command | Meaning |
 |---|---|
-| och find | 枚举设备，不开始发射 |
-| och info | 查询身份、能力及 USB-C 电源信息 |
-| och power status --json | 读取 HD3SS3220 并报告 USB-C 电源状态 |
-| och config | 查询设备 system_status 状态 |
-| och config --sample-rate 30.72M --lo-frequency 1G | 由默认配置加指定参数应用 RF，不启动 TX |
-| och commands --json | 离线列出全部规范命令、单位、范围及 SDK 对照 |
-| och get system.status | 查询当前系统状态 |
-| och get usb.irq | 查询桥接错误/恢复计数 |
-| och get rf.register 0x037 | 读取 AD9361 寄存器 |
-| och set rx.lo-frequency 1G | 设置 RX LO 为 1 GHz |
-| och set tx1.attenuation 10 | 设置 TX1 衰减为 10 dB |
-| och get rx.dc-correction | 查询 AD9361 RF/基带直流跟踪校正状态 |
-| och set rx.dc-correction on | 开启两个 RX 通道的 RF/基带直流跟踪校正 |
-| och set rx.iq-correction on | 开启两个 RX 通道的正交跟踪校正 |
-| och set rx.lo-source external | RX 使用外部 LO 输入；默认 internal |
-| och set tx.lo-source external | TX 使用外部 LO 输入；默认 internal |
-| och set clock.ref-source external | ADF4002 开启外部 10 MHz 驯服；AD9361 输入仍为 40 MHz |
-| och get clock.ref-status | ADF4002 配置与可观测性；锁定和灯状态未知 |
-| och action clock.ref-test | D5 闪三次并恢复选源；需要人工观察，不要求接入 10 MHz |
-| och action usb.clear | 请求清除锁存错误，不抹掉历史统计 |
-| och fir status | 查询两个方向的 FIR 配置和校验状态 |
-| och fir rx load filter.ftr | 装载 RX FIR，成功后 RX FIR 保持关闭 |
-| och fir both on | 一次事务开启 RX/TX FIR |
-| och clock status | 查询实际参考钟和两个方向的六级时钟链 |
-| och clock sample-rate 30.72M | 计算并应用共享采样率，成功后回读；无精确时钟方案时改用最近可用速率并提示 `WARN` |
-| och selftest | 停止通路并执行设备 RX/TX 数字自检 |
-| och help | 查看命令及参数 |
-| och version --json | 查询软件及 ABI 版本 |
-| och firmware | 查询 CH32 桥接固件模式与版本（不访问 SDK） |
-| och firmware update FILE.ocfw | 通过 USB 升级桥接固件，见 [桥接固件升级](firmware-update.md) |
-| och firmware boot / enter | 离开 / 进入桥接 Bootloader |
+| och find | Enumerate devices; does not start transmitting |
+| och info | Query identity, capabilities, and USB-C power information |
+| och power status --json | Read the HD3SS3220 and report the USB-C power state |
+| och config | Query the device's system_status state |
+| och config --sample-rate 30.72M --lo-frequency 1G | Apply RF from the default configuration plus the given parameters; does not start TX |
+| och commands --json | List all canonical commands, units, ranges, and SDK equivalents offline |
+| och get system.status | Query the current system state |
+| och get usb.irq | Query bridge error/recovery counts |
+| och get rf.register 0x037 | Read an AD9361 register |
+| och set rx.lo-frequency 1G | Set the RX LO to 1 GHz |
+| och set tx1.attenuation 10 | Set TX1 attenuation to 10 dB |
+| och get rx.dc-correction | Query the AD9361 RF/baseband DC tracking correction state |
+| och set rx.dc-correction on | Turn on RF/baseband DC tracking correction for both RX channels |
+| och set rx.iq-correction on | Turn on quadrature tracking correction for both RX channels |
+| och set rx.lo-source external | Use the external LO input for RX; default internal |
+| och set tx.lo-source external | Use the external LO input for TX; default internal |
+| och set clock.ref-source external | Enable ADF4002 disciplining to external 10 MHz; the AD9361 input is still 40 MHz |
+| och get clock.ref-status | ADF4002 configuration and observability; lock and LED state unknown |
+| och action clock.ref-test | D5 blinks three times and the source selection is restored; needs manual observation, no 10 MHz required |
+| och action usb.clear | Request clearing of latched errors without erasing historical statistics |
+| och fir status | Query the FIR configuration and verification state of both directions |
+| och fir rx load filter.ftr | Load the RX FIR; the RX FIR stays off after a successful load |
+| och fir both on | Turn on the RX/TX FIRs in one transaction |
+| och clock status | Query the actual reference clock and the six-stage clock chains of both directions |
+| och clock sample-rate 30.72M | Compute and apply the shared sample rate, then read it back; when no exact clock solution exists, the nearest usable rate is used with a `WARN` |
+| och selftest | Stop the data path and run the device's RX/TX digital self-test |
+| och help | Show commands and arguments |
+| och version --json | Query the software and ABI versions |
+| och firmware | Query the CH32 bridge firmware mode and version (does not access the SDK) |
+| och firmware update FILE.ocfw | Update the bridge firmware over USB; see [Bridge Firmware Update](firmware-update.md) |
+| och firmware boot / enter | Leave / enter the bridge bootloader |
 
-规范名称使用小写点分组，例如 rx.lo-frequency、tx1.attenuation。get/set/action 会按 [完整目录](commands.md) 校验参数并转换到 SDK 单位，频率为 Hz、增益/衰减为 dB、DDS scale 为归一化比例。单值回读也转换成规范单位；结构化状态内容保留固件字段。JSON 的 reply 是规范结果，raw_reply 保留原回应，sdk_command 是实际命令。PPS 使用 `pps.input-enabled` 和 `pps.status`，40 MHz 调谐模式和 CH32 环路状态用 `clock.vcxo-status`；旧固件缺少 `pps_monitor=1`/`vcxo=1` 时明确报不支持，详见 [PPS](pps.md)。do 是 action 的兼容别名。
+Canonical names use lowercase dot-separated groups, e.g. rx.lo-frequency, tx1.attenuation. get/set/action validate arguments against the [full catalog](commands.md) and convert them to SDK units: frequencies in Hz, gain/attenuation in dB, and DDS scale as a normalized ratio. Single-value read-backs are also converted to canonical units; structured status content keeps the firmware fields. In JSON, reply is the canonical result, raw_reply keeps the original response, and sdk_command is the command actually sent. PPS uses `pps.input-enabled` and `pps.status`, and the 40 MHz tuning mode and CH32 loop state use `clock.vcxo-status`; older firmware lacking `pps_monitor=1`/`vcxo=1` reports unsupported explicitly; see [PPS](pps.md). do is a compatibility alias for action.
 
-原 SDK 名称的 get/set 仍作为原始透传兼容：och set rx_lo_freq 1000 的 1000 为 MHz，och set tx1_attenuation 10000 的 10000 为 mdB。原始接口不转换数值后缀或返回单位。每次只允许一条命令，拒绝换行批量注入；固件拒绝命令时返回失败。新程序优先使用规范名称。
+get/set with the original SDK names remain as raw pass-through for compatibility: in och set rx_lo_freq 1000, 1000 is MHz, and in och set tx1_attenuation 10000, 10000 is mdB. The raw interface does not convert number suffixes or returned units. Only one command is allowed at a time, and batch injection through newlines is rejected; when the firmware rejects a command, failure is returned. New programs should prefer the canonical names.
 
-`rx.dc-correction` / `rx.iq-correction` 接受 `on/off`、`true/false`、`1/0`，需要 SDK `rx_correction=1`；设置一项时保留另一项并核验回读，JSON 的 `raw_reply` 是设置后查询到的固件原始状态。两项都是 AD9361 原生的 RX 跟踪，语义见 [API：RX 直流与 IQ 校正](api.md#rx-直流与-iq-校正)。
+`rx.dc-correction` / `rx.iq-correction` accept `on/off`, `true/false`, `1/0`, and require SDK `rx_correction=1`; setting one keeps the other and verifies the read-back, and the JSON `raw_reply` is the raw firmware state queried after the setting. Both are the AD9361's native RX tracking; for the semantics see [API: RX DC and IQ correction](api.md#rx-dc-and-iq-correction).
 
-FIR 与 clock 的文件格式、事务边界及实际时钟限制见 [FIR 与时钟使用说明](fir.md)。这些操作不启动数据流，也不改 CH32 固件。所有需要设备的 CLI 操作会取得独占设备所有权并清理旧 USB 会话；find、commands、help、version 不打开设备。
+For the FIR and clock file formats, transaction boundaries, and actual clock limits, see [FIR and Clocks](fir.md). These operations do not start data streams and do not change the CH32 firmware. Every CLI operation that needs the device takes exclusive ownership of it and cleans up the old USB session; find, commands, help, and version do not open the device.
 
-参考与 LO source 接受 `internal/external` 或 `0/1`，默认内部。外部 LO 的名义 RF 范围为 70 MHz..4 GHz，物理输入为其两倍；外部状态下频率命令只声明频率，不能调节信号源。返回内部恢复此前内部 PLL 频率。ADF4002 MUXOUT 只接 D5，软件无法回读锁定或 LED 亮灭，`locked=-1` / `led_on=-1` 必须保持未知。通信自检的 `gpio_verified=1` 仅证明 GPIO pad 回读，需观察 D5 三次闪烁补充芯片响应证据。详见 [参考与外部 LO](reference-lo.md)。
+Reference and LO sources accept `internal/external` or `0/1`, internal by default. The nominal RF range of the external LO is 70 MHz..4 GHz, with a physical input at twice that; in the external state, frequency commands only declare the frequency and cannot tune the signal source. Returning to internal restores the previous internal PLL frequency. The ADF4002 MUXOUT only connects to D5, so software cannot read back lock or whether the LED is lit, and `locked=-1` / `led_on=-1` must stay unknown. `gpio_verified=1` from the communication self-test only proves the GPIO pad read-back; watch D5 blink three times to supply evidence of the chip responding. See [Reference Clock and External LO](reference-lo.md).
 
-find 只枚举系统中匹配的设备（Windows、Linux、macOS 相同），不打开 USB 管道探测链路速度。未查询的速度在默认文本中显示 unknown；为保持兼容，JSON 的 usb_speed_mbps 仍为 0，含义同样是未查询。需要确认实际链路时运行 info；不要把枚举阶段的 0 当成传输速度或断线证据。
+find only enumerates the matching devices on the system (the same on Windows, Linux, and macOS) and does not open the USB pipes to probe the link speed. A speed that has not been queried is shown as unknown in the default text; for compatibility, usb_speed_mbps in JSON is still 0, which also means not queried. Run info when you need to confirm the actual link; do not take a 0 from the enumeration stage as the transfer speed or as evidence of a disconnect.
 
-## USB-C 电源信息
+## USB-C power information
 
-och power 与 och power status 等价；均支持 --serial 和 --json。och info 的原有 JSON 字段保持不变，并增加 power 对象。och find 仍只枚举设备，不读取电源日志。
+och power and och power status are equivalent; both support --serial and --json. The existing JSON fields of och info are unchanged, with a power object added. och find still only enumerates devices and does not read the power log.
 
-**桥接固件 1.0.1 起**：每次查询都通过 EP3 OUT 发送 `typec?`，桥接固件现场读取 HD3SS3220，source 为 typec_query，live 为 true，文本显示 `USB-C`，重复运行结果一致，约 0.1 s。
+**Since bridge firmware 1.0.1**: every query sends `typec?` through EP3 OUT and the bridge firmware reads the HD3SS3220 on the spot; source is typec_query, live is true, the text shows `USB-C`, repeated runs give consistent results, and it takes about 0.1 s.
 
-**桥接固件 1.0.0**：信息来自现有 EP83 的 HD3SS3220 **启动日志**，source 为 startup_log，live 为 false，文本显示 `USB-C at startup`。它是启动时观察结果，不是当前连接的实时轮询，也不是实际耗电电流或电源电压测量。只有日志完整且解码为有效 UFP 连接时，supports_3a 才会是 true 或 false；没有日志、状态无效或不是 UFP 时为 JSON null，文本显示 unknown，不能把未知当作不支持 3 A。
+**Bridge firmware 1.0.0**: the information comes from the HD3SS3220 **boot log** on the existing EP83; source is startup_log, live is false, and the text shows `USB-C at startup`. It is an observation at boot, not a live poll of the current connection, and not a measurement of actual current draw or supply voltage. supports_3a is only true or false when the log is complete and decodes to a valid UFP connection; with no log, an invalid state, or not UFP it is JSON null and the text shows unknown, and unknown must not be taken to mean 3 A is unsupported.
 
-查询默认最多等待 500 ms 获取现有日志。启动日志可能已经被其他程序读走，缺失时不会为重新生成日志而复位设备或要求更新固件。查询结果不写入磁盘缓存，不能沿用旧电脑/旧连接的结果来冒充当前设备状态。
+By default the query waits at most 500 ms for the existing log. The boot log may already have been read by another program; when it is missing, the device is not reset and no firmware update is required to regenerate it. Query results are not cached on disk, and results from an old computer/old connection cannot be passed off as the current device state.
 
-raw_08/raw_09/raw_0a 保留寄存器值，attached_state/current_detected 保留解码字段，source_current_ma 表示启动时检测到的电流公告。USB default 不固定推算成某个毫安数，此时 source_current_ma 为 null。EP83 读取会消费调试字节，缓存只在当前进程的 device 句柄存在，关闭句柄或退出进程后不会留给下一次 CLI；因此第一次 info 显示支持 3 A、随后另一次 power status 变成 unknown 是可能的，不能解释为 3 A 能力消失。
+raw_08/raw_09/raw_0a keep the register values, attached_state/current_detected keep the decoded fields, and source_current_ma is the current advertisement detected at boot. USB default is not converted into a fixed number of milliamps; in that case source_current_ma is null. Reading EP83 consumes the debug bytes, and the cache only exists in the device handle of the current process, so it is not kept for the next CLI run after the handle is closed or the process exits; it is therefore possible for a first info to show 3 A support and a later power status to show unknown, which must not be interpreted as the 3 A capability disappearing.
 
-主机不能据此确定板上 LED 引脚的物理电平或亮灭，亦不能证明电源在当前负载下确实可持续输出 3 A。重新插拔后应重新检查；若固件未产生新的日志，应保留 unknown/非实时的限制。
+The host cannot use this to determine the physical level of the board's LED pin or whether it is lit, nor prove that the supply can actually sustain 3 A under the current load. After replugging, check again; if the firmware produced no new log, keep the unknown/non-live limitations.
 
-## 流与标准参数
+## Streams and standard arguments
 
-| 参数 | 含义 |
+| Argument | Meaning |
 |---|---|
-| --sample-rate 61.44M | 每通道采样率 Hz；RX/TX 共用 |
-| --channels 1 / 2 / 1,2 | 物理通道；默认双通道 |
-| --rx-channels / --tx-channels | bench/config 的分方向选择 |
-| --lo-frequency 1G | 同时设置 RX/TX LO，Hz |
-| --rx-lo-frequency / --tx-lo-frequency | 分别设置 LO，Hz |
-| --bandwidth 18M | 同时设置 RX/TX 模拟带宽，Hz |
-| --rx-bw / --tx-bw | 分别设置带宽 |
-| --gain 30 | 两个 RX 手动增益 dB；默认切手动 |
-| --agc manual/fast/slow/hybrid | 接收增益模式；显式参数优先 |
-| --attenuation 10 | 两个 TX 衰减 dB |
-| --format packed12/sc16/fc32/sc8 | 文件或应用格式；rx/tx 默认 sc16；sc8 需要 8bit wire |
-| --iq-bits 12/8 | USB wire 精度，默认 12；8 需要 bench --rx --tx 及双方向通道均 1,2 |
-| --seconds 10 | 持续时间；0 表示直到 Ctrl+C |
-| --buffer-mib 64 | 每方向主机队列大小，MiB，最大 512 |
-| --queue 32 | 每方向并行 USB 请求数 |
-| --block 196608 | USB 请求字节数，需为 16384（一个成帧块）的倍数 |
+| --sample-rate 61.44M | Per-channel sample rate in Hz; shared by RX/TX |
+| --channels 1 / 2 / 1,2 | Physical channels; dual channel by default |
+| --rx-channels / --tx-channels | Per-direction selection for bench/config |
+| --lo-frequency 1G | Set both RX/TX LO, Hz |
+| --rx-lo-frequency / --tx-lo-frequency | Set each LO separately, Hz |
+| --bandwidth 18M | Set both RX/TX analog bandwidth, Hz |
+| --rx-bw / --tx-bw | Set each bandwidth separately |
+| --gain 30 | Manual gain of both RX in dB; switches to manual by default |
+| --agc manual/fast/slow/hybrid | Receive gain mode; explicit arguments take priority |
+| --attenuation 10 | Attenuation of both TX in dB |
+| --format packed12/sc16/fc32/sc8 | File or application format; rx/tx default to sc16; sc8 needs the 8-bit wire |
+| --iq-bits 12/8 | USB wire precision, 12 by default; 8 needs bench --rx --tx and channels 1,2 in both directions |
+| --seconds 10 | Duration; 0 means until Ctrl+C |
+| --buffer-mib 64 | Host queue size per direction in MiB, at most 512 |
+| --queue 32 | Parallel USB requests per direction |
+| --block 196608 | USB request size in bytes; must be a multiple of 16384 (one framed block) |
 
-十进制数支持 k/K、M、G，例如 30.72M、1e9。拼写错误、非法后缀、非有限数、重复选项、错误通道等明确拒绝，不截取合法数字前缀。
+Decimal numbers accept k/K, M, and G, e.g. 30.72M, 1e9. Typos, invalid suffixes, non-finite numbers, duplicate options, invalid channels, and so on are rejected explicitly, and a valid numeric prefix is never silently truncated.
 
-旧选项 --rate、--frequency、--rx-freq、--tx-freq 分别兼容 --sample-rate、--lo-frequency、--rx-lo-frequency、--tx-lo-frequency；同时传同一参数的新旧名字会报冲突，避免命令顺序决定结果。帮助和新示例只使用规范名字。
+The old options --rate, --frequency, --rx-freq, and --tx-freq remain compatible with --sample-rate, --lo-frequency, --rx-lo-frequency, and --tx-lo-frequency respectively; passing both the new and old name of the same argument reports a conflict, so the order of arguments never decides the result. Help and new examples only use the canonical names.
 
-流命令使用命令行参数及基座默认 RF 配置，默认采样率 30.72 MSPS、两个通道；需要 LO、带宽、增益等指定值时随每次流命令传入，或在自有程序中保存配置对象。已经装载的硬件 FIR 系数和启停状态会保留，因此不能假定每个流都自动绕过滤波器。采样率改变后，原 FIR 系数代表的 Hz 频响随之改变；组合不合法会明确失败。
+Streaming commands use the command-line arguments plus the core's default RF configuration: 30.72 MSPS and two channels by default. When you need specific LO, bandwidth, gain, and so on, pass them with every streaming command, or keep a configuration object in your own program. Hardware FIR coefficients and on/off state already loaded are kept, so you cannot assume every stream bypasses the filter automatically. After the sample rate changes, the frequency response in Hz represented by the existing FIR coefficients changes with it; invalid combinations fail explicitly.
 
 ### RX
 
@@ -211,13 +211,13 @@ raw_08/raw_09/raw_0a 保留寄存器值，attached_state/current_detected 保留
 och rx --sample-rate 30.72M --channels 1,2 --seconds 5 --file iq.sc16 --format sc16 --rx-lo-frequency 1G
 ~~~
 
-只有 payload 写入文件，每个 16 KiB 块的 16 B 头被剥离。另写 iq.sc16.metadata.jsonl，按行记录：
+Only the payload is written to the file; the 16 B header of each 16 KiB block is stripped. A separate iq.sc16.metadata.jsonl is written, recording line by line:
 
-- capture：格式、配置、`hardware_timestamps`（设备是否提供硬件时间）。
-- boundary：file_byte/file_sample 文件位置、epoch/sample_index、flags、主机丢样、设备丢样（由块头时间差得到的精确值）、`time_ticks`（本段首样点的硬件时间）与 `tick_rate`。
-- end：最终统计；异常终止可能没有这一行，已有边界仍可读取。
+- capture: format, configuration, `hardware_timestamps` (whether the device provides hardware time).
+- boundary: file position file_byte/file_sample, epoch/sample_index, flags, host drops, device drops (exact value derived from the block header time difference), `time_ticks` (hardware time of the first sample of this segment), and `tick_rate`.
+- end: final statistics; an abnormal termination may lack this line, and the existing boundaries can still be read.
 
-文件无额外容器头。sc16/fc32 为小端序，双通道顺序 I1,Q1,I2,Q2，单通道是所选物理通道的 I,Q。已有文件需 --overwrite 才能覆盖。
+Files have no extra container header. sc16/fc32 are little-endian; dual channel is ordered I1,Q1,I2,Q2, and single channel is I,Q of the selected physical channel. An existing file is only overwritten with --overwrite.
 
 ### TX
 
@@ -227,15 +227,15 @@ och tx --sample-rate 30.72M --channels 1,2 --file iq.sc16 --format sc16
 och tx --sample-rate 30.72M --channels 1,2 --file iq.sc16 --format sc16 --loop --seconds 30
 ~~~
 
-普通文件默认发送到 EOF，--loop 重复文件。文件必须是完整交织 IQ 帧，不能把 metadata.jsonl 或保留块头的原始 USB dump 当作 IQ 发射。多个不连续 epoch 的采集文件仍按文件内容顺序播放，不自动重建原采集时间间隔。
+A normal file is sent until EOF by default, and --loop repeats the file. The file must consist of complete interleaved IQ frames; metadata.jsonl or a raw USB dump with block headers kept must not be transmitted as IQ. A capture file with several discontinuous epochs is still played in file order, without reconstructing the original time gaps between captures.
 
-TX 最低预填四个完整 USB 块；持续源在启动前先运行生产者，准备 min(32 MiB, 主机队列一半) wire 数据作为调度余量，再显式开始输出。有限文件提前读到 EOF 时可用已预填数据启动。无循环的文件不足四块会拒绝；用 --loop 才重复填充。
+TX prefills at least four complete USB blocks; a continuous source runs its producer before starting, preparing min(32 MiB, half the host queue) of wire data as scheduling headroom, then explicitly starts output. A finite file that reaches EOF early can start with the data already prefilled. A non-looping file shorter than four blocks is rejected; use --loop to repeat-fill it.
 
-`och tx` 发送的是不带时间的连续流；按样点时刻发射突发请使用 C API 的 `och_send_burst`，见 [硬件时间戳](timestamps.md)。定时持续源到时立即关闭硬件并取消剩余排队数据，不为结束而等待队列耗尽。文件 EOF 才显式 flush，必要的传输块零填充以 tx_padding_samples 报告。接受进入主机队列的样本数不等于已从 RF 播放的样本数；两种停止方式都不提供精确的 RF 结束时间。
+`och tx` sends an untimed continuous stream; to transmit bursts at specific sample times, use `och_send_burst` from the C API, see [Hardware Timestamps](timestamps.md). A timed continuous source closes the hardware immediately when time is up and cancels the remaining queued data, without waiting for the queue to drain before ending. Only a file EOF flushes explicitly, and the necessary transport-block zero padding is reported as tx_padding_samples. The number of samples accepted into the host queue is not the number played over RF; neither way of stopping provides an exact RF end time.
 
-**有限文件 EOF 之后的尾部欠流**：flush 完成后设备仍在消耗 FIFO，关闭硬件前可能出现 TX 欠流 / 主机欠供通知，CLI 原样报告。它们不等于连续数据中段丢样，原因见 [架构：TX 的显式启动与停止](architecture.md#tx-的显式启动与停止)；持续流 benchmark 与有限文件回放的验收结果应分别报告。
+**Trailing underflow after a finite file's EOF**: after flush completes, the device keeps draining the FIFO, and TX underflow / host starvation notifications may appear before the hardware is closed; the CLI reports them as they are. They do not mean samples were lost in the middle of continuous data; for why, see [Architecture: Explicit TX start and stop](architecture.md#explicit-tx-start-and-stop). Acceptance results for continuous-stream benchmarks and finite file playback should be reported separately.
 
-测试正弦为 cos+j sin，双通道同一测试码。为保持周期连接和运行吞吐，周期过长的任意频率会量化到最多 65536 点周期，并在 stderr 报告 actual_Hz；1 MHz 在 30.72/61.44 MSPS 下为精确整数周期。幅度 0..1，1 对应 12 位峰值 2047，默认 0.25。
+The test sine is cos+j sin, with the same test code on both channels. To keep the period seamless and sustain throughput, arbitrary frequencies with very long periods are quantized to a period of at most 65536 points, and actual_Hz is reported on stderr; 1 MHz at 30.72/61.44 MSPS has an exact integer period. Amplitude is 0..1, where 1 corresponds to the 12-bit peak of 2047; default 0.25.
 
 ### Benchmark
 
@@ -244,23 +244,23 @@ och bench --rx --tx --sample-rate 30.72M --channels 1,2 --seconds 30 --json
 och bench --rx --tx --sample-rate 61.44M --rx-channels 1 --tx-channels 2 --seconds 30
 ~~~
 
-必须选 --rx、--tx 或两者。bench 使用原生 wire 格式：12bit 默认 packed12；`--iq-bits 8` 默认 sc8，要求 `--rx --tx --channels 1,2`。无磁盘 IO 和浮点转换。usb_MBps 为十进制 MB/s，包括会话启停开销，不是只截取稳定窗口的峰值，也不能仅凭字节率证明 RF 波形正确。`och get usb.iq-bits` 查询，`och set usb.iq-bits 8|12` 在流停止后修改格式；通道与源限制由 SDK 验证，常规流使用 `--iq-bits` 自动协调配置。详见 [8bit 扩展](iq8.md)。
+You must choose --rx, --tx, or both. bench uses the native wire format: packed12 by default for 12-bit; `--iq-bits 8` defaults to sc8 and requires `--rx --tx --channels 1,2`. There is no disk I/O and no floating-point conversion. usb_MBps is decimal MB/s including session start/stop overhead; it is not a peak taken over a steady window only, and the byte rate alone cannot prove the RF waveform is correct. `och get usb.iq-bits` queries the format, and `och set usb.iq-bits 8|12` changes it after streams are stopped; channel and source restrictions are verified by the SDK, and normal streams use `--iq-bits` to coordinate the configuration automatically. See [8-bit extension](iq8.md).
 
-## 退出状态
+## Exit status
 
-| 退出码 | 含义 |
+| Exit code | Meaning |
 |---|---|
-| 0 | 命令完成 |
-| 1 | 设备、传输或运行错误 |
-| 2 | 参数错误（未访问设备） |
-| 3 | `bench --fail-fast` 因连续 RX 溢出提前结束，已清理并保留统计 |
-| 130 | 被 Ctrl+C 中断，已清理 |
+| 0 | Command completed |
+| 1 | Device, transport, or runtime error |
+| 2 | Invalid arguments (device not accessed) |
+| 3 | `bench --fail-fast` stopped early because of consecutive RX overflows; cleaned up with statistics kept |
+| 130 | Interrupted by Ctrl+C; cleaned up |
 
-默认情况下 EVT/间断不自动使流停止；`bench --fail-fast` 例外如上。业务是否通过应根据间断、欠流、块头错误和队列损失统计判断，不能只看退出码。
+By default, EVTs/discontinuities do not stop the stream automatically; `bench --fail-fast` is the exception described above. Whether the job passed should be judged from the statistics on discontinuities, underflows, header errors, and queue losses, not from the exit code alone.
 
 ## RX RSSI
 
-RSSI 上报**默认关闭**，断电后也恢复为关闭，需要先运行 `och rssi on` 开启（`och rssi off` 关闭，或使用 `och set rx.rssi-enabled on|off`）。未开启时，`och rssi` 会提示并以退出码 1 结束。`och rssi` 读取 RX1 和 RX2 的 symbol RSSI。单位为相对 dB，数值越大越强，**不是校准过的输入功率**。ENSM 不在接收状态时显示 `--`，JSON 中为 `null`。本板运行 2R2T，USB 只上传一个通道时，两路仍都能读到 RSSI。`--count N` 指定读取次数（0 表示一直读，直到 Ctrl+C），`--interval 0.5` 指定读取间隔（秒）。`och get rx.rssi` 只读取一次，与其他查询命令格式相同。
+RSSI reporting is **off by default** and returns to off after a power cycle; run `och rssi on` first to enable it (`och rssi off` turns it off, or use `och set rx.rssi-enabled on|off`). When it is not enabled, `och rssi` prints a notice and exits with code 1. `och rssi` reads the symbol RSSI of RX1 and RX2. The unit is relative dB, larger is stronger, and it is **not calibrated input power**. When the ENSM is not in the receive state it shows `--`, and `null` in JSON. This board runs 2R2T, so even when USB uploads only one channel, RSSI can still be read for both. `--count N` sets the number of reads (0 reads until Ctrl+C), and `--interval 0.5` sets the read interval in seconds. `och get rx.rssi` reads once, in the same format as other query commands.
 
 ```powershell
 och rssi on
@@ -269,8 +269,8 @@ och rssi --count 0 --interval 0.2
 och rssi --count 10 --json
 ```
 
-新 SDK 的 `rx_rssi?` 实测每次约 1.1 ms。旧 SDK 由 OCH 从 `system_status?` 中解析，每次约 190 ms。见 [设备协议：控制串口](protocol.md#控制串口)。
+On new SDKs, `rx_rssi?` takes about 1.1 ms per read. On older SDKs, OCH parses it from `system_status?`, about 190 ms per read. See [Device Protocol: Control UART](protocol.md#control-uart).
 
-## RGB 与风扇温控
+## RGB and fan control
 
-`rgb.enabled` / `rgb.status`、`fan.enabled` / `fan.status` 和 `core.temperature` 控制和查询 RGB 状态灯、风扇温控与 Zynq 核心温度，不停止 IQ 流。默认值、状态颜色、温控策略与固件要求见 [板级控制](board-control.md)。
+`rgb.enabled` / `rgb.status`, `fan.enabled` / `fan.status`, and `core.temperature` control and query the RGB status LED, fan temperature control, and Zynq core temperature, without stopping IQ streams. For defaults, status colors, the fan control policy, and firmware requirements, see [Board Control](board-control.md).

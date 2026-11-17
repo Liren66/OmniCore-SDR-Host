@@ -16,7 +16,7 @@ if(-not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)){throw 'Inno Setup
 # CMake install merges into an existing directory. Refuse stale SDK/test/debug
 # payloads instead of silently including them in Inno's recursive file entry.
 # matlab: optional MATLAB toolbox (bindings/matlab/build_omnicore_mex.m with OutputDir <stage>\matlab).
-$allowedRoots=@('bin','docs','examples','include','lib','licenses','matlab','README.md','LICENSE','PAYLOAD_SHA256.txt')
+$allowedRoots=@('bin','docs','examples','include','lib','licenses','matlab','README.md','README.zh-CN.md','LICENSE','PAYLOAD_SHA256.txt')
 foreach($item in Get-ChildItem -LiteralPath $stage -Force){
     if($item.Name -notin $allowedRoots){throw "Unexpected stage entry '$($item.Name)'. Recreate a clean stage using CMake install."}
 }
@@ -56,6 +56,7 @@ if(Test-Path -LiteralPath $matlab){
 if($LASTEXITCODE -ne 0){throw 'MSVC import-library generation failed'}
 foreach($d in @('docs','licenses\libusbK','licenses\libwdi','licenses\mingw','licenses\sources','licenses\driver-build')){New-Item -ItemType Directory -Force (Join-Path $stage $d)|Out-Null}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'INSTALL_WINDOWS.txt') -Destination (Join-Path $stage 'docs') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'INSTALL_WINDOWS.zh-CN.txt') -Destination (Join-Path $stage 'docs') -Force
 Copy-Item -Path (Join-Path $driver 'libusbK-3.1.0.0-src\license\*') -Destination (Join-Path $stage 'licenses\libusbK') -Force
 Copy-Item -LiteralPath (Join-Path $driver 'libwdi-1.5.1\COPYING'),(Join-Path $driver 'libwdi-1.5.1\COPYING-LGPL') -Destination (Join-Path $stage 'licenses\libwdi') -Force
 Copy-Item -LiteralPath (Join-Path $driver 'downloads\libwdi-v1.5.1.zip'),(Join-Path $driver 'downloads\libusbK-3.1.0.0-src.7z') -Destination (Join-Path $stage 'licenses\sources') -Force

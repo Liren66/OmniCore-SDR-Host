@@ -1,65 +1,65 @@
 <!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>transmit - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
 <body>
 <div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="omnicore.Device.html">omnicore.Device</a> › transmit</div>
 <h1>transmit</h1>
-<p class="purpose">发射一个突发，等待设备确认发完</p>
+<p class="purpose">Transmit one burst and wait for the device to confirm it was sent</p>
 
-<h2>语法</h2>
+<h2>Syntax</h2>
 <p class="syntax"><a href="#s1">transmit(dev, x)</a></p>
 <p class="syntax"><a href="#s2">transmit(dev, x, Name, Value)</a></p>
 <p class="syntax"><a href="#s3">s = transmit(___)</a></p>
 
-<h2>说明</h2>
+<h2>Description</h2>
 <div class="desc" id="s1"><div class="syntax">transmit(dev, x)</div>
-<p>把 <code>x</code> 作为一个突发发出，设备报告突发结束（BurstAck）后返回。<code>x</code> 为 N × <code>numel(dev.TxChannels)</code>，单通道时行向量也可以。</p></div>
+<p>Sends <code>x</code> as one burst and returns after the device reports the end of the burst (BurstAck). <code>x</code> is N × <code>numel(dev.TxChannels)</code>; for a single channel, a row vector also works.</p></div>
 <div class="desc" id="s2"><div class="syntax">transmit(dev, x, Name, Value)</div>
-<p>指定开始的硬件时间、超时或缓冲大小。</p></div>
+<p>Specifies the start hardware time, the timeout, or the buffer size.</p></div>
 <div class="desc" id="s3"><div class="syntax">s = transmit(___)</div>
-<p>返回这个突发的 TX 事件统计。</p></div>
+<p>Returns the TX event statistics for this burst.</p></div>
 
-<h2>示例</h2>
-<details open><summary>一个单音突发</summary>
+<h2>Examples</h2>
+<details open><summary>A tone burst</summary>
 <pre><code>dev = omnicore.Device('TxChannels', 1, 'TxFrequency', 2.45e9, 'TxGain', 20);
 x = single(0.5 * exp(1j*2*pi*1e6/dev.SampleRate*(0:30719).'));
 s = transmit(dev, x);
-fprintf('突发结束于硬件时间 %.6f s\n', s.AckTime);</code></pre></details>
-<details><summary>定时突发</summary>
+fprintf('Burst ended at hardware time %.6f s\n', s.AckTime);</code></pre></details>
+<details><summary>Timed burst</summary>
 <pre><code>t = time(dev) + 0.5;
 s = transmit(dev, x, 'StartTime', t);
-(s.AckTime - t) * dev.SampleRate        % 突发长度加上设备流水线延迟，样点</code></pre></details>
+(s.AckTime - t) * dev.SampleRate        % burst length plus device pipeline delay, in samples</code></pre></details>
 
-<h2>输入参数</h2>
+<h2>Input arguments</h2>
 <dl class="args">
-<dt>x <span class="type">single | double | int16 | int8，复数或实数</span></dt>
-<dd>single / double 按 ±1 满量程，超出部分限幅并给 <code>omnicore:TxClipped</code> 警告；实数按 Q = 0 发射。int16 为 12 位样点左对齐；int8 只在 <code>IQBits = 8</code> 时可用。见<a href="data_formats.html">样点格式与缩放</a>。</dd>
+<dt>x <span class="type">single | double | int16 | int8, complex or real</span></dt>
+<dd>single / double use ±1 full scale; anything beyond is clipped with an <code>omnicore:TxClipped</code> warning; real values are transmitted with Q = 0. int16 is 12-bit samples left-aligned; int8 is only available with <code>IQBits = 8</code>. See <a href="data_formats.html">Sample Formats and Scaling</a>.</dd>
 </dl>
-<h3>名称-值参数</h3>
+<h3>Name-value arguments</h3>
 <dl class="args">
-<dt>'StartTime' <span class="type">秒</span></dt><dd>第一个样点的硬件时间。已经过去时设备报告 Late，并给 <code>omnicore:TxLate</code> 警告。</dd>
-<dt>'Timeout' <span class="type">秒，默认 1</span></dt><dd>没有进展的最长时间，超过报 <code>omnicore:TIMEOUT</code>。定时突发的等待时间自动加上到 <code>StartTime</code> 的延迟。</dd>
-<dt>'BufferBytes' <span class="type">字节，默认 64 MiB</span></dt><dd>主机环形缓冲大小。</dd>
+<dt>'StartTime' <span class="type">seconds</span></dt><dd>Hardware time of the first sample. If it has already passed, the device reports Late and an <code>omnicore:TxLate</code> warning is given.</dd>
+<dt>'Timeout' <span class="type">seconds, default 1</span></dt><dd>Maximum time without progress; beyond it, <code>omnicore:TIMEOUT</code> is raised. For a timed burst, the wait automatically includes the delay until <code>StartTime</code>.</dd>
+<dt>'BufferBytes' <span class="type">bytes, default 64 MiB</span></dt><dd>Host ring buffer size.</dd>
 </dl>
 
-<h2>输出参数</h2>
-<dl class="args"><dt>s <span class="type">结构体</span></dt><dd>
+<h2>Output arguments</h2>
+<dl class="args"><dt>s <span class="type">struct</span></dt><dd>
 <table>
-<tr><th>字段</th><th>含义</th></tr>
-<tr><td><code>Underflow</code></td><td>设备发射时样点用完的次数（射频欠流），另有 <code>omnicore:TxUnderflow</code> 警告</td></tr>
-<tr><td><code>Starved</code></td><td>突发进行中主机队列为空的次数。定时突发等待开始时也会出现，此时无害</td></tr>
-<tr><td><code>Late</code></td><td>开始时间已过的次数</td></tr>
-<tr><td><code>BurstAck</code></td><td>设备确认的突发结束次数</td></tr>
-<tr><td><code>AckTime</code>, <code>AckTicks</code></td><td>突发结束的硬件时间（秒 / <code>uint64</code> 样点）</td></tr>
-<tr><td><code>Errors</code>, <code>LastError</code>, <code>Dropped</code></td><td>设备报告的 TX 错误数、最后一条错误、事件队列满时丢掉的事件数</td></tr>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>Underflow</code></td><td>Number of times the device ran out of samples while transmitting (RF underflow), with an additional <code>omnicore:TxUnderflow</code> warning</td></tr>
+<tr><td><code>Starved</code></td><td>Number of times the host queue was empty during the burst. This also appears while a timed burst waits to start, where it is harmless</td></tr>
+<tr><td><code>Late</code></td><td>Number of times the start time had already passed</td></tr>
+<tr><td><code>BurstAck</code></td><td>Number of burst ends confirmed by the device</td></tr>
+<tr><td><code>AckTime</code>, <code>AckTicks</code></td><td>Hardware time of the burst end (seconds / <code>uint64</code> samples)</td></tr>
+<tr><td><code>Errors</code>, <code>LastError</code>, <code>Dropped</code></td><td>Number of TX errors reported by the device, the last error, and the number of events dropped when the event queue was full</td></tr>
 </table></dd></dl>
 
-<h2>提示</h2>
+<h2>Tips</h2>
 <ul>
-<li>每台设备只有一个 TX 流：<code>transmitRepeat</code> 或 <code>TxStream</code> 活动时，<code>transmit</code> 报 <code>omnicore:BUSY</code>。</li>
-<li>多个连续的定时突发、或边算边发时，用 <a href="omnicore.TxStream.html"><code>TxStream</code></a>，不必每次都等确认。</li>
+<li>Each device has only one TX stream: while <code>transmitRepeat</code> or a <code>TxStream</code> is active, <code>transmit</code> raises <code>omnicore:BUSY</code>.</li>
+<li>For several consecutive timed bursts, or for generating while transmitting, use <a href="omnicore.TxStream.html"><code>TxStream</code></a> so you do not have to wait for confirmation each time.</li>
 </ul>
 
-<h2>另请参阅</h2>
+<h2>See also</h2>
 <p class="seealso"><a href="omnicore.Device.transmitRepeat.html">transmitRepeat</a><a href="omnicore.TxStream.html">omnicore.TxStream</a><a href="omnicore.Transmitter.html">omnicore.Transmitter</a></p>
 </body></html>

@@ -1,8 +1,8 @@
-# PPS 时钟频率监控与 40 MHz 驯服
+# PPS Clock Frequency Monitoring and 40 MHz Disciplining
 
-PPS 计数器测量 AD9361 数字接口的 DATA_CLK 频率，本文介绍这项监控和 40 MHz 驯服；它本身不提供 UTC 时间。用 PPS 装载样点时间、定时收发见 [硬件时间戳](timestamps.md)。默认关闭；不需要外部 PPS 也可以正常启动和收发。在 PA4 调谐硬件上（SDK `vcxo=1`），只用 PPS、不用外部 10 MHz 时，CH32 会按这些计数驱动 PA4 DAC 驯服板载 40 MHz，见下文 [40 MHz 调谐模式](#40-mhz-调谐模式sdk-vcxo1)。
+The PPS counter measures the DATA_CLK frequency of the AD9361 digital interface. This page covers that monitoring and the 40 MHz disciplining; it does not provide UTC time by itself. For loading sample time on PPS and timed RX/TX, see [Hardware Timestamps](timestamps.md). Monitoring is off by default, and the board starts and streams normally without external PPS. On PA4 tuning hardware (SDK `vcxo=1`), when only PPS is used without an external 10 MHz, the CH32 drives the PA4 DAC from these counts to discipline the on-board 40 MHz; see [40 MHz tuning mode](#40-mhz-tuning-mode-sdk-vcxo1) below.
 
-## 使用
+## Usage
 
 ```powershell
 och get pps.input-enabled
@@ -12,115 +12,115 @@ och get pps.status --json
 och set pps.input-enabled off
 ```
 
-SDK 原指令：`pps_input_en?`、`pps_input_en=0|1`、`pps_status?`。`system_status?` 也包含 PPS 状态。`system_info?` 的 `pps_monitor=1` 表示 SDK 已连接支持 PPS 的 FPGA；`pps_adjustment=0` 表示没有调节功能。旧固件/旧比特流会返回不支持，不伪造有效测量。
+Raw SDK commands: `pps_input_en?`, `pps_input_en=0|1`, `pps_status?`. `system_status?` also includes the PPS state. `pps_monitor=1` in `system_info?` means the SDK is connected to an FPGA with PPS support; `pps_adjustment=0` means there is no adjustment function. Older firmware/bitstreams return unsupported, and no valid measurement is fabricated.
 
-开启只解除 PPS 中断屏蔽并启动统计，关闭时屏蔽中断并清空本次统计；FPGA 内部输入采样与计数模块仍存在。打开或关闭监控不暂停 IQ 流、不改采样率、不切参考源。选择在关闭/重新打开 OCH 后保留，在 `rf_reinit!` 后保留；SDK 重启恢复关闭。
+Enabling only unmasks the PPS interrupt and starts the statistics; disabling masks the interrupt and clears the current statistics. The input sampling and counting module inside the FPGA remains in place either way. Turning monitoring on or off does not pause IQ streams, change the sample rate, or switch the reference source. The setting persists across closing/reopening OCH and across `rf_reinit!`; restarting the SDK returns it to off.
 
-## 状态和数据含义
+## States and data
 
-| 字段/状态 | 含义 |
+| Field/state | Meaning |
 |---|---|
-| `disabled` | 监控已关闭 |
-| `waiting` | 开启或重新配置后等待两个连续有效脉冲 |
-| `valid` | 最近完整 PPS 间隔产生有效频率 |
-| `no_signal` | 开启后或最后脉冲之后超过 1.5 秒未收到新脉冲 |
-| `invalid_interval` | 脉冲间隔或计数异常，包括丢脉冲后第一次恢复 |
-| `clock_unavailable` | RF 时钟未就绪，监控选择保留，测量暂停 |
-| `signal_present` | 最近 1.5 秒收到过脉冲，不等于合格的 1 Hz 信号 |
-| `frequency_valid` | 必须为 1 才能使用频率和频偏 |
-| `nominal_hz` | 根据当前时钟配置推算的名义 DATA_CLK，非测量值 |
-| `measured_hz` | 假设外部脉冲为准确 1 Hz，由 FPGA 周期计数获得的 DATA_CLK 频率 |
-| `error_ppm` | `(measured_hz / nominal_hz - 1) × 10^6`；无效时协议返回 `unknown` |
-| `pulse_count` / `invalid_count` | 本次启用期间收到的 IRQ 数/被拒绝的间隔数，32 位计数可回绕 |
-| `age_ms` | 距最后脉冲的毫秒数；4294967295 表示开启/重新测量后尚无脉冲 |
-| `raw_counter` | 有效时的 FPGA 原始计数，修正零起点后 `measured_hz = raw_counter + 1` |
-| `hardware_timeout` | HDL 自带超时标志，仅作诊断；门限依赖 DATA_CLK，软件状态采用固定 1.5 秒 |
+| `disabled` | Monitoring is off |
+| `waiting` | Waiting for two consecutive valid pulses after enabling or reconfiguring |
+| `valid` | The most recent complete PPS interval produced a valid frequency |
+| `no_signal` | No new pulse for more than 1.5 s after enabling or after the last pulse |
+| `invalid_interval` | Abnormal pulse interval or count, including the first recovery after a missed pulse |
+| `clock_unavailable` | RF clock not ready; the monitoring setting is kept and measurement is paused |
+| `signal_present` | A pulse was received within the last 1.5 s; this does not mean a qualified 1 Hz signal |
+| `frequency_valid` | Must be 1 before the frequency and offset can be used |
+| `nominal_hz` | Nominal DATA_CLK derived from the current clock configuration, not a measurement |
+| `measured_hz` | DATA_CLK frequency obtained from the FPGA period count, assuming the external pulse is exactly 1 Hz |
+| `error_ppm` | `(measured_hz / nominal_hz - 1) × 10^6`; the protocol returns `unknown` when invalid |
+| `pulse_count` / `invalid_count` | IRQs received / intervals rejected while enabled this time; 32-bit counters that may wrap |
+| `age_ms` | Milliseconds since the last pulse; 4294967295 means no pulse yet since enabling/re-measuring |
+| `raw_counter` | Raw FPGA count when valid; after correcting the zero origin, `measured_hz = raw_counter + 1` |
+| `hardware_timeout` | Timeout flag built into the HDL, for diagnostics only; its threshold depends on DATA_CLK, while the software state uses a fixed 1.5 s |
 
-当前物理接口固定为 2R2T LVDS，DATA_CLK = 4 × 每通道采样率。30.72 MSPS 对应名义 122.88 MHz，61.44 MSPS 对应 245.76 MHz；USB 只选一个 RX 通道不会改变这个关系。监测值不是板上 40 MHz 参考时钟的直接读数。
+The physical interface is currently fixed at 2R2T LVDS, with DATA_CLK = 4 × per-channel sample rate. 30.72 MSPS corresponds to a nominal 122.88 MHz and 61.44 MSPS to 245.76 MHz; selecting only one RX channel over USB does not change this relationship. The monitored value is not a direct reading of the on-board 40 MHz reference clock.
 
-首次 PPS 只建立起点，不发布频率。PS 定时器只检查 IRQ 间隔是否在 0.9–1.1 秒，硬件计数还须在名义频率 ±10% 内；PS 接收时刻不用于精确算频率。下一次连续合格 PPS 才有效。丢失输入时立即停止发布过期频率，`measured_hz=0`、`error_ppm=unknown`；零表示无效占位，不表示真的测得 0 Hz。改采样率、FIR/时钟重配和 RF 重初始化后重新等待两个脉冲。
+The first PPS only establishes the starting point and publishes no frequency. The PS timer only checks that the IRQ interval is within 0.9–1.1 s, and the hardware count must also be within ±10% of the nominal frequency; the PS receive time is not used to compute the precise frequency. The next consecutive qualified PPS makes it valid. When the input is lost, publishing the stale frequency stops immediately, with `measured_hz=0` and `error_ppm=unknown`; zero is an invalid placeholder and does not mean 0 Hz was actually measured. After changing the sample rate, reconfiguring FIR/clocks, or reinitializing RF, it waits for two pulses again.
 
-板上 PPS 接口是 J6 的 PPS_EXT（原理图连接器文字为 10M_EXT），10 MHz 外部频率参考则接 J3。输入电平必须与实板 Bank 供电匹配。OCH 不改变 FPGA 的 LVCMOS25 约束或板上电压。
+The on-board PPS input is PPS_EXT on J6 (the schematic connector label reads 10M_EXT), while the 10 MHz external frequency reference connects to J3. The input level must match the actual board's bank supply. OCH does not change the FPGA's LVCMOS25 constraint or the board voltages.
 
-## OCH 的 LOCK 显示
+## LOCK display in OCH
 
-从 0.3.4 起，参考状态、PPS 状态及系统状态统一使用 PPS 测频判定 `locked`，并标注 `lock_source=PPS`、`lock_tolerance_ppm=1`。
+Since 0.3.4, the reference state, PPS state, and system state all determine `locked` from the PPS frequency measurement, labeled `lock_source=PPS` and `lock_tolerance_ppm=1`.
 
-| 监控情况 | LOCK 显示 |
+| Monitoring situation | LOCK display |
 |---|---|
-| 已开启，最近有效频率与名义 DATA_CLK 相差不超过 ±1 ppm（包含边界） | `locked=1` |
-| 已开启，测量有效但超出 ±1 ppm | `locked=0` |
-| 关闭、无输入、等待两个有效脉冲、无效间隔、时钟不可用、超时或查询失败 | 隐藏 LOCK |
+| Enabled, and the most recent valid frequency is within ±1 ppm of the nominal DATA_CLK (boundary included) | `locked=1` |
+| Enabled, measurement valid but outside ±1 ppm | `locked=0` |
+| Off, no input, waiting for two valid pulses, invalid interval, clock unavailable, timeout, or query failed | LOCK hidden |
 
-判定使用整数频率差，避免 ppm 显示舍入影响边界；每次有效测量更新，不累计多秒确认。`frequency_valid=1` 的 SDK 校验范围是 ±10%，不能直接当作锁定。
+The decision uses an integer frequency difference, so rounding in the ppm display does not affect the boundary; it updates on every valid measurement and does not accumulate confirmation over several seconds. The SDK's check range for `frequency_valid=1` is ±10%, so it cannot be taken as lock by itself.
 
-这是相对于输入 PPS 的频率容差标志，不是相位锁定、ADF4002 锁定反馈或绝对频率精度保证。只开启外部 10 MHz 时不需要 PPS，ADF4002 实际锁定仍需观察 D5。监控不调节时钟。
+This is a frequency-tolerance flag relative to the input PPS, not phase lock, ADF4002 lock feedback, or a guarantee of absolute frequency accuracy. Enabling only the external 10 MHz does not need PPS, and actual ADF4002 lock still has to be checked by watching D5. Monitoring does not adjust the clock.
 
-CLI 的普通输出及 JSON `reply` 隐藏无法观测的硬件 lock/LED 字段；规范命令 JSON `raw_reply` 和底层 `och_command` 保留原始 SDK 回复，供协议诊断。界面应使用规范 `reply` 或 C API 的 `lock_known/locked`，不要显示原始 SDK 的 `locked=-1`。
+The CLI's normal output and the JSON `reply` hide the hardware lock/LED fields that cannot be observed; the canonical command's JSON `raw_reply` and the low-level `och_command` keep the raw SDK reply for protocol diagnostics. User interfaces should use the canonical `reply` or the C API's `lock_known/locked`, and should not show the raw SDK `locked=-1`.
 
-## C/C++ 接口
+## C/C++ interface
 
 ```cpp
 och::device device;
 device.set_pps_enabled(true);
 auto status = device.pps_status();
 if (status.frequency_valid) {
-    // status.measured_hz 和 status.error_ppm 有效。
+    // status.measured_hz and status.error_ppm are valid.
 }
 if (status.lock_known) {
-    // 显示 status.locked：1 = 频率在 ±1 ppm 内，0 = 超出。
+    // Show status.locked: 1 = frequency within ±1 ppm, 0 = outside.
 } else {
-    // 隐藏 LOCK。
+    // Hide LOCK.
 }
 device.set_pps_enabled(false);
 ```
 
-C ABI：`och_set_pps_enabled(device, 0|1)`，`och_get_pps_status(device, &status)`；`och_pps_status.struct_size` 必须设置。无效频率在 C 结构中以 `frequency_valid=0` 和零数值表示。0.3.4 在原保留槽加入 `lock_known/locked`，`och_pps_status` 仍为 96 字节，`error_ppm` 偏移仍为 56，保持 ABI 1。`lock_known=0` 时 `locked=-1`，界面必须隐藏。`och_reference_status.lock_known/locked` 同样表示 PPS 频率监控结果；参考 getter 将不支持/失败的可选 PPS 查询降级为未知，显式 PPS getter 仍报告错误。
+C ABI: `och_set_pps_enabled(device, 0|1)`, `och_get_pps_status(device, &status)`; `och_pps_status.struct_size` must be set. An invalid frequency is represented in the C struct by `frequency_valid=0` and zero values. 0.3.4 added `lock_known/locked` in former reserved slots; `och_pps_status` is still 96 bytes and `error_ppm` is still at offset 56, preserving ABI 1. When `lock_known=0`, `locked=-1`, and the user interface must hide it. `och_reference_status.lock_known/locked` likewise represent the PPS frequency monitoring result; the reference getter downgrades an unsupported/failed optional PPS query to unknown, while the explicit PPS getter still reports the error.
 
-同进程 API 可以在 RX/TX 流运行期间调用，也允许持有 RX 租借缓冲。查询/开关失败不会停流或使 RF 配置失效。原始 `och_command` 的写操作仍要求没有流；正在收发的应用应使用上述类型化接口，不能另开 CLI 抢占设备。
+The in-process API can be called while RX/TX streams are running, and also while an RX lease buffer is held. A failed query/switch does not stop streams or invalidate the RF configuration. Write operations through the raw `och_command` still require that no streams exist; applications that are streaming should use the typed interfaces above rather than opening a separate CLI to take over the device.
 
-## 板级实现与验证
+## Board implementation and verification
 
-新比特流包含修订号 2 的 PPS 接收 IP。PPS 中断连接 concat In0 → IRQ_F2P[0] → GIC 61，SDK 显式采用此板级映射；当前 BSP 自动生成的 `XPAR_FABRIC_AXI_AD9361_GPS_PPS_IRQ_INTR=91` 与实线不一致，91 留给现有 CH32 中断。驱动共享已有 GIC，使用上升沿触发，同时解除 RX/TX 两侧 PPS 屏蔽。没有修改 CH32H417 工程。
+The new bitstream includes revision 2 of the PPS receive IP. The PPS interrupt is wired concat In0 → IRQ_F2P[0] → GIC 61, and the SDK uses this board mapping explicitly; the `XPAR_FABRIC_AXI_AD9361_GPS_PPS_IRQ_INTR=91` auto-generated by the current BSP does not match the actual wiring, and 91 is left for the existing CH32 interrupt. The driver shares the existing GIC, uses rising-edge triggering, and unmasks PPS on both the RX and TX sides. The CH32H417 project was not modified.
 
-接入真实外部 10 MHz 和 PPS 后，D5 常亮；30.72 MSPS 下稳定读数为 122880000–122880001 Hz、频偏 0–0.008 ppm。该结果相对于输入 PPS，不是独立仪表的绝对精度验收。计数功能背景可参阅 [ADI AXI AD9361 文档](https://analogdevicesinc.github.io/hdl/2023_R2/library/axi_ad9361/index.html)，具体计数修正和中断映射以本项目 RTL/连线为准。
+With real external 10 MHz and PPS connected, D5 stays lit; at 30.72 MSPS the stable reading is 122880000–122880001 Hz with an offset of 0–0.008 ppm. This result is relative to the input PPS and is not an absolute accuracy verification with an independent instrument. For background on the counting function, see the [ADI AXI AD9361 documentation](https://analogdevicesinc.github.io/hdl/2023_R2/library/axi_ad9361/index.html); the specific count correction and interrupt mapping follow this project's RTL/wiring.
 
-## 40 MHz 调谐模式（SDK `vcxo=1`）
+## 40 MHz tuning mode (SDK `vcxo=1`)
 
-新硬件把 CH32H417 的 PA4（DAC1_OUT）接到 ADF4002 电荷泵输出，即 40 MHz VCTCXO 的调谐节点（CP→R109 100 kΩ→Vc，R101/R123 1 MΩ/1 MΩ 偏置到 1.65 V），原 PA4 LED 已去掉。两个驱动源不能同时工作，模式由两个开关组合：
+The new hardware connects the CH32H417's PA4 (DAC1_OUT) to the ADF4002 charge pump output, which is the tuning node of the 40 MHz VCTCXO (CP→R109 100 kΩ→Vc, with R101/R123 1 MΩ/1 MΩ biasing it to 1.65 V); the former PA4 LED has been removed. The two drive sources cannot operate at the same time, and the mode is set by combining two switches:
 
-| 模式 | `clock.ref-source` | `pps.input-enabled` | ADF4002 | PA4 | LOCK |
+| Mode | `clock.ref-source` | `pps.input-enabled` | ADF4002 | PA4 | LOCK |
 |---|---|---|---|---|---|
-| 0 | internal | off | CE 低、电荷泵高阻 | 高阻 | 隐藏；Vc 由偏置电阻保持 1.65 V |
-| 1 | external | off | 锁相到 J3 10 MHz | 高阻 | 不读锁定（和以前一样默认锁定，看 D5） |
-| 2 | internal | on | CE 低、电荷泵高阻 | CH32 DAC 闭环 | `lock_source=CH32_PPS_LOOP` |
-| 3 | external | on | 锁相到 J3 10 MHz | 高阻 | PPS ±1 ppm 频率检查，仅作参考 |
+| 0 | internal | off | CE low, charge pump high-impedance | High-impedance | Hidden; Vc held at 1.65 V by the bias resistors |
+| 1 | external | off | Phase-locked to J3 10 MHz | High-impedance | Lock not read (as before, assumed locked; watch D5) |
+| 2 | internal | on | CE low, charge pump high-impedance | CH32 DAC closed loop | `lock_source=CH32_PPS_LOOP` |
+| 3 | external | on | Phase-locked to J3 10 MHz | High-impedance | PPS ±1 ppm frequency check, for reference only |
 
-**切换规则。** 关闭电荷泵立即生效。打开电荷泵（进入 1 或 3）时，SDK 先让 CH32 释放 PA4，收到 CH32 对本次请求的 `pa4=0` 应答后才开启 ADF4002；`clock_ref_source=1` 先回 `pending=1`，OCH 轮询 `vcxo_status?` 最多 5 s。3 s 内没有应答时，电荷泵保持高阻，并报 `error=-116`，`och set clock.ref-source external` 失败。CH32 上电和复位后 PA4 都是高阻，只有收到 Zynq 的模式 2 才驱动。
+**Switching rules.** Turning the charge pump off takes effect immediately. When turning the charge pump on (entering 1 or 3), the SDK first asks the CH32 to release PA4, and only enables the ADF4002 after receiving the CH32's `pa4=0` reply to that request; `clock_ref_source=1` first replies `pending=1`, and OCH polls `vcxo_status?` for up to 5 s. If no reply arrives within 3 s, the charge pump stays high-impedance and `error=-116` is reported, so `och set clock.ref-source external` fails. PA4 is high-impedance after CH32 power-up and reset, and is only driven after receiving mode 2 from the Zynq.
 
-**CH32 环路（模式 2）。** Zynq 在每个 PPS 边沿上传一行计数，其中期望值按 BBPLL 整数和小数字精确计算。CH32 的处理顺序：
+**CH32 loop (mode 2).** On every PPS edge the Zynq uploads a line of counts, with the expected value computed exactly from the BBPLL integer and fractional words. The CH32 processes them in this order:
 
-1. 第一次进入时 DAC 写 2048，与偏置电压相同，接管无跳变。
-2. CAL：DAC 步进 400 LSB 测量斜率 K（ppb/LSB），约 36 s。这一步会让 40 MHz 偏移几百 ppb 到几 ppm，具体取决于晶振压控斜率。
-3. ACQ：每 8 s 修正一次频率。
-4. TRACK：相位 PI 环，τ=15 s、ζ=0.707，把 PPS 相位误差压到 0。DAC 按 1 Hz 做一阶 Σ-Δ 取整，把舍入误差带到下一秒，平均频率等于 PI 输出的小数值，避免在两个码之间来回跳的极限环。
-5. 超过 3 s 没有新样本时进入 HOLD，DAC 保持不变；单次跳变超过 500 ppb 视为毛刺，丢弃该样本并把相位清零。相位误差超过 ±2 µs 时记为一次相位滑动（phase slip）：只把相位清零，频率积分和 DAC 保留，继续 TRACK，不再退回 ACQ。
+1. On first entry, the DAC is written to 2048, the same as the bias voltage, so the takeover is glitch-free.
+2. CAL: the DAC steps by 400 LSB to measure the slope K (ppb/LSB), taking about 36 s. This step shifts the 40 MHz by a few hundred ppb to a few ppm, depending on the oscillator's tuning slope.
+3. ACQ: the frequency is corrected every 8 s.
+4. TRACK: a phase PI loop with τ=15 s and ζ=0.707 drives the PPS phase error to 0. The DAC is rounded with a first-order Σ-Δ at 1 Hz, carrying the rounding error into the next second, so the average frequency equals the fractional PI output and the limit cycle of jumping back and forth between two codes is avoided.
+5. If no new sample arrives for more than 3 s, it enters HOLD and the DAC stays unchanged; a single jump of more than 500 ppb is treated as a glitch, and that sample is discarded and the phase reset to zero. A phase error beyond ±2 µs counts as one phase slip: only the phase is reset to zero, the frequency integrator and DAC are kept, and it continues in TRACK without falling back to ACQ.
 
-再次进入模式 2 时，直接从上次的 DAC 值和 K 开始 ACQ。环路在 CH32 本地运行，Host 不读 EP2 时也照常工作。改采样率、FIR、`rf_reinit!` 期间没有计数，环路处于 HOLD。
+On re-entering mode 2, ACQ starts directly from the previous DAC value and K. The loop runs locally on the CH32 and keeps working even when the host is not reading EP2. While changing the sample rate, FIR, or running `rf_reinit!`, there are no counts and the loop is in HOLD.
 
-**锁定判断。** `locked=1` 表示 CH32 处于 TRACK，且相位误差在 ±1000 ns 以内。实测斜率约 10.6 ppb/LSB。开始或停止流传输时板子温度变化，40 MHz 会在一分钟内漂移约 100–140 ppb；τ 取 15 s，按实测斜率仿真，这种热瞬态的相位峰值约 550 ns，2 ppb/min 慢漂约 80 ns（τ=40 s 时热瞬态会超过 2 µs）。Σ-Δ 只在 1 Hz 环路速率上做，不做更快的抖动，以免在射频本振上产生调制边带。
+**Lock decision.** `locked=1` means the CH32 is in TRACK with a phase error within ±1000 ns. The measured slope is about 10.6 ppb/LSB. When streaming starts or stops, the board temperature changes and the 40 MHz drifts by about 100–140 ppb within a minute; with τ = 15 s, a simulation using the measured slope gives a phase peak of about 550 ns for this thermal transient, and about 80 ns for a slow drift of 2 ppb/min (with τ=40 s the thermal transient would exceed 2 µs). Σ-Δ is applied only at the 1 Hz loop rate, without faster dithering, to avoid modulation sidebands on the RF LO.
 
 ```powershell
-och set pps.input-enabled on        # 内部参考 → 模式 2，CH32 驯服
+och set pps.input-enabled on        # internal reference → mode 2, disciplined by the CH32
 och get clock.vcxo-status
-och set clock.ref-source external   # → 模式 3，CH32 先释放 PA4
+och set clock.ref-source external   # → mode 3, the CH32 releases PA4 first
 ```
 
-`och_get_vcxo_status` / `device.vcxo_status()` 返回 `och_vcxo_status`：
+`och_get_vcxo_status` / `device.vcxo_status()` return `och_vcxo_status`:
 
-- `requested_mode` / `applied_mode` / `pending` / `error`：模式请求和执行情况。
-- `pll_enabled`：ADF4002 电荷泵是否开启。
-- `bridge_alive`：3 s 内收到过 CH32 应答。
-- `pa4_driving`、`state`（OFF/CALIBRATE/ACQUIRE/TRACK/HOLD）、`dac_code`、`k_ppb_per_lsb`、`error_ppb`、`phase_ns`、`samples`、`locked`：只有 `bridge_alive=1` 时有效，否则 `state=UNKNOWN`、`pa4_driving=-1`、`dac_code=-1`。
+- `requested_mode` / `applied_mode` / `pending` / `error`: mode request and execution status.
+- `pll_enabled`: whether the ADF4002 charge pump is on.
+- `bridge_alive`: a CH32 reply was received within 3 s.
+- `pa4_driving`, `state` (OFF/CALIBRATE/ACQUIRE/TRACK/HOLD), `dac_code`, `k_ppb_per_lsb`, `error_ppb`, `phase_ns`, `samples`, `locked`: only valid when `bridge_alive=1`; otherwise `state=UNKNOWN`, `pa4_driving=-1`, `dac_code=-1`.
 
-在模式 2 下，`och_reference_status.lock_known/locked` 也改用这个结果。PPS 开关在流运行期间可以直接切换，不停流。
+In mode 2, `och_reference_status.lock_known/locked` also use this result. The PPS switch can be toggled directly while streams are running, without stopping them.

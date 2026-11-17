@@ -1,8 +1,8 @@
-# AD9361 FIR 与时钟
+# AD9361 FIR and Clocks
 
-这些命令控制 AD9361 芯片内的 RX/TX FIR。它们不对主机收到的 IQ 再做软件滤波，也不提供滤波器频响设计器。文件解析成功、CRC 一致和硬件读回成功只证明配置按要求装载；不能由此声称已经测量通带、阻带、群延迟或模拟射频性能。
+These commands control the RX/TX FIR inside the AD9361 chip. They do not apply any further software filtering to the IQ received by the host, and they do not provide a filter frequency-response designer. A successfully parsed file, a matching CRC, and a successful hardware read-back only prove that the configuration was loaded as requested; they cannot be used to claim the passband, stopband, group delay, or analog RF performance has been measured.
 
-## 常用流程
+## Typical workflow
 
 ~~~powershell
 och clock status
@@ -16,20 +16,20 @@ och bench --rx --tx --sample-rate 30.72M --channels 1,2 --seconds 10
 och fir both off
 ~~~
 
-先为实际采样率设计/选择系数，再按文件声明的插值/抽取因子和当前时钟确认可用性。上述命令顺序是假定这组系数适合 30.72 MSPS 的示例，不代表任意文件都可以使用此采样率。某些 RX/TX 因子组合只能同时启用，用 both on 可在一个事务里设置两边；只启用 rx 或 tx 会保持另一边当前的启停状态。
+First design/choose coefficients for the actual sample rate, then confirm they are usable given the interpolation/decimation factors declared in the file and the current clocks. The command sequence above assumes the coefficients suit 30.72 MSPS as an example; it does not mean any file can be used at this sample rate. Some RX/TX factor combinations can only be enabled together; both on sets both sides in one transaction, while enabling only rx or tx keeps the other side's current on/off state.
 
-每次 load 仅装载指定方向，成功后该方向关闭，不隐式发射。RX1/RX2 共用一组 RX 系数，TX1/TX2 共用一组 TX 系数；本版不支持同一方向两路使用不同 FIR。采样率和 AD9361 时钟链仍由 RX/TX 共用，改变一个方向不能被理解为独立改时钟。
+Each load only loads the given direction, and that direction is off after a successful load; it never transmits implicitly. RX1/RX2 share one set of RX coefficients and TX1/TX2 share one set of TX coefficients; this release does not support different FIRs for the two channels of the same direction. The sample rate and the AD9361 clock chain are still shared by RX/TX, so changing one direction must not be understood as changing its clock independently.
 
-C/C++ 的 FIR / 时钟写接口可以在流运行时调用，由设备协调暂停、应用、恢复，规则与失败处理见 [API：运行中修改参数](api.md#运行中修改参数)。SDK 对每次硬件事务做状态检查、两通道系数 SPI 校验、时钟回读和数字通路检查；若错误显示 `rollback=failed`、`applied=unknown`，必须先完成 `rf.reinit` 并确认成功。独立 CLI 命令仍要独占打开设备，不能改另一个进程正在收发的设备。
+The C/C++ FIR / clock write interfaces can be called while streams are running, with the device coordinating pause, apply, and resume; for the rules and failure handling see [API: Changing parameters at runtime](api.md#changing-parameters-at-runtime). The SDK performs state checks, two-channel coefficient SPI verification, clock read-back, and digital path checks for every hardware transaction; if an error shows `rollback=failed`, `applied=unknown`, you must first complete `rf.reinit` and confirm it succeeded. Standalone CLI commands still need to open the device exclusively and cannot change a device another process is streaming on.
 
-加载的自定义 FIR 保存在设备 SDK 的 RAM 状态中，后续正常 configure/流命令会保留它。断电或重新下载 ELF 不保证保留；安装程序不写启动 Flash。旧 SDK 需具备 system_info? 中的 fir_upload=1、clock_config=1，见 [固件依赖](firmware-compatibility.md)。
+A loaded custom FIR is kept in the RAM state of the device SDK, and subsequent normal configure/stream commands keep it. It is not guaranteed to survive a power cycle or reloading the ELF; the installer does not write the boot flash. Older SDKs need fir_upload=1 and clock_config=1 in system_info?; see [Firmware Compatibility](firmware-compatibility.md).
 
-## 支持的 FTR 格式
+## Supported FTR format
 
-支持 ADI FTR 文本的系数部分和明确识别的配置字段，采用以下大小写和语法。十进制整数，不允许浮点、指数或 k/M/G 系数后缀；UTF-8 BOM、CRLF、空行、行尾 # 注释可以接受。
+The coefficient part of ADI FTR text and explicitly recognized configuration fields are supported, using the case and syntax below. Decimal integers only; no floating point, exponents, or k/M/G suffixes on coefficients. A UTF-8 BOM, CRLF, blank lines, and trailing # comments are accepted.
 
 ~~~text
-# 两列时固定为 TX, RX；本段仅展示语法，省略号不是合法系数。
+# With two columns the order is always TX, RX; this only shows the syntax, and the ellipsis is not a valid coefficient.
 TX 3 GAIN -6 INT 2
 RX 3 GAIN 0 DEC 2
 12, -34
@@ -37,28 +37,28 @@ RX 3 GAIN 0 DEC 2
 ...
 ~~~
 
-只有一个方向时只需对应 RX 或 TX 头。单列表示该列供文件声明的方向使用；两列必须同时声明 RX/TX，第一列 TX、第二列 RX。整个文件不能混用单列和双列。所有头和配置字段必须在系数之前。
+With only one direction, only the matching RX or TX header is needed. A single column is used for the direction declared in the file; two columns must declare both RX/TX, with TX in the first column and RX in the second. A file cannot mix single and double columns. All headers and configuration fields must come before the coefficients.
 
-工程附带 [identity16.ftr](../examples/fir/identity16.ftr) 作为可加载的格式/事务测试文件：两列分别 TX/RX、factor=1、gain=0、首 tap 为 32767、其余 15 tap 为 0。它不是推荐低通滤波器，也不承诺精确单位增益或实测 RF 频响，不能代替业务所需的滤波器设计。
+The project ships [identity16.ftr](../examples/fir/identity16.ftr) as a loadable format/transaction test file: two columns for TX/RX, factor=1, gain=0, first tap 32767, and the other 15 taps 0. It is not a recommended low-pass filter, does not promise exact unity gain or a measured RF frequency response, and cannot replace the filter design your application needs.
 
-| 字段 | 约束 |
+| Field | Constraint |
 |---|---|
-| 通道 mask | 当前选中方向必须为 3，即该方向两个物理通道 |
-| 每个系数 | signed 16 位整数，-32768..32767 |
-| tap 数 | 16..128，必须为 16 的倍数 |
-| RX DEC / TX INT | 1、2 或 4 |
-| RX GAIN | -12、-6、0、6 dB |
-| TX GAIN | -6、0 dB |
-| TX INT 1 | 最多 64 taps |
-| 文件 / 行 | 最多 256 KiB / 4096 字节 |
+| Channel mask | Must be 3 for the selected direction, i.e. both physical channels of that direction |
+| Each coefficient | Signed 16-bit integer, -32768..32767 |
+| Tap count | 16..128, must be a multiple of 16 |
+| RX DEC / TX INT | 1, 2, or 4 |
+| RX GAIN | -12, -6, 0, 6 dB |
+| TX GAIN | -6, 0 dB |
+| TX INT 1 | At most 64 taps |
+| File / line | At most 256 KiB / 4096 bytes |
 
-这些只是静态边界。实际可用 tap 数还受当前 ADC/DAC 时钟、采样率和另一方向配置限制。合法的 128-tap 文本可能在某个高速时钟组合下被硬件校验拒绝；程序不会擅自把采样率退到更低的值来让它通过。
+These are only static limits. The usable tap count is further limited by the current ADC/DAC clocks, the sample rate, and the configuration of the other direction. A valid 128-tap text may be rejected by hardware verification under some high-speed clock combinations; the program will not lower the sample rate on its own to make it pass.
 
-解析器拒绝未知字段、重复头、重复配置字段、非完整整数、越界、超长或二进制内容。在打开设备之前完整验证文件，错误输入不会开始上传。
+The parser rejects unknown fields, duplicate headers, duplicate configuration fields, incomplete integers, out-of-range values, overlong lines, and binary content. The file is fully validated before the device is opened, so bad input never starts an upload.
 
-## 完整 FTR 时钟/带宽配置
+## Full FTR clock/bandwidth configuration
 
-ADI 生成的文件可能还带以下字段：
+Files generated by ADI may also contain these fields:
 
 ~~~text
 RTX <BBPLL> <DAC> <T2> <T1> <CLKTF> <TX_SAMPLE>
@@ -67,34 +67,34 @@ BWTX <Hz>
 BWRX <Hz>
 ~~~
 
-本版 FIR loader **不会自动应用这些时钟与带宽值**。默认拒绝含这些字段的文件，防止系数已加载、配套时钟却未应用的含糊状态。若确实只需要其中系数、增益和因子，可明确运行：
+The FIR loader in this release **does not apply these clock and bandwidth values automatically**. Files containing these fields are rejected by default, to avoid the ambiguous state where the coefficients are loaded but the matching clocks are not applied. If you really only need the coefficients, gain, and factor from it, run explicitly:
 
 ~~~powershell
 och fir rx load full_profile.ftr --coefficients-only --json
 ~~~
 
-程序仍验证上述字段是否为正确数量的正 uint32 十进制 Hz，并在 stderr 给出提示、在 JSON ignored_profile_fields 列出被忽略字段。忽略不是成功导入完整滤波器配置，不能据此保证设计频响。
+The program still verifies that these fields have the right number of positive uint32 decimal Hz values, prints a notice on stderr, and lists the ignored fields in the JSON ignored_profile_fields. Ignoring them is not a successful import of the complete filter configuration, and the designed frequency response cannot be guaranteed on that basis.
 
-需要完整配置时，应根据设计要求通过 clock sample-rate 或 clock set 设置合法链，并通过 set rx.rf-bandwidth / set tx.rf-bandwidth 设置模拟带宽，随后核对实际状态。更改采样率会改变同一组系数对应的 Hz 频响；必须重新评估或重新设计系数。
+When you need the complete configuration, set a valid chain through clock sample-rate or clock set according to the design requirements, set the analog bandwidth through set rx.rf-bandwidth / set tx.rf-bandwidth, and then check the actual state. Changing the sample rate changes the frequency response in Hz of the same coefficients, so they must be re-evaluated or redesigned.
 
-## 时钟命令
+## Clock commands
 
-clock status 回读 reference_hz 和两组六级时钟。clock sample-rate 30.72M 让 SDK 计算合法共享链，明确拒绝超出时钟或 FIR 范围的组合。若只是小数分频无法精确命中（如 11.2 MSPS），会改用最近的可精确实现的整 Hz 速率（11200011 Hz，详见 [API 参考](api.md)），并以 `WARN`（JSON 模式为 stderr 的 `sample_rate_adjusted`）给出请求值与实际值。set rx.sample-rate、set tx.sample-rate、set clock.sample-rate、config 和流命令的 `--sample-rate` 也使用同一入口。
+clock status reads back reference_hz and both sets of six-stage clocks. clock sample-rate 30.72M lets the SDK compute a valid shared chain and explicitly rejects combinations outside the clock or FIR range. If the fractional divider simply cannot hit the rate exactly (e.g. 11.2 MSPS), the nearest whole-Hz rate that can be achieved exactly is used instead (11200011 Hz, see the [API Reference](api.md)), and the requested and actual values are reported as a `WARN` (in JSON mode, `sample_rate_adjusted` on stderr). set rx.sample-rate, set tx.sample-rate, set clock.sample-rate, config, and the `--sample-rate` of streaming commands all use the same entry point.
 
-需要精确指定链时：
+When you need to specify the chain exactly:
 
 ~~~powershell
 och clock set --rx-chain "983.04M,245.76M,122.88M,61.44M,30.72M,30.72M" --tx-chain "983.04M,245.76M,122.88M,61.44M,30.72M,30.72M"
 ~~~
 
-这是 FIR 旁路时的链格式示例，实际需与启用的 FIR 因子匹配。每组必须恰好六个正整数 Hz，可带 k/M/G 后缀，逗号内不放空格。RX 顺序 BBPLL、ADC、R2、R1、RF、采样率；TX 顺序 BBPLL、DAC、T2、T1、TF、采样率。两边 BBPLL 和最终采样率必须一致；合法分频、时钟范围及 FIR 运算预算由 SDK 再检查。成功输出为实际回读结果。
+This is an example of the chain format with the FIR bypassed; in practice it must match the enabled FIR factors. Each set must contain exactly six positive integer Hz values, optionally with k/M/G suffixes, with no spaces after the commas. The RX order is BBPLL, ADC, R2, R1, RF, sample rate; the TX order is BBPLL, DAC, T2, T1, TF, sample rate. BBPLL and the final sample rate must be the same on both sides; the SDK additionally checks valid dividers, clock ranges, and the FIR computation budget. On success the output is the actual read-back.
 
-AD9361 参考钟为固定 40 MHz，不能通过 clock set 修改。0.3.2 可用 ADF4002 将这个 40 MHz 振荡器驯服到外部 10 MHz，详见 [参考与外部 LO](reference-lo.md)。PPS 驯服见 [PPS](pps.md)，定时收发见 [硬件时间戳](timestamps.md)，多板采样时钟同步见 [多板同步](multi-board-sync.md)；外部参考选源本身不构成相干同步或锁定证明。
+The AD9361 reference clock is a fixed 40 MHz and cannot be changed through clock set. Since 0.3.2, the ADF4002 can discipline this 40 MHz oscillator to an external 10 MHz; see [Reference Clock and External LO](reference-lo.md). For PPS disciplining see [PPS](pps.md), for timed RX/TX see [Hardware Timestamps](timestamps.md), and for synchronizing sample clocks across boards see [Multi-Board Sync](multi-board-sync.md); selecting the external reference by itself does not constitute coherent sync or proof of lock.
 
-## C/C++ 对应接口
+## C/C++ interfaces
 
-och_get_fir / och_set_fir / och_set_fir_enabled 对应 FIR 状态、配置及两个方向启停；och_get_clock / och_set_clock / och_set_sample_rate 对应时钟。C++ 的 device 提供 fir、set_fir、set_fir_enabled、clock、set_clock、set_sample_rate 同名包装。
+och_get_fir / och_set_fir / och_set_fir_enabled correspond to FIR state, configuration, and enabling both directions; och_get_clock / och_set_clock / och_set_sample_rate correspond to clocks. The C++ device provides wrappers with the same names: fir, set_fir, set_fir_enabled, clock, set_clock, set_sample_rate.
 
-fir 状态中的 verified 表示 SDK 保存的配置已通过 SPI 校验；查询系数来自最近一次已验证快照，并非每次查询都重新读 SPI。CRC32 检查上传/快照的系数一致性，不代表频响合格。API 不接收文件路径：上层可以自行设计系数并填入 och_fir_config；FTR 文件解析目前是 CLI 的功能。
+verified in the FIR state means the configuration saved by the SDK passed SPI verification; queried coefficients come from the most recent verified snapshot, not a fresh SPI read on every query. CRC32 checks the consistency of uploaded/snapshot coefficients and does not mean the frequency response is acceptable. The API does not accept file paths: higher layers can design their own coefficients and fill in och_fir_config; FTR file parsing is currently a CLI feature.
 
-格式背景参考 [ADI AD9361 驱动文档](https://analogdevicesinc.github.io/linux/drivers/iio-transceiver/ad9361/) 与 [ADI Filter Wizard](https://github.com/analogdevicesinc/ad936x-filter-wizard)。本项目没有复制其滤波器设计实现。
+For background on the format, see the [ADI AD9361 driver documentation](https://analogdevicesinc.github.io/linux/drivers/iio-transceiver/ad9361/) and the [ADI Filter Wizard](https://github.com/analogdevicesinc/ad936x-filter-wizard). This project does not copy their filter design implementation.

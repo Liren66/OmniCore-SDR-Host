@@ -1,70 +1,70 @@
-# 固件与协议依赖
+# Firmware and Protocol Dependencies
 
-主机安装器只安装 Windows 程序、主机 C/C++ 开发接口和目标数据口的 libusbK 驱动，不含板级 SDK 源码副本、ELF、BOOT.bin 或 FPGA bitstream，不自动烧写 CH32、SDK、FPGA 或启动 Flash。把软件装到新电脑后仍须连接具有匹配固件的 OmniCoreSDR。
+The host installer only installs the Windows programs, the host C/C++ development interface, and the libusbK driver for the target data interface. It contains no copy of the board SDK source, ELF, BOOT.bin, or FPGA bitstream, and never flashes the CH32, SDK, FPGA, or boot flash automatically. After installing the software on a new computer, you still need to connect an OmniCoreSDR with matching firmware.
 
-## 版本对应
+## Version mapping
 
-OCH 0.6.0 起只支持成帧 USB 传输（每个 16 KiB 块带 16 B 头和样点时间），需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`，提示加载 FPGA `CH32H417_IP` 1.3 与 `SDK_CMD_1.1`。
+Since OCH 0.6.0, only the framed USB transport is supported (each 16 KiB block carries a 16 B header and a sample time), which requires Zynq firmware [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) or later. If `system_info?` does not contain `transport=framed16k` when the device is opened, `och_open` returns `OCH_UNSUPPORTED` and asks you to load FPGA `CH32H417_IP` 1.3 and `SDK_CMD_1.1`.
 
-当前版本 OCH 0.8.0 推荐使用固件 [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)（Zynq `SDK_CMD_1.2_20261107_SYNC` + CH32 桥接 1.0.1）。0.7.2、0.8.0 没有新的固件要求：0.7.2 增加 macOS 支持并重构核心，0.8.0 增加 SoapySDR 插件与 MATLAB 工具箱，两者都只调用公开 C 接口。
+The current release, OCH 0.8.0, recommends firmware [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08) (Zynq `SDK_CMD_1.2_20261107_SYNC` + CH32 bridge 1.0.1). 0.7.2 and 0.8.0 add no new firmware requirements: 0.7.2 added macOS support and refactored the core, and 0.8.0 added the SoapySDR plugin and the MATLAB toolbox, both of which only call the public C interface.
 
-| OCH | Zynq 固件（BOOT.bin） | FPGA `CH32H417_IP` | SDK 标识 | CH32 桥接 |
+| OCH | Zynq firmware (BOOT.bin) | FPGA `CH32H417_IP` | SDK identifier | CH32 bridge |
 |---|---|---|---|---|
-| **0.8.0** | 同 0.7.1，推荐 v2026.11.08 | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1**（1.0.0 仍可用） |
-| 0.7.2 | 同 0.7.1 | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | 1.0.1（1.0.0 仍可用） |
-| 0.7.1 | 同 0.7.0；每次都能读到 USB-C 电流需 CH32 桥接 1.0.1（[v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)） | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1**（1.0.0 仍可用，USB-C 电流只在上电后第一次可读） |
-| 0.7.0 | v2026.11.07 及以上；`och sync` 需要 v2026.11.07.2（SDK_CMD_1.2，FPGA 带 OC_SYNC_AXI 1.0） | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | 1.0.0（不变） |
-| 0.6.1 | v2026.11.07 及以上，推荐 v2026.11.07.1 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_EVTCOUNT`（v2026.11.07.1） | 1.0.0（不变） |
-| 0.6.0 | v2026.11.07 及以上 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_FRAMED` | 1.0.0（不变） |
-| 0.5.x | v2026.11.03 及以前 | 1.1 | `SDK_CMD_1.0_*` | 1.0.0 / legacy |
+| **0.8.0** | Same as 0.7.1; v2026.11.08 recommended | 1.3 (`0x01030001`) | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1** (1.0.0 still works) |
+| 0.7.2 | Same as 0.7.1 | 1.3 (`0x01030001`) | `SDK_CMD_1.2_20261107_SYNC` | 1.0.1 (1.0.0 still works) |
+| 0.7.1 | Same as 0.7.0; reading the USB-C current every time needs CH32 bridge 1.0.1 ([v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)) | 1.3 (`0x01030001`) | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1** (1.0.0 still works, but the USB-C current can only be read the first time after power-up) |
+| 0.7.0 | v2026.11.07 or later; `och sync` needs v2026.11.07.2 (SDK_CMD_1.2, FPGA with OC_SYNC_AXI 1.0) | 1.3 (`0x01030001`) | `SDK_CMD_1.2_20261107_SYNC` | 1.0.0 (unchanged) |
+| 0.6.1 | v2026.11.07 or later; v2026.11.07.1 recommended | 1.3 (`0x01030001`) | `SDK_CMD_1.1_20261107_EVTCOUNT` (v2026.11.07.1) | 1.0.0 (unchanged) |
+| 0.6.0 | v2026.11.07 or later | 1.3 (`0x01030001`) | `SDK_CMD_1.1_20261107_FRAMED` | 1.0.0 (unchanged) |
+| 0.5.x | v2026.11.03 or earlier | 1.1 | `SDK_CMD_1.0_*` | 1.0.0 / legacy |
 
-0.6.1 与 v2026.11.07 也能配合使用，只是过载时固件逐条上报事件、不带 `count`（每条记 1）；v2026.11.07.1 合并过载事件并带 `count=`，见 [硬件时间戳](timestamps.md)。
+0.6.1 also works with v2026.11.07, except that under overload the firmware reports events one at a time without `count` (each counts as 1); v2026.11.07.1 merges overload events and includes `count=`. See [Hardware Timestamps](timestamps.md).
 
-两边必须配套：0.6.0 不能连接旧固件，0.5.x 也不能使用新固件收发 IQ（新固件不再发送 16 KiB 递增起始头）。CH32 桥接固件对数据内容透明，两种组合都可用 1.0.0。
+The two sides must match: 0.6.0 cannot connect to older firmware, and 0.5.x cannot stream IQ with newer firmware (the new firmware no longer sends the 16 KiB incrementing start header). The CH32 bridge firmware is transparent to the data contents, so 1.0.0 works with both combinations.
 
-0.5.0 起，CH32 桥接固件 1.0.0 及以上可由用户手动执行 `och firmware update FILE.ocfw` 通过 USB 升级，详见 [桥接固件升级](firmware-update.md)。`och firmware info` 显示桥接固件版本；1.0.0 之前的桥接固件显示 legacy。
+Since 0.5.0, CH32 bridge firmware 1.0.0 and later can be updated over USB by manually running `och firmware update FILE.ocfw`; see [Bridge Firmware Update](firmware-update.md). `och firmware info` shows the bridge firmware version; bridge firmware older than 1.0.0 is shown as legacy.
 
-## 能力检查
+## Capability checks
 
-OCH 按固件回报的能力字段启用功能，不按固件名字判断：FIR/时钟等扩展曾沿用旧的固件名字（如 `SDK_CMD_1.0_20261023`），名字相同不代表功能相同。缺少某项能力时，只有对应的 API / 命令返回 `OCH_UNSUPPORTED`，其余功能照常；能力检查在暂停数据流之前完成，不支持的请求不会打断已有的流。
+OCH enables features based on the capability fields the firmware reports, not on firmware names: extensions such as FIR/clocks once kept an old firmware name (e.g. `SDK_CMD_1.0_20261023`), so the same name does not mean the same features. When a capability is missing, only the corresponding API / command returns `OCH_UNSUPPORTED` and everything else works as usual. Capability checks run before any stream is paused, so an unsupported request never interrupts existing streams.
 
-| 组件 | 必要能力 | 检查方式 |
+| Component | Required capability | How it is checked |
 |---|---|---|
-| ZYNQ SDK | 命令封装协议 v1 | host_protocol? 包含 host_protocol=1 |
-| ZYNQ SDK | 成帧 USB 传输（16 B 块头、样点时间、GAP） | system_info? 包含 transport=framed16k |
-| ZYNQ SDK 时间扩展 | 时间基准、PPS 对时、定时 RX、带时间的事件 | 使用时间 API 时要求 hw_time=1 |
-| ZYNQ SDK FIR 扩展 | 安全分块上传、快照读取、双通道 SPI 校验 | 使用 FIR 功能时要求 system_info? 包含 fir_upload=1 |
-| ZYNQ SDK 时钟扩展 | 无降速回退的共享 Fs 和完整链事务 | 使用安全时钟设置时要求 system_info? 包含 clock_config=1 |
-| ZYNQ SDK RX 校正扩展 | RF/BBDC 直流及 RX 正交跟踪开关、状态回读 | 使用 RX correction 时要求 system_info? 包含 rx_correction=1 |
-| ZYNQ SDK ADF4002 扩展 | 外部 10 MHz 驯服、GPIO 检查和 D5 自检 | 状态/自检要求 adf4002=1；选源还要求 ref_source=1 |
-| ZYNQ SDK 多板同步扩展 | REF_OUT、TRIG、SYNC/PPS 沿计数、AD9361 MCS 步骤、time_source=sync | 使用同步功能时要求 system_info? 包含 sync=1 |
-| ZYNQ SDK 外部 LO 扩展 | 独立 RX/TX 源、验证和名义频率状态 | 使用 LO source 时要求 external_lo=1 |
-| 可选 2TX2RX 8bit 扩展 | SDK 格式命令与 FPGA signed8 路径 | 仅选择 8bit 时要求 iq_format=1 iq8_2t2r=1；默认 12bit 保持旧 SDK 兼容 |
-| CH32 | 已有诊断及流清理协议 v4 | USB 厂商请求 0xD0 的诊断版本 |
-| FPGA/IP | `CH32H417_IP` 1.3：16 KiB 成帧块、64 位样点时间、事件 FIFO；packed12 / signed8 通道布局不变 | SDK 回报 `fpga=CH32H417_IP_0x01030001`；数据流逐块校验头部 |
-| USB | SuperSpeed 或 USB 2.0 High-Speed（480 Mbit/s）；数据端点 01/81，控制端点 02/82 | 枚举及打开时确认；Full-Speed（12 Mbit/s）不支持 |
-| Windows 驱动 | 发行包 libusbK 3.1.0.0 | och-driver check；实际安装仍受 Windows 策略约束 |
+| ZYNQ SDK | Command wrapper protocol v1 | host_protocol? contains host_protocol=1 |
+| ZYNQ SDK | Framed USB transport (16 B block header, sample time, GAP) | system_info? contains transport=framed16k |
+| ZYNQ SDK time extension | Time base, PPS time alignment, timed RX, events with time | Time APIs require hw_time=1 |
+| ZYNQ SDK FIR extension | Safe chunked upload, snapshot read, dual-channel SPI verification | FIR features require system_info? to contain fir_upload=1 |
+| ZYNQ SDK clock extension | Shared Fs without a reduced-rate fallback, and full-chain transactions | Safe clock settings require system_info? to contain clock_config=1 |
+| ZYNQ SDK RX correction extension | RF/BBDC DC and RX quadrature tracking switches, status read-back | RX correction requires system_info? to contain rx_correction=1 |
+| ZYNQ SDK ADF4002 extension | External 10 MHz disciplining, GPIO check, and D5 self-test | Status/self-test require adf4002=1; selecting the source also requires ref_source=1 |
+| ZYNQ SDK multi-board sync extension | REF_OUT, TRIG, SYNC/PPS edge counting, AD9361 MCS steps, time_source=sync | Sync features require system_info? to contain sync=1 |
+| ZYNQ SDK external LO extension | Independent RX/TX sources, verification, and nominal frequency state | LO source requires external_lo=1 |
+| Optional 2TX2RX 8-bit extension | SDK format command and FPGA signed8 path | Only selecting 8-bit requires iq_format=1 iq8_2t2r=1; the default 12-bit stays compatible with older SDKs |
+| CH32 | Existing diagnostic and stream cleanup protocol v4 | Diagnostic version from USB vendor request 0xD0 |
+| FPGA/IP | `CH32H417_IP` 1.3: 16 KiB framed blocks, 64-bit sample time, event FIFO; packed12 / signed8 channel layout unchanged | SDK reports `fpga=CH32H417_IP_0x01030001`; the stream verifies the header of every block |
+| USB | SuperSpeed or USB 2.0 High-Speed (480 Mbit/s); data endpoints 01/81, control endpoints 02/82 | Confirmed at enumeration and open; Full-Speed (12 Mbit/s) is not supported |
+| Windows driver | libusbK 3.1.0.0 from the release package | och-driver check; actual installation is still subject to Windows policy |
 
-旧 SDK 即使支持原始串口命令，也可能缺少命令封装协议或成帧传输，不能直接假定兼容；版本不满足时 OCH 明确失败，避免把超时或残留回复误认为新命令已成功。各命令的格式见 [设备协议](protocol.md)。
+Even if an older SDK supports the raw serial commands, it may lack the command wrapper protocol or the framed transport, so compatibility cannot be assumed. When the version requirements are not met, OCH fails explicitly, rather than mistaking a timeout or a leftover reply for a successful new command. See [Device Protocol](protocol.md) for the format of each command.
 
-板级 SDK、FPGA 与 CH32 工程在 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) 仓库，独立于 OmniCore Host。主机安装包不升级 Zynq / FPGA 固件；RAM 中运行的新 ELF 不等于断电后仍会启动该版本，长期使用请按固件仓库的流程部署启动镜像。自定义 FIR / 时钟、RX 校正开关等设置只保存在运行中 SDK 的 RAM，断电或重新下载程序后恢复默认。
+The board SDK, FPGA, and CH32 projects live in the [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) repository, separate from OmniCore Host. The host installer does not update the Zynq / FPGA firmware. A new ELF running from RAM does not mean that version will still boot after a power cycle; for long-term use, deploy the boot image following the firmware repository's procedure. Settings such as custom FIR / clocks and the RX correction switches are kept only in the RAM of the running SDK and return to defaults after a power cycle or reloading the program.
 
-打开设备会停止旧 USB 会话并清理缓存，不要让其他上位机、调试脚本和 OCH 同时操作同一个数据口。只需检查 Windows 驱动时用 `och-driver check`，只需枚举时用 `och find`。
+Opening the device stops any previous USB session and clears its buffers, so do not let other host software, debug scripts, and OCH operate the same data interface at the same time. Use `och-driver check` when you only need to check the Windows driver, and `och find` when you only need to enumerate.
 
-## 需要多端同时更新的功能
+## Features that need several components updated together
 
-| 功能 | 固件要求 | 不满足时 |
+| Feature | Firmware requirement | If not met |
 |---|---|---|
-| PPS 驯服 40 MHz（PA4 调谐硬件） | SDK `vcxo=1 pps_adjustment=1` + 带 PA4 握手的 CH32 桥接固件 | 旧桥接固件把 PA4 当 LED 推挽驱动且不回应握手，新 SDK 因此拒绝打开 ADF4002 电荷泵（`error=-116`），外部 10 MHz 设置失败而不会与 PA4 冲突；旧桥接固件也不能用于仅 PPS 模式。`och_get_vcxo_status` 在旧 SDK 上返回 `OCH_UNSUPPORTED`。见 [PPS](pps.md) |
-| 板级 RGB、风扇、Zynq 温度 | FPGA 带 BOARD_CTRL_AXI，SDK `board_rgb=1 fan_control=1 core_temp=1` | 对应命令不支持。新旧 SDK 的默认亮度（15% / 25%）都能识别，见 [板级控制](board-control.md) |
-| USB 2.0 High-Speed | 支持 USBHS 的 CH32 桥接固件 | 旧桥接固件缺少 USBHS 控制端点和 0xD0 诊断 / 流清理；只支持 512 B 最大包长的 High-Speed，64 B 的 Full-Speed 一律拒绝 |
-| RX RSSI 开关 | SDK `rssi=1`（`rssi_enable`、`rx_rssi?`） | 旧 SDK 没有开关：OCH 从 `system_status?` 的 RSSI 行读取（约 190 ms，新 SDK 约 1.1 ms），`enabled` 视为 1，开关命令返回不支持。含义见 [命令行：RX RSSI](cli.md#rx-rssi) |
-| 控制串口 3.125 MBd | Zynq SDK 与 CH32 桥接固件同时更新 | 一边新、一边旧时，`och find` 仍能看到设备，但 `och info` 因 `host_protocol?` 超时而失败。见 [设备协议：控制串口](protocol.md#控制串口) |
+| PPS disciplining of the 40 MHz (PA4 tuning hardware) | SDK `vcxo=1 pps_adjustment=1` + CH32 bridge firmware with the PA4 handshake | Older bridge firmware drives PA4 push-pull as an LED and does not answer the handshake, so the new SDK refuses to enable the ADF4002 charge pump (`error=-116`); setting external 10 MHz fails instead of conflicting with PA4. Older bridge firmware cannot be used in PPS-only mode either. `och_get_vcxo_status` returns `OCH_UNSUPPORTED` on older SDKs. See [PPS](pps.md) |
+| Board RGB, fan, Zynq temperature | FPGA with BOARD_CTRL_AXI, SDK `board_rgb=1 fan_control=1 core_temp=1` | The corresponding commands are unsupported. The default brightness of both old and new SDKs (15% / 25%) is recognized; see [Board Control](board-control.md) |
+| USB 2.0 High-Speed | CH32 bridge firmware with USBHS support | Older bridge firmware lacks the USBHS control endpoint and 0xD0 diagnostics / stream cleanup; only High-Speed with a 512 B max packet size is supported, and Full-Speed with 64 B is always rejected |
+| RX RSSI switch | SDK `rssi=1` (`rssi_enable`, `rx_rssi?`) | Older SDKs have no switch: OCH reads the RSSI line from `system_status?` (about 190 ms, versus about 1.1 ms on new SDKs), `enabled` is treated as 1, and the switch commands return unsupported. For the meaning see [CLI: RX RSSI](cli.md#rx-rssi) |
+| Control UART at 3.125 MBd | Zynq SDK and CH32 bridge firmware updated together | With one side new and the other old, `och find` still sees the device, but `och info` fails because `host_protocol?` times out. See [Device Protocol: Control UART](protocol.md#control-uart) |
 
-USB2 下 `och info` 精确显示 **480 Mbit/s（High-Speed, USB 2.0）**；其中的 61.44 MSPS 是射频采样率上限，不是 USB2 可持续速率，USB2 档位见 [测试结果](benchmarks.md#usb-20-high-speed)。
+On USB2, `och info` shows exactly **480 Mbit/s (High-Speed, USB 2.0)**; the 61.44 MSPS shown there is the RF sample-rate ceiling, not a rate USB2 can sustain. For USB2 settings see [Benchmarks](benchmarks.md#usb-20-high-speed).
 
-## TX FIR 插值 ×2 / ×4
+## TX FIR interpolation ×2 / ×4
 
-AD9361 驱动写入 TX FIR 系数时，会把 `0x002[1:0]` 临时设为目标插值；旧 SDK 的 `fir_verify_coeff`（`console_commands/sdr_fir.c`）却在写入后的当前模式下回读。TX FIR 关闭（旁路）时，×2 / ×4 滤波器的回读与写入不一致，SDK 判定失败并回滚，返回 `ERR fir_or_clock_apply code=-1 rollback=verified`。因此旧固件无法在关闭状态装载 TX 插值滤波器（含 `och fir tx load`），已开启的 ×2 / ×4 TX FIR 也无法关闭。
+When the AD9361 driver writes TX FIR coefficients, it temporarily sets `0x002[1:0]` to the target interpolation, but the older SDK's `fir_verify_coeff` (`console_commands/sdr_fir.c`) reads them back in the current mode after the write. With the TX FIR off (bypassed), the read-back of a ×2 / ×4 filter does not match what was written, so the SDK reports a failure and rolls back, returning `ERR fir_or_clock_apply code=-1 rollback=verified`. As a result, older firmware cannot load a TX interpolation filter while it is off (including `och fir tx load`), and an enabled ×2 / ×4 TX FIR cannot be turned off.
 
-修复后的 SDK 在回读 TX 系数时进入 ALERT 状态，把 `0x002[1:0]` 临时设为配置的插值，读完恢复原值；系数仍被逐个核对。修复版已实测：TX ×2 / ×4 在关闭状态装载、开启与关闭均成功，RX / TX 各种因子组合下的采样率就近选择与全双工吞吐测试通过。RX 抽取不受此问题影响。该修复只在板级 SDK 中，主机程序无需改动；固件版本字符串未变，请以能否装载 TX 插值滤波器来确认所用固件。
+The fixed SDK enters the ALERT state when reading back TX coefficients, temporarily sets `0x002[1:0]` to the configured interpolation, and restores the original value afterwards; every coefficient is still checked. The fix has been tested on hardware: loading TX ×2 / ×4 while off, enabling, and disabling all succeed, and nearest-sample-rate selection and full-duplex throughput tests pass for all combinations of RX / TX factors. RX decimation is not affected by this problem. The fix is only in the board SDK and the host program needs no changes; the firmware version string did not change, so confirm your firmware by whether it can load a TX interpolation filter.

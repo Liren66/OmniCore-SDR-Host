@@ -177,9 +177,9 @@ class Hub:
                 self.steps.append(item)
                 faults = (item["rx_gaps"], item["host_dropped"], self.faults[2] + item["restarts"])
                 if faults != self.faults:  # say exactly when and where data went missing
-                    self.broadcast({"type": "log", "line": f"数据间断：第 {item['sweep'] + 1} 遍第 {item['step'] + 1} 步，"
-                                    f"LO {item['frequency'] / 1e6:.2f} MHz；累计 RX 间断 {faults[0]}，"
-                                    f"丢样 {faults[1]}，重采 {faults[2]}"})
+                    self.broadcast({"type": "log", "line": f"Data gap: sweep {item['sweep'] + 1}, step {item['step'] + 1}, "
+                                    f"LO {item['frequency'] / 1e6:.2f} MHz; total RX gaps {faults[0]}, "
+                                    f"dropped {faults[1]}, re-captures {faults[2]}"})
                     self.faults = faults
                 now = time.monotonic()
                 if now - self.last_progress > 0.05:
