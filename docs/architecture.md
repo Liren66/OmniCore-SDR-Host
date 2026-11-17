@@ -5,7 +5,7 @@
 ![OmniCore Host 架构](images/architecture.svg)
 
 ~~~text
-应用层：OnAir 原生数据源（后续）/ MATLAB / GNU Radio / 其他程序
+应用层：OnAir（原生接入）/ MATLAB / GNU Radio（SoapySDR）/ 其他程序
                               │
                   C ABI：omnicore/och.h
                   C++：omnicore/och.hpp
@@ -23,7 +23,7 @@
                          ZYNQ 控制接口
 ~~~
 
-CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux / macOS 共用的 libusb 1.0。0.3 为 OnAir 等持续收样应用补齐运行中改参的生命周期能力；本版不包含 OnAir 数据源实现；核心库本身不依赖 SoapySDR，插件是可选的单独模块。
+CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux / macOS 共用的 libusb 1.0。运行中改参的生命周期（下文“设备协调重配置”）就是为持续收样的应用设计的。[OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) 是 OnAir 的 fork，直接调用 C ABI 原生接入，支持 RX、TX 与全双工，单独发布，不在本仓库中。核心库本身不依赖 SoapySDR，插件是可选的单独模块。
 
 控制面逐条发送 SDK 命令并分离异步 EVT；数据面使用独立的 RX/TX USB 请求队列和生产者/消费者。一个 RX 流只能有一个应用消费者，一个 TX 流只能有一个应用生产者。RX 与 TX 可以并发。设备配置、打开、关闭、创建/销毁流应由应用管理线程串行执行。
 
@@ -51,7 +51,7 @@ TX 清除旧配置下的待发数据，不重放取消请求。只有原本正�
 
 硬件变更或恢复失败会停止双方并使配置缓存失效，不自动回滚发射。调用方保存错误，结束 IO 线程并销毁旧流，确认设备状态后显式重新 configure、创建和启动。原始 och_command 修改仍只允许没有流对象时执行，避免绕过协调器。
 
-这是单个 SDK 设备对象内的协调机制。独立的 och 进程仍遵循设备独占，没有为另一个软件的现有流提供 IPC；OnAir 等应用需要在自己的数据源内持有同一个 OCH device，并把 UI 调参交给管理线程。原生数据源可直接使用 C ABI/C++ 包装；当前版本不包含第三方驱动加载层。
+这是单个 SDK 设备对象内的协调机制。独立的 och 进程仍遵循设备独占，没有为另一个软件的现有流提供 IPC；OnAir 这类应用需要在自己的数据源内持有同一个 OCH device，并把界面上的调参交给管理线程。原生数据源可直接使用 C ABI / C++ 包装。
 
 ## 缓冲与复制
 
