@@ -1,4 +1,4 @@
-// MATLAB-side RF parameters (MEX_PLAN.md 3.1) -> one och_config: the shared mapping of
+// MATLAB-side RF parameters (Device properties and configure) -> one och_config: the shared mapping of
 // common/ConfigRequest.hpp with MATLAB's property names, 1-based channels and error / warning
 // identifiers. Tested offline in tests/config_request_test.cpp.
 #pragma once

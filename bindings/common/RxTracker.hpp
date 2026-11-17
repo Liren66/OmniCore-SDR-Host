@@ -1,5 +1,7 @@
 // Decides what the bindings report for each block och_recv returns: sample loss, a late start and
-// the block's time (SoapySDR readStream: SOAPY_PLAN.md 4.2). Pure logic on och_metadata values;
+// the block's time. SoapySDR readStream returns OVERFLOW / TIME_ERROR first and the block on the
+// next call, because gr-soapy re-tags rx_time only after an OVERFLOW return (see observe()).
+// Pure logic on och_metadata values;
 // tested offline in tests/interleave_test.cpp.
 #pragma once
 #include <cstddef>

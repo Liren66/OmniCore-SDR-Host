@@ -1,4 +1,4 @@
-"""S3 hardware acceptance for the OmniCore SoapySDR module (TX and full duplex). Needs one device.
+"""Hardware acceptance for the OmniCore SoapySDR module (TX and full duplex). Needs one device.
 
     SOAPY_SDR_PLUGIN_PATH=<build>/bindings/soapy python3 bindings/soapy/hwtest/tx_accept.py
 
@@ -156,7 +156,8 @@ def bursts(sdr):
     report("10 TX activate/burst/deactivate cycles", failures == 0, f"failures={failures}")
 
     # First burst shorter than one block (gr-soapy length-tag bursts). The EOB block reaches the
-    # FPGA padded, so och_start's prefill gate is met (SOAPY_PLAN.md 9.3 item 1, checked 2026-11-12).
+    # FPGA padded, so och_start's prefill gate is met even for a 1-sample burst (checked 2026-11-12:
+    # starts within 20 ms and is acknowledged), so the core needs no special case for short bursts.
     short_failures = []
     for n_short, timed in ((1, False), (1000, False), (1000, True)):
         sdr.activateStream(tx)

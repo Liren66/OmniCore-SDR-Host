@@ -80,7 +80,7 @@ Setup and uninstall
   The package contains no PS firmware or SDK files and performs no board flashing.
 
 C and C++ consumers
-  find_package(OmniCoreHost 0.2 CONFIG REQUIRED)
+  find_package(OmniCoreHost 0.8 CONFIG REQUIRED)
   target_link_libraries(myapp PRIVATE OmniCore::omnicore)
   Include <omnicore/och.h> for C or <omnicore/och.hpp> for C++17.
   Build x64. Keep omnicore.dll and libusbK.dll beside your application, or configure

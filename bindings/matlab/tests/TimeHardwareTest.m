@@ -1,6 +1,6 @@
 classdef (TestTags = {'Hardware'}) TimeHardwareTest < matlab.unittest.TestCase
-    %TIMEHARDWARETEST M5 checks on a connected OmniCoreSDR: clock and time sources, setTime, PPS,
-    %   events and the sample-rate warning (MEX_PLAN.md 8). Uses the board's internal PPS; no
+    %TIMEHARDWARETEST Time checks on a connected OmniCoreSDR: clock and time sources, setTime, PPS,
+    %   events and the sample-rate warning. Uses the board's internal PPS; no
     %   external 10 MHz or PPS is needed (see hwtest/m5_accept.m for those). Leaves ClockSource
     %   'internal' and TimeSource 'none'.
     %       results = runtests('TimeHardwareTest')

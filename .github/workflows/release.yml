@@ -60,7 +60,7 @@ jobs:
           archive: false
           if-no-files-found: error
       # MATLAB toolbox: a separate build with libstdc++ linked statically into libomnicore, since
-      # MATLAB loads its own older libstdc++ first (MEX_PLAN.md 6.5).
+      # MATLAB loads its own older libstdc++ first (otherwise "GLIBCXX_3.4.x not found").
       - uses: matlab-actions/setup-matlab@v2
         with:
           release: R2023b

@@ -5,7 +5,7 @@
 - **MEX 网关** `omnicore_mex`：只调用公共 C ABI（`och.h`），和 `och` 命令行用同一套库。
 - **MATLAB 包** `+omnicore`：在网关之上提供 `Device`、`RxStream`、`TxStream` 三个句柄类，以及 `Receiver`、`Transmitter` 两个 System object（Simulink 中作为 MATLAB System 模块使用）。
 
-支持 MATLAB R2018a 及以后版本。代码不用 `arguments` 块，也不用 `Name=Value` 写法；R2021a 起你自己的代码当然可以用 `Name=Value`。设计和验收记录见仓库根目录的 `MEX_PLAN.md`。
+支持 MATLAB R2018a 及以后版本。代码不用 `arguments` 块，也不用 `Name=Value` 写法；R2021a 起你自己的代码当然可以用 `Name=Value`。测试在 `bindings/matlab/tests/`（`OfflineTest` 不接设备，`*HardwareTest` 需要设备）。
 
 | 状态 | 内容 |
 |---|---|
@@ -25,7 +25,7 @@ omnicore.findDevices()                  % 列出已连接的设备
 
 - **Windows**：USB 驱动仍需安装一次：装 OmniCore Host 安装包并运行 `och-driver install`。安装包里勾选 “Install the MATLAB toolbox” 时，同样的文件夹会装到 `C:\Program Files\OmniCore Host\matlab`，`addpath` 这个目录即可。
 - **macOS**：从浏览器下载的 zip 会被 Gatekeeper 隔离，MEX 文件会被拒绝加载。解压后运行一次：`xattr -dr com.apple.quarantine omnicore-matlab`。
-- **Linux**：需要 udev 规则，见 [Linux 安装](INSTALL_LINUX.md)。发布包里的 `libomnicore.so.1` 静态链接了 libstdc++，以避开 MATLAB 自带的旧版 libstdc++（见[排错](#排错)）。
+- **Linux**：需要 udev 规则，见 [Linux 与 macOS 安装](install.md)。发布包里的 `libomnicore.so.1` 静态链接了 libstdc++，以避开 MATLAB 自带的旧版 libstdc++（见[排错](#排错)）。
 
 设备同一时间只能被一个进程打开：MATLAB 持有设备时，`och`、GNU Radio 等其他程序打不开它，反之亦然。
 

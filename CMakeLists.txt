@@ -31,7 +31,8 @@ option(OCH_BUILD_SOAPY "Build the SoapySDR module in bindings/soapy (needs Soapy
 option(OCH_BUILD_MATLAB "Build the MATLAB MEX gateway in bindings/matlab (needs MATLAB R2018a+)" OFF)
 # Linux: MATLAB loads its own, older libstdc++ first, so a libomnicore built with a newer GCC can
 # fail with "GLIBCXX_3.4.x not found" inside MATLAB. Linking libstdc++ statically avoids that; the
-# library still exports only och_* (MEX_PLAN.md 6.5). Used for the MATLAB release package.
+# library still exports only och_*, so the static runtime does not clash with MATLAB's. Used for
+# the MATLAB release package.
 option(OCH_STATIC_LIBSTDCXX "Linux: link libstdc++ and libgcc statically into libomnicore" OFF)
 
 add_library(och_dsp STATIC src/dsp/codec.cpp src/protocol/frame.cpp)

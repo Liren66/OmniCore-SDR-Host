@@ -5,7 +5,7 @@
 ![OmniCore Host 架构](images/architecture.svg)
 
 ~~~text
-应用层：OnAir 原生数据源（后续）/ MATLAB / GNU Radio / 其他程序
+应用层：OnAir（原生接入）/ MATLAB / GNU Radio（SoapySDR）/ 其他程序
                               │
                   C ABI：omnicore/och.h
                   C++：omnicore/och.hpp
@@ -17,13 +17,13 @@
               ↓                           ↑
       当前wire租借 或应用格式转换     应用格式转当前wire
                 └─────────────┬──────────────┘
-                       libusbK 后端
+     libusbK 后端（Windows）/ libusb 后端（Linux、macOS）
                               │
              CH32H417 USB 3.0/2.0 ↔ FPGA ↔ AD9361
                          ZYNQ 控制接口
 ~~~
 
-CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux libusb 1.0。0.3 为 OnAir 等持续收样应用补齐运行中改参的生命周期能力；本版不包含 OnAir 数据源实现；核心库本身不依赖 SoapySDR，插件是可选的单独模块。
+CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux / macOS 共用的 libusb 1.0。运行中改参的生命周期（下文“设备协调重配置”）就是为持续收样的应用设计的。[OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) 是 OnAir 的 fork，直接调用 C ABI 原生接入，支持 RX、TX 与全双工，单独发布，不在本仓库中。核心库本身不依赖 SoapySDR，插件是可选的单独模块。
 
 控制面逐条发送 SDK 命令并分离异步 EVT；数据面使用独立的 RX/TX USB 请求队列和生产者/消费者。一个 RX 流只能有一个应用消费者，一个 TX 流只能有一个应用生产者。RX 与 TX 可以并发。设备配置、打开、关闭、创建/销毁流应由应用管理线程串行执行。
 
@@ -43,7 +43,7 @@ AD9361 硬件 FIR 和时钟链也属于控制面。CLI 在打开设备前解析 
 
 当前 CH32 跨会话清理约束仍存在，因此一次参数修改可能中断双方收发；这里没有声称无缝 LO 跳频或独立方向的时钟。调用方应把停顿作为正常数据间断处理。大缓冲保持分配可以避免每次调谐重新分配大块内存，但硬件校准、USB 调度和 SDK 响应仍决定实际恢复时间。单通道实机测试已验证原流继续收发及间断标记，不承诺固定毫秒延迟。
 
-例外是只改 LO、RX 增益或 TX 衰减的请求（有 TX 流时，TX LO 变化除外）。这类请求跳过第 2、3、5 步，直接写参数，流不停；下一个 RX 块带 RECONFIGURED | DISCONTINUITY，见 [API 快速调谐](api.md#快速调谐046)。
+例外是只改 LO、RX 增益或 TX 衰减的请求（有 TX 流时，TX LO 变化除外）。这类请求跳过第 2、3、5 步，直接写参数，流不停；下一个 RX 块带 RECONFIGURED | DISCONTINUITY，见 [API 快速调谐](api.md#快速调谐)。
 
 RX 在恢复后的第一个成帧块开启下一个单调递增的 epoch，首块额外带 RECONFIGURED，并带 START、DISCONTINUITY 与 HAS_TIME。已知的主机队列丢弃计入 host_dropped_samples，重配原因不冒充设备溢出。块头时间戳照常给出；但改变采样率会使硬件时间作废（`OCH_EVENT_TIME_INVALIDATED`），需要重新对时。
 
@@ -51,7 +51,7 @@ TX 清除旧配置下的待发数据，不重放取消请求。只有原本正�
 
 硬件变更或恢复失败会停止双方并使配置缓存失效，不自动回滚发射。调用方保存错误，结束 IO 线程并销毁旧流，确认设备状态后显式重新 configure、创建和启动。原始 och_command 修改仍只允许没有流对象时执行，避免绕过协调器。
 
-这是单个 SDK 设备对象内的协调机制。独立 och.exe 仍遵循设备独占，没有为另一个软件的现有流提供 IPC；OnAir 等应用需要在自己的数据源内持有同一个 OCH device，并把 UI 调参交给管理线程。原生数据源可直接使用 C ABI/C++ 包装；当前版本不包含第三方驱动加载层。
+这是单个 SDK 设备对象内的协调机制。独立的 och 进程仍遵循设备独占，没有为另一个软件的现有流提供 IPC；OnAir 这类应用需要在自己的数据源内持有同一个 OCH device，并把界面上的调参交给管理线程。原生数据源可直接使用 C ABI / C++ 包装。
 
 ## 缓冲与复制
 
@@ -104,4 +104,4 @@ start 时核心先等待 FPGA TX FIFO 达到约一个成帧块（每块组数 �
 
 后续插件负责第三方软件的设备枚举、参数映射、缓冲策略和数据类型转换。它可以使用 C++ 包装，也可以直接调用 C ABI。硬件公共状态（共享采样率、射频 LO、通道 mask）由设备对象管理，不能由不同插件假定独立时钟。
 
-适配器必须向上层传播间断、设备错误、主机队列溢出和 TX 欠供，不可只交付 IQ 而丢弃元数据。0.6.0 起每批 RX 样点带硬件时间（`time_ticks`），适配器应向上层传递，以支持定时收发和 PPS 对时。多设备同步需要共享 J3 10 MHz 和 J6 PPS；本版未实现 AD9361 多芯片同步（MCS），各板 LO 相位不相干。
+适配器必须向上层传播间断、设备错误、主机队列溢出和 TX 欠供，不可只交付 IQ 而丢弃元数据。0.6.0 起每批 RX 样点带硬件时间（`time_ticks`），适配器应向上层传递，以支持定时收发和 PPS 对时。多设备同步由 `och_multi_sync` 完成（共享 10 MHz、AD9361 多芯片同步 MCS、公共时间装载），见 [多板同步](multi-board-sync.md)；MCS 只对齐采样时钟，各板 LO 相位仍不相干。

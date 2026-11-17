@@ -8,13 +8,15 @@
 
 ## 电源查询显示 unknown
 
+桥接固件 1.0.1 及以上时，och power / och info 每次通过 `typec?` 实时查询 USB-C 状态（`live=true`），不会出现下面的情况；仍为 unknown 时先用 `och firmware info` 确认桥接版本。以下说明只适用于桥接固件 1.0.0。
+
 och power status 使用现有 CH32 EP83 启动日志，只有完整、无冲突且有效的 UFP 快照才能给出 supports_3a=true/false。没有 EP83、日志尚未到达、被其他程序消费或存在冲突快照都可能是 unknown，不等于不支持 3 A。info 也会读取并消费这段日志；缓存仅属于当前进程中的设备句柄，关闭句柄或退出进程后销毁。因而先 info 显示 3 A、再 power status 显示 unknown，并不表示 3 A 消失或供电下降。
 
 启动日志不提供可靠启动编号、实时连接状态或 LED GPIO 读回。主机仅报告已有信息，不会为取得结果而修改/下载 CH32、SDK 或 FPGA，也不假装测量当前供电电流。若同一日志显示 3 A，只说明该启动快照中的检测结果，不能据此证明线缆/电源在当前负载下表现。
 
 ## 吞吐低、RX 间断或 TX 欠流
 
-USB2 先查看 README 测试结果中的 USB2 表和 [USB2 测试结果](usb2.md)，按收发通道数与 IQ 精度选择速率。`RF sample-rate ceiling` 的 61.44 MSPS 不是 USB2 可持续速率。短测通过仍可能在几分钟后欠流，应对选定档位重复长测；默认的 30.72 MSPS 示例面向 USB3。
+USB2 先查看 [USB2 测试结果](benchmarks.md#usb-20-high-speed)，按收发通道数与 IQ 精度选择速率。`RF sample-rate ceiling` 的 61.44 MSPS 不是 USB2 可持续速率。短测通过仍可能在几分钟后欠流，应对选定档位重复长测；默认的 30.72 MSPS 示例面向 USB3。
 
 先运行不写盘的 packed12 benchmark，再测试文件和格式转换。双 RX 满速 wire 为 368.64 MB/s，保存 fc32 约 983.04 MB/s；磁盘短时缓存快不代表持续写入达标。
 
@@ -22,7 +24,7 @@ USB2 先查看 README 测试结果中的 USB2 表和 [USB2 测试结果](usb2.md
 
 双向启动时短时 RX 溢出如经设备恢复并出现新完整头，基座继续接收并标明新 epoch。下游必须重置边界。持续重复溢出说明吞吐/消费能力仍不足，不能因为程序没有退出就视为无损。
 
-有限 TX 文件 EOF 后 flush 会排空主机/USB 队列，关闭硬件前的尾部可能报告 TX 欠流和主机欠供。本版不隐藏这些事件。结合 EOF、完成字节数、padding 与传输错误判断，并把它与持续流中途欠流分开；不能仅凭全部 USB 完成就确认精确定长 DAC 播放。精确 RF 最后一个样本时刻当前不可观测，不提供虚构的 end-of-burst。
+有限 TX 文件回放结束时，关闭硬件前的尾部可能报告 TX 欠流和主机欠供，这是预期行为，见 [架构：TX 的显式启动与停止](architecture.md#tx-的显式启动与停止)；要与连续流中途的欠流分开判断。
 
 ## 成帧块与旧数据
 
@@ -40,17 +42,16 @@ USB2 先查看 README 测试结果中的 USB2 表和 [USB2 测试结果](usb2.md
 
 ## 运行中改参、TIMEOUT 与恢复
 
-0.3 的 C/C++ configure 和 typed FIR/clock/sample-rate 设置接口可以在运行中调用。它们会协调暂停双方，清掉旧数据，再恢复此前 running 的方向；不需要应用每次销毁流。收发线程遇到暂时的 TIMEOUT 应重试同一个句柄，部分 send 要按 accepted 前进。显式 STOPPED 或其他错误不能当成调参超时无限重试。
+机制与规则见 [API：运行中修改参数](api.md#运行中修改参数) 和 [架构：设备协调重配置](architecture.md#设备协调重配置)。常见现象：
 
-改参返回 BUSY 时，检查 RX 租借是否已释放。已有任意流时不能改变 rx_mask/tx_mask；若需改通道数，先停止并销毁全部流，再重新 configure/create。已 stop 的流不会因 configure 复活，未启动 TX 也不会被改参自动开启。
-
-RX 的 RECONFIGURED、START、DISCONTINUITY 标志意味着新数据段，下游需要重置解调/滤波状态。重配期间的已知主机丢弃会进入 host_dropped_samples；这不是 DEVICE_OVERFLOW。TX 的旧队列和取消请求不会重放，活动 TX 重启会填入 4 个 USB 传输块的零 IQ，见 tx_padding_samples。接收端可能观察到中断或零信号，不能把它解释为连续相位或无损切频。
-
-若硬件改参或恢复失败，核心停止双方并使配置缓存失效。先保存 och_last_error，再结束 IO 线程、销毁流；确认必要的 rf.reinit 已成功后显式 configure 并重建流。不要只在旧流上循环 start，也不要假定已经恢复旧 TX。成功时 OCH_EVENT_RECONFIGURED 记录恢复、丢弃和主机耗时，失败时 OCH_EVENT_TRANSPORT 记录停止状态。实机测量中带宽变更最长约 873 ms、TX FIR 复写约 1057 ms，不能把常见值视为延迟上限。
-
-持续 TX 的生产者应在重配 TIMEOUT 后继续 send。核心会在新配置和 4 块零 IQ 预填完成后提前放行生产者，再先恢复 RX、最后启动 TX。若上层一直等待 configure 返回才恢复供样，启动阶段仍可能耗尽预填；零 IQ 块不能代替持续生产者。
-
-另开 och.exe config/set 无法控制现有软件所持的设备：设备仍独占，本版没有跨进程控制服务。在应用进程内使用 typed API；och_command 写操作在有流时仍被拒绝。参见 [改参示例](../examples/reconfigure.cpp)。
+| 现象 | 原因与处理 |
+|---|---|
+| 收发调用返回 TIMEOUT | 重配置期间的暂时中断。保留同一个句柄重试（建议间隔约 1 ms），部分 send 按 accepted 前进；持续 TX 的生产者应继续 send，不要等 configure 返回。显式 STOPPED 或其他错误不能当成超时无限重试 |
+| 改参返回 BUSY | 还有未释放的 RX 租借；或已有流时想改 `rx_mask` / `tx_mask`、USB IQ 位数，需要先停止并销毁全部流 |
+| RX 出现 RECONFIGURED / DISCONTINUITY，或收到零信号 | 新数据段开始，下游重置解调 / 滤波状态。重配期间的主机丢弃计入 `host_dropped_samples`，不是 DEVICE_OVERFLOW；活动 TX 恢复时会插入 4 个传输块的零 IQ（`tx_padding_samples`） |
+| 改参失败后流全部停止 | 核心停止双方并使配置缓存失效。保存 `och_last_error`，结束 IO 线程、销毁流，必要时先成功执行 `rf.reinit`，再 configure 并重建流；不要在旧流上循环 start |
+| 改参耗时比平时长 | 实测带宽变更最长约 873 ms、TX FIR 复写约 1057 ms，常见值不是上限 |
+| 另开 `och config` / `och set` 改不了正在收发的设备 | 设备独占，没有跨进程控制服务；在应用进程内用 C/C++ 接口，见 [改参示例](../examples/reconfigure.cpp) |
 
 ## FIR 文件或时钟被拒绝
 
@@ -62,8 +63,8 @@ RX 的 RECONFIGURED、START、DISCONTINUITY 标志意味着新数据段，下游
 
 ## 与第三方软件的关系
 
-GNU Radio（gr-soapy）、SDR++、SDRangel 和 SoapySDR 的 Python / C++ 接口可以通过 SoapySDR 插件（驱动名 `omnicore`）使用 OmniCoreSDR。插件需要从源码编译，安装包不带，见 [SoapySDR 插件](soapy.md)；插件相关的问题见那里的“排错”一节。MATLAB 目前还没有适配层。
+GNU Radio（gr-soapy）、SDR++、SDRangel 和 SoapySDR 的 Python / C++ 接口可以通过 SoapySDR 插件（驱动名 `omnicore`）使用 OmniCoreSDR。插件需要从源码编译，安装包不带，见 [SoapySDR 插件](soapy.md)；插件相关的问题见那里的“排错”一节。MATLAB 使用自带的工具箱（不经过 SoapySDR），问题见 [MATLAB 工具箱](matlab.md#排错)。
 
 通过插件运行时，上面“运行中改参”一节同样适用：改 TX 本振、带宽或采样率会让传输短暂暂停，全双工下 RX 会出现空档，插件会把它报成 OVERFLOW 并重新打时间标签。插件的写入会在调用方给的超时时间内等待暂停结束，所以 gr-soapy 只有在暂停超过 100 ms 时才会报 `TIMEOUT`。
 
-外部 PPS 支持频率监控；开启后没有输入时显示 `no_signal`，频率无效。尚不支持硬件时间戳、精确定时 TX、PPS 闭环调频、设备间同步或多软件同时独占同一设备。首次发行安装器还需要在干净 Windows 主机及不同安全策略上实测。
+外部 PPS 开启后没有输入时显示 `no_signal`，频率无效。硬件时间戳、定时 RX / TX 见 [硬件时间戳](timestamps.md)，PPS 驯服 40 MHz 见 [PPS](pps.md)，多板同步见 [多板同步](multi-board-sync.md)。同一块板同一时间只能被一个进程打开，多个软件不能同时使用。Windows 安装器的首次驱动安装还需要在干净 Windows 主机及不同安全策略上实测。

@@ -1,4 +1,4 @@
-// Loads the OmniCore Host library before the first och_* call (MEX_PLAN.md 6.3).
+// Loads the OmniCore Host library before the first och_* call.
 //
 // Windows does not look for a MEX file's dependencies in the MEX file's own folder. The MSVC
 // build links omnicore.dll with /DELAYLOAD, and this preloads it by full path from next to the

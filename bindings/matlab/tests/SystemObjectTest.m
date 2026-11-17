@@ -1,5 +1,5 @@
 classdef (TestTags = {'Hardware'}) SystemObjectTest < matlab.unittest.TestCase
-    %SYSTEMOBJECTTEST M4 checks on a connected OmniCoreSDR: omnicore.Receiver / omnicore.Transmitter.
+    %SYSTEMOBJECTTEST System object checks on a connected OmniCoreSDR: omnicore.Receiver / omnicore.Transmitter.
     %   No RF connection is needed (TX at low gain). Skipped when no device is connected.
     %       results = runtests('SystemObjectTest')
     %   The 10-minute full-duplex run and the Simulink model are in hwtest/m4_accept.m.

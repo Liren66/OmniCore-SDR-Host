@@ -1,5 +1,5 @@
 function m2_accept(serial)
-%M2_ACCEPT M2 acceptance runs on a connected OmniCoreSDR (MEX_PLAN.md 8, M2).
+%M2_ACCEPT Long RX acceptance runs (receive, RxStream) on a connected OmniCoreSDR.
 %   m2_accept() or m2_accept(SERIAL). Needs the staged toolbox folder on the path. No RF
 %   connection is needed. Prints one line per check and errors on the first failure.
 %     1. receive 1e8 samples, 2R at 30.72 MSPS (int16, 800 MB): no gap

@@ -84,7 +84,7 @@ jobs:
 
   # MATLAB MEX gateway (bindings/matlab). Builds with CMake, runs the offline C++ tests and the MATLAB
   # tests that need no device. On Linux this also checks that MATLAB loads libomnicore next to its
-  # own libstdc++ (MEX_PLAN.md 6.5). MATLAB is free for public repositories in GitHub Actions.
+  # own, older libstdc++ (the reason for OCH_STATIC_LIBSTDCXX). MATLAB is free for public repositories in GitHub Actions.
   matlab:
     name: matlab (${{ matrix.os }})
     strategy:

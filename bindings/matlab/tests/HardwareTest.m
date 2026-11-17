@@ -1,5 +1,5 @@
 classdef (TestTags = {'Hardware'}) HardwareTest < matlab.unittest.TestCase
-    %HARDWARETEST M1 checks on a connected OmniCoreSDR (MEX_PLAN.md section 8).
+    %HARDWARETEST Device checks on a connected OmniCoreSDR: open / close, RF properties, status.
     %   No RF connection is needed. Skipped when no device is connected. Run with:
     %       results = runtests('HardwareTest')
     %   OMNICORE_TEST_SERIAL selects a device when several are connected.

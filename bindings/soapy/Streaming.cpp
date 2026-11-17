@@ -1,4 +1,4 @@
-// Streams (SOAPY_PLAN.md section 4): RX (S2) and TX (S3).
+// Streams: RX (readStream) and TX (writeStream, readStreamStatus).
 //
 // An och stream can be started only once, while SoapySDR applications activate and deactivate
 // the same stream repeatedly. So setupStream only records the request, every activateStream
@@ -46,8 +46,10 @@ namespace omnicore_soapy {
         std::vector<uint64_t> bounce;
         RxTracker tracker;
 
-        // TX: the och stream is created at activation but started only once enough is queued
-        // (SOAPY_PLAN.md 4.3). burst_open mirrors burst for readStreamStatus on another thread.
+        // TX: the och stream is created at activation but started only once enough is queued.
+        // och_start needs queued samples and blocks until the FPGA FIFO holds about one block,
+        // while SoapySDR applications activate first and write afterwards; so the first write that
+        // queues a full transfer, or ends a burst, starts it. burst_open mirrors burst for readStreamStatus on another thread.
         TxBurst burst;
         bool started = false;
         std::atomic<bool> burst_open{false};
@@ -185,7 +187,8 @@ SoapySDR::Stream *OmniCoreDevice::setupStream(int direction, const std::string &
     s->sample_bytes = och_sample_size(s->format);
     if (iq8 && mask != 3) throw std::invalid_argument("OmniCore: 8-bit IQ (iq_bits=8) streams both channels");
 
-    // The core accepts a channel-mask change only while no och_stream exists (SOAPY_PLAN.md 3.4).
+    // The core accepts a channel-mask change only while no och_stream exists, so with the other
+    // direction streaming the mask must already be right (preset rx_mask / tx_mask in the device args).
     if (mask != (rx ? config_.rx_mask : config_.tx_mask)) {
         if (other && other->handle)
             throw std::runtime_error(std::string("OmniCore: ") + name + " needs " + (rx ? "rx_mask=" : "tx_mask=") +
@@ -401,7 +404,9 @@ int OmniCoreDevice::writeStream(SoapySDR::Stream *stream, const void *const *buf
     // While a TX reconfigure runs (LO, bandwidth) the core pauses the stream and och_send_burst returns
     // OCH_TIMEOUT at once instead of waiting. Keep retrying until the caller's timeout has really
     // passed: SoapySDR callers (gr-soapy) treat TIMEOUT as "waited the full time" and retry at once,
-    // which otherwise spins and floods the log (SOAPY_PLAN.md 8.5).
+    // which otherwise spins and floods the log: before this loop a bandwidth change produced about
+    // 125000 immediate timeouts and log lines. Now gr-soapy sees TIMEOUT only for pauses longer
+    // than its 100 ms write timeout (a sample-rate change, about 0.5 s).
     using clock = std::chrono::steady_clock;
     const auto deadline = clock::now() + std::chrono::microseconds(std::max(timeoutUs, 0L));
     size_t accepted = 0;

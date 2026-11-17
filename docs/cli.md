@@ -38,9 +38,9 @@
     USB link                  5.0 Gbit/s  SuperSpeed
 
   Firmware ───────────────────────────────────────────────────────────────────
-    Zynq SDK                  SDK_CMD_1.1_20261107_EVTCOUNT
+    Zynq SDK                  SDK_CMD_1.2_20261107_SYNC
     FPGA IP                   CH32H417_IP 1.3  (framed 16 KiB, hardware time)
-    CH32 bridge               1.0.0  (bootloader 1.0.0)
+    CH32 bridge               1.0.1  (bootloader 1.0.0)
 
   RF ─────────────────────────────────────────────────────────────────────────
     Channels                  2 RX / 2 TX
@@ -53,7 +53,7 @@
     Now                       39,462,912,000  (1284.6 s at 30.720 MSPS)
 
   Power ──────────────────────────────────────────────────────────────────────
-    USB-C at startup          3000 mA available
+    USB-C                     3000 mA available
 
   · Link speed is negotiated; RX and TX share one USB link and sample clock.
 ~~~
@@ -92,9 +92,9 @@
 
 默认文本布局可能随版本改进，自动化程序应使用 `--json` 或公开 C/C++ API。`--json` 的结果字段和结构与旧版本兼容。读取 JSON 时仍需分别处理标准输出、标准错误和进程退出码；有事件不必然表示命令失败。
 
-### USB2 采样率与判定（0.4.3）
+### USB2 采样率与稳定性判定
 
-`info` 在 USB2 与 USB3 下使用相同的分组。USB2 显示 `480 Mbit/s High-Speed (USB 2.0)`，`Max sample rate` 仍表示射频能力。实测采样率、测试主机与时长放在 [USB2 报告](usb2.md) 和 README 中；`info --json` 保留 `usb2_reference` 供脚本读取。
+`info` 在 USB2 与 USB3 下使用相同的分组。USB2 显示 `480 Mbit/s High-Speed (USB 2.0)`，`Max sample rate` 仍表示射频能力。实测采样率、测试主机与时长见 [测试结果](benchmarks.md#usb-20-high-speed)；`info --json` 保留 `usb2_reference` 供脚本读取。
 
 流开始时新增 `USB link`、`RX + TX wire demand` 和匹配配置的参考值。超过参考采样率会提示 `WARN`，但不自动改参或限制 SDK 的射频范围。单通道参考只测过 CH1；CH2-only、非对称全双工及其他固件组合显示未测。已测点也不能保证另一台主机的结果。
 
@@ -156,13 +156,13 @@ JSON 保持旧字段，新增内容如下：
 
 原 SDK 名称的 get/set 仍作为原始透传兼容：och set rx_lo_freq 1000 的 1000 为 MHz，och set tx1_attenuation 10000 的 10000 为 mdB。原始接口不转换数值后缀或返回单位。每次只允许一条命令，拒绝换行批量注入；固件拒绝命令时返回失败。新程序优先使用规范名称。
 
-`rx.dc-correction` / `rx.iq-correction` 接受 `on/off`、`true/false`、`1/0`。规范命令检查 SDK `rx_correction=1` 能力；setter 保留另一个开关并核验回读。JSON 保持通用命令结构，`sdk_command` 为所请求的设置/查询，`raw_reply` 是最终查询的固件原始状态，`reply` 使用规范名称。这两项功能属于 AD9361 原生 RX 跟踪，不修改 CH32 或主机 IQ 数据。
+`rx.dc-correction` / `rx.iq-correction` 接受 `on/off`、`true/false`、`1/0`，需要 SDK `rx_correction=1`；设置一项时保留另一项并核验回读，JSON 的 `raw_reply` 是设置后查询到的固件原始状态。两项都是 AD9361 原生的 RX 跟踪，语义见 [API：RX 直流与 IQ 校正](api.md#rx-直流与-iq-校正)。
 
 FIR 与 clock 的文件格式、事务边界及实际时钟限制见 [FIR 与时钟使用说明](fir.md)。这些操作不启动数据流，也不改 CH32 固件。所有需要设备的 CLI 操作会取得独占设备所有权并清理旧 USB 会话；find、commands、help、version 不打开设备。
 
 参考与 LO source 接受 `internal/external` 或 `0/1`，默认内部。外部 LO 的名义 RF 范围为 70 MHz..4 GHz，物理输入为其两倍；外部状态下频率命令只声明频率，不能调节信号源。返回内部恢复此前内部 PLL 频率。ADF4002 MUXOUT 只接 D5，软件无法回读锁定或 LED 亮灭，`locked=-1` / `led_on=-1` 必须保持未知。通信自检的 `gpio_verified=1` 仅证明 GPIO pad 回读，需观察 D5 三次闪烁补充芯片响应证据。详见 [参考与外部 LO](reference-lo.md)。
 
-find 只枚举 Windows 中匹配的设备，不打开 USB 管道探测链路速度。未查询的速度在默认文本中显示 unknown；为保持兼容，JSON 的 usb_speed_mbps 仍为 0，含义同样是未查询。需要确认实际链路时运行 info；不要把枚举阶段的 0 当成传输速度或断线证据。
+find 只枚举系统中匹配的设备（Windows、Linux、macOS 相同），不打开 USB 管道探测链路速度。未查询的速度在默认文本中显示 unknown；为保持兼容，JSON 的 usb_speed_mbps 仍为 0，含义同样是未查询。需要确认实际链路时运行 info；不要把枚举阶段的 0 当成传输速度或断线证据。
 
 ## USB-C 电源信息
 
@@ -233,7 +233,7 @@ TX 最低预填四个完整 USB 块；持续源在启动前先运行生产者，
 
 `och tx` 发送的是不带时间的连续流；按样点时刻发射突发请使用 C API 的 `och_send_burst`，见 [硬件时间戳](timestamps.md)。定时持续源到时立即关闭硬件并取消剩余排队数据，不为结束而等待队列耗尽。文件 EOF 才显式 flush，必要的传输块零填充以 tx_padding_samples 报告。接受进入主机队列的样本数不等于已从 RF 播放的样本数；两种停止方式都不提供精确的 RF 结束时间。
 
-**有限文件 EOF 有独立的尾部边界限制。** flush 完成后，设备仍在消耗 FIFO，SDK 关闭硬件前可能出现一次或多次 TX 欠流/主机欠供通知；本版不会过滤或隐藏这些事件。它们不应直接等同于持续数据中段丢样，也不能反过来据此断言全部文件样本已精确从 DAC 播放。应联合 EOF、USB 完成字节数、padding、transfer_errors 和事件日志判断。持续流 benchmark 与有限文件 EOF 的验收结果分别报告，不用其中一种代替另一种。
+**有限文件 EOF 之后的尾部欠流**：flush 完成后设备仍在消耗 FIFO，关闭硬件前可能出现 TX 欠流 / 主机欠供通知，CLI 原样报告。它们不等于连续数据中段丢样，原因见 [架构：TX 的显式启动与停止](architecture.md#tx-的显式启动与停止)；持续流 benchmark 与有限文件回放的验收结果应分别报告。
 
 测试正弦为 cos+j sin，双通道同一测试码。为保持周期连接和运行吞吐，周期过长的任意频率会量化到最多 65536 点周期，并在 stderr 报告 actual_Hz；1 MHz 在 30.72/61.44 MSPS 下为精确整数周期。幅度 0..1，1 对应 12 位峰值 2047，默认 0.25。
 
@@ -269,8 +269,8 @@ och rssi --count 0 --interval 0.2
 och rssi --count 10 --json
 ```
 
-新 SDK 的 `rx_rssi?` 实测每次约 1.1 ms。旧 SDK 由 OCH 从 `system_status?` 中解析，每次约 190 ms。见 [固件兼容性](firmware-compatibility.md#rx-rssi-与控制串口波特率)。
+新 SDK 的 `rx_rssi?` 实测每次约 1.1 ms。旧 SDK 由 OCH 从 `system_status?` 中解析，每次约 190 ms。见 [设备协议：控制串口](protocol.md#控制串口)。
 
 ## RGB 与风扇温控
 
-`rgb.enabled` / `rgb.status`、`fan.enabled` / `fan.status` 和 `core.temperature` 分别控制和查询 RGB 状态灯、风扇温控与 Zynq 核心温度。需要包含 BOARD_CTRL_AXI 的 FPGA 和对应 SDK，能力字段为 `board_rgb=1 fan_control=1 core_temp=1`。SDK 默认 RGB 开启、亮度 15%，风扇温控关闭；同时兼容旧版 25% 亮度固件，亮度以设备回报为准。这些操作不改变 C ABI 结构，也不停止 IQ 流。详见 [板级控制及接口](board-control.md)。
+`rgb.enabled` / `rgb.status`、`fan.enabled` / `fan.status` 和 `core.temperature` 控制和查询 RGB 状态灯、风扇温控与 Zynq 核心温度，不停止 IQ 流。默认值、状态颜色、温控策略与固件要求见 [板级控制](board-control.md)。

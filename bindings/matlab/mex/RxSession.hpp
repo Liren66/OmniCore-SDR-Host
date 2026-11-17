@@ -1,4 +1,4 @@
-// RX for MATLAB (MEX_PLAN.md 3.2, 3.3, 5.1): one-shot receive(N) and the continuous RxStream.
+// RX for MATLAB: one-shot receive(N) and the continuous RxStream.
 //
 // An och stream starts only once, so an RxSession records the options and every start() creates
 // and starts a fresh och_stream; stop() stops and destroys it (like the Soapy plugin's

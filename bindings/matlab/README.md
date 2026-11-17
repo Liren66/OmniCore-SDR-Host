@@ -15,7 +15,7 @@ MATLAB R2018a 及以后版本直接使用 OmniCoreSDR：采集、发射、定时
 
 - **Windows**：先用 OmniCore Host 安装包装好 USB 驱动（`och-driver install`）。安装包勾选 “MATLAB” 组件时，文件夹在 `C:\Program Files\OmniCore Host\matlab`。
 - **macOS**：下载的 zip 会被 Gatekeeper 隔离，解压后运行一次 `xattr -dr com.apple.quarantine omnicore-matlab`。
-- **Linux**：需要 udev 规则（`packaging/linux/60-omnicore.rules`），见 `docs/INSTALL_LINUX.md`。
+- **Linux**：需要 udev 规则（`packaging/linux/60-omnicore.rules`），见 OmniCore Host 文档 `docs/install.md`。
 
 ## 最短示例
 

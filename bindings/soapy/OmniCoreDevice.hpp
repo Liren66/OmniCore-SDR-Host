@@ -1,5 +1,5 @@
 // SoapySDR device for OmniCoreSDR, built only on the public C API (include/omnicore/och.h).
-// Design: SOAPY_PLAN.md.
+// User documentation: docs/soapy.md. Shared mapping and stream logic: bindings/common/.
 #pragma once
 #include <SoapySDR/Device.hpp>
 #include <atomic>

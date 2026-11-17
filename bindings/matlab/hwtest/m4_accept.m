@@ -1,5 +1,5 @@
 function m4_accept(varargin)
-%M4_ACCEPT M4 acceptance runs on a connected OmniCoreSDR (MEX_PLAN.md 8, M4).
+%M4_ACCEPT Full-duplex, 8-bit and Simulink acceptance runs on a connected OmniCoreSDR.
 %   m4_accept() or m4_accept(Name, Value) with 'Serial' ('' = the only device) and 'Minutes'
 %   (full-duplex run, default 10). Needs the staged toolbox folder and bindings/matlab/examples on
 %   the path. No RF connection is needed. Errors on the first failure.

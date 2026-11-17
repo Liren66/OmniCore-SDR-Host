@@ -1,5 +1,7 @@
 // Transport interface used by src/core/. Standard library only: no platform or USB library
-// types appear here. The interface grows as core call sites move onto it (TRANSPORT_PLAN.md).
+// types appear here, so src/core/ compiles the same on every platform (checked by the
+// core_is_portable test). Backends: win/ (libusbK), posix/ (libusb, Linux and macOS), fake/
+// (offline tests).
 #pragma once
 #include <cstddef>
 #include <cstdint>
