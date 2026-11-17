@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="530" viewBox="0 0 1000 530" role="img" aria-labelledby="t d">
+<title id="t">Linux USB 吞吐实测</title><desc id="d">OCH 0.4.3 Linux 版在 OmniCoreSDR 上的 bench 结果：实测 USB 吞吐与理论 wire 速率</desc>
+<rect x="0.5" y="0.5" width="999" height="529" rx="14" fill="#fcfcfb" stroke="#e4e3df"/>
+<text x="28" y="42" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="20" font-weight="700" fill="#0b0b0b" text-anchor="start">Linux USB 吞吐实测</text>
+<text x="28" y="66" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">OCH 0.4.3 · Ryzen 5 5500U · Ubuntu 24.04.3 · libusb 1.0.27 · USB 5 Gbit/s · 平均值含启停 · 2026-10-25</text>
+<rect x="28" y="86" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="46" y="96" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12.5" font-weight="500" fill="#52514e" text-anchor="start">RX 实测</text>
+<rect x="120" y="86" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="138" y="96" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12.5" font-weight="500" fill="#52514e" text-anchor="start">TX 实测</text>
+<line x1="218" y1="84" x2="218" y2="100" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="228" y="96" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12.5" font-weight="500" fill="#52514e" text-anchor="start">理论 wire 速率</text>
+<text x="972" y="96" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#8a8984" text-anchor="end">标签：实测 MB/s · 实测 / 理论</text>
+<line x1="290.0" y1="122" x2="290.0" y2="466" stroke="#cfcdc6" stroke-width="1" stroke-linecap="round"/>
+<text x="290.0" y="484" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#8a8984" text-anchor="middle">0</text>
+<line x1="432.5" y1="122" x2="432.5" y2="466" stroke="#e9e8e4" stroke-width="1" stroke-linecap="round"/>
+<text x="432.5" y="484" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#8a8984" text-anchor="middle">100</text>
+<line x1="575.0" y1="122" x2="575.0" y2="466" stroke="#e9e8e4" stroke-width="1" stroke-linecap="round"/>
+<text x="575.0" y="484" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#8a8984" text-anchor="middle">200</text>
+<line x1="717.5" y1="122" x2="717.5" y2="466" stroke="#e9e8e4" stroke-width="1" stroke-linecap="round"/>
+<text x="717.5" y="484" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#8a8984" text-anchor="middle">300</text>
+<line x1="860.0" y1="122" x2="860.0" y2="466" stroke="#e9e8e4" stroke-width="1" stroke-linecap="round"/>
+<text x="860.0" y="484" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#8a8984" text-anchor="middle">400</text>
+<text x="860.0" y="502" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11.5" font-weight="400" fill="#8a8984" text-anchor="end">MB/s（十进制）</text>
+<text x="28" y="141" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">RX · 2 通道 · 61.44 MSPS</text>
+<text x="28" y="157" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">12bit · 60 秒</text>
+<path d="M290,132 L811.219,132 Q815.219,132 815.219,136 L815.219,144 Q815.219,148 811.219,148 L290,148 Z" stroke="#2a78d6" stroke-width="0" fill="#2a78d6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="815.312" y1="129" x2="815.312" y2="151" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="823.312" y="144.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">368.6 · 100.0%</text>
+<text x="282" y="144.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">RX</text>
+<text x="28" y="179" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">RX · 1 通道 · 61.44 MSPS</text>
+<text x="28" y="195" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">12bit · 60 秒</text>
+<path d="M290,170 L548.61,170 Q552.61,170 552.61,174 L552.61,182 Q552.61,186 548.61,186 L290,186 Z" stroke="#2a78d6" stroke-width="0" fill="#2a78d6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="552.656" y1="167" x2="552.656" y2="189" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="560.656" y="182.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">184.3 · 100.0%</text>
+<text x="282" y="182.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">RX</text>
+<text x="28" y="217" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">TX · 2 通道 · 61.44 MSPS</text>
+<text x="28" y="233" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">12bit · 60 秒</text>
+<path d="M290,208 L810.545,208 Q814.545,208 814.545,212 L814.545,220 Q814.545,224 810.545,224 L290,224 Z" stroke="#eb6834" stroke-width="0" fill="#eb6834" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="815.312" y1="205" x2="815.312" y2="227" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="823.312" y="220.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">368.1 · 99.9%</text>
+<text x="282" y="220.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">TX</text>
+<text x="28" y="255" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2RX + 2TX · 30.72 MSPS</text>
+<text x="28" y="271" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">12bit · 60 秒</text>
+<path d="M290,246 L548.612,246 Q552.612,246 552.612,250 L552.612,258 Q552.612,262 548.612,262 L290,262 Z" stroke="#2a78d6" stroke-width="0" fill="#2a78d6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="552.656" y1="243" x2="552.656" y2="265" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="560.656" y="258.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">184.3 · 100.0%</text>
+<text x="282" y="258.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">RX</text>
+<path d="M290,264 L548.267,264 Q552.267,264 552.267,268 L552.267,276 Q552.267,280 548.267,280 L290,280 Z" stroke="#eb6834" stroke-width="0" fill="#eb6834" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="552.656" y1="261" x2="552.656" y2="283" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="560.656" y="276.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">184.0 · 99.9%</text>
+<text x="282" y="276.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">TX</text>
+<text x="28" y="311" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">1RX + 1TX · 61.44 MSPS</text>
+<text x="28" y="327" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">12bit · 60 秒</text>
+<path d="M290,302 L548.613,302 Q552.613,302 552.613,306 L552.613,314 Q552.613,318 548.613,318 L290,318 Z" stroke="#2a78d6" stroke-width="0" fill="#2a78d6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="552.656" y1="299" x2="552.656" y2="321" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="560.656" y="314.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">184.3 · 100.0%</text>
+<text x="282" y="314.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">RX</text>
+<path d="M290,320 L548.27,320 Q552.27,320 552.27,324 L552.27,332 Q552.27,336 548.27,336 L290,336 Z" stroke="#eb6834" stroke-width="0" fill="#eb6834" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="552.656" y1="317" x2="552.656" y2="339" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="560.656" y="332.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">184.0 · 99.9%</text>
+<text x="282" y="332.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">TX</text>
+<text x="28" y="367" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2RX + 2TX · 50 MSPS</text>
+<text x="28" y="383" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">8bit wire · 300 秒连续</text>
+<path d="M290,358 L570.999,358 Q574.999,358 574.999,362 L574.999,370 Q574.999,374 570.999,374 L290,374 Z" stroke="#2a78d6" stroke-width="0" fill="#2a78d6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="575.000" y1="355" x2="575.000" y2="377" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="583.000" y="370.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">200.0 · 100.0%</text>
+<text x="282" y="370.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">RX</text>
+<path d="M290,376 L570.924,376 Q574.924,376 574.924,380 L574.924,388 Q574.924,392 570.924,392 L290,392 Z" stroke="#eb6834" stroke-width="0" fill="#eb6834" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="575.000" y1="373" x2="575.000" y2="395" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="583.000" y="388.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">199.9 · 100.0%</text>
+<text x="282" y="388.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">TX</text>
+<text x="28" y="423" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="600" fill="#0b0b0b" text-anchor="start">2RX + 2TX · 61.44 MSPS</text>
+<text x="28" y="439" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">8bit wire · 300 秒连续</text>
+<path d="M290,414 L636.204,414 Q640.204,414 640.204,418 L640.204,426 Q640.204,430 636.204,430 L290,430 Z" stroke="#2a78d6" stroke-width="0" fill="#2a78d6" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="640.208" y1="411" x2="640.208" y2="433" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="648.208" y="426.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">245.8 · 100.0%</text>
+<text x="282" y="426.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">RX</text>
+<path d="M290,432 L636.111,432 Q640.111,432 640.111,436 L640.111,444 Q640.111,448 636.111,448 L290,448 Z" stroke="#eb6834" stroke-width="0" fill="#eb6834" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="640.208" y1="429" x2="640.208" y2="451" stroke="#0b0b0b" stroke-width="2" stroke-linecap="round"/>
+<text x="648.208" y="444.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="600" fill="#0b0b0b" text-anchor="start">245.7 · 100.0%</text>
+<text x="282" y="444.5" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#52514e" text-anchor="end">TX</text></svg>
