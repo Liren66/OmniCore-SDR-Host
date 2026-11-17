@@ -124,6 +124,7 @@ nav:
       - troubleshooting.md
       - firmware-update.md
       - firmware-compatibility.md
+      - development.md
   - Features:
       - timestamps.md
       - multi-board-sync.md

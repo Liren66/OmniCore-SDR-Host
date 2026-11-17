@@ -1,81 +1,77 @@
-# OmniCore Host (OCH)
+<div align="center">
 
-[English](README.md) | 简体中文 · **在线文档：<https://liren66.github.io/OmniCore-SDR-Host/zh-CN/>**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/zh-CN/banner-dark.svg">
+  <img src="docs/images/zh-CN/banner-light.svg" alt="OmniCore Host：OmniCoreSDR 主机软件与 SDK" width="100%">
+</picture>
 
-OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机端软件：C++17 运行库、命令行工具 `och` 和公共 C/C++ SDK。它负责设备发现、射频控制、连续 IQ 收发、RX 数据边界恢复与吞吐测试，可作为 GNU Radio、MATLAB、SDRangel 等上层软件的接入基础；[OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir)（OnAir 的 fork）已通过它原生支持 RX、TX 与全双工。
+[![CI](https://github.com/Liren66/OmniCore-SDR-Host/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Liren66/OmniCore-SDR-Host/actions/workflows/ci.yml)
+[![Docs](https://github.com/Liren66/OmniCore-SDR-Host/actions/workflows/docs.yml/badge.svg?branch=main)](https://liren66.github.io/OmniCore-SDR-Host/zh-CN/)
+[![Release](https://img.shields.io/github/v/release/Liren66/OmniCore-SDR-Host?label=release&color=3f51b5)](https://github.com/Liren66/OmniCore-SDR-Host/releases)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-3f51b5)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-555)](#快速上手)
 
-| 版本 | 平台 | 接口 | 许可证 |
-|---|---|---|---|
-| **0.8.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0）<br>macOS 12+ 通用二进制（libusb 1.0；Intel Mac 未实机测试） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+**[在线文档](https://liren66.github.io/OmniCore-SDR-Host/zh-CN/)** · **[下载发布包](https://github.com/Liren66/OmniCore-SDR-Host/releases)** · **[更新记录](CHANGELOG.md)** · **[English](README.md)**
 
-![OmniCore Host 架构](docs/images/zh-CN/architecture.svg)
+</div>
+
+OmniCore Host（OCH）是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机端软件：C++17 运行库、命令行工具 `och`、公共 C/C++ SDK、SoapySDR 插件和 MATLAB 工具箱。它负责设备发现、射频控制、连续 IQ 收发、硬件时间戳与吞吐测试。[OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir)（OnAir 的 fork）已通过它原生支持 RX、TX 与全双工。
+
+<p align="center"><img src="docs/images/cli-info.png" width="640" alt="och info：OmniCore SDR 标题、设备身份、三类固件版本、RF 能力、时间基准与电源摘要"></p>
 
 > [!IMPORTANT]
-> **推荐固件 [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)：Zynq `SDK_CMD_1.2_20261107_SYNC`、FPGA `CH32H417_IP` 1.3、CH32 桥接 1.0.1。**
->
-> - 最低要求 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07)（成帧 USB 传输：每个 16 KiB 块带 16 字节头和 64 位样点时间）。更旧的固件只能用 OCH 0.5.x，两者不能混用。
-> - 多板同步（`och sync`）需要 Zynq 固件 v2026.11.07.2 及以上（`SDK_CMD_1.2`）。
-> - `och info` / `och power` 每次都读到 USB-C 电流，需要桥接固件 1.0.1（`och firmware update OmniCore-Bridge-1.0.1.ocfw`）；1.0.0 下只有上电后第一次可读。
->
-> 各版本对应关系见 [固件兼容性](docs/zh-CN/firmware-compatibility.md)。
+> 需要 Zynq 固件 **[v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上**（成帧 USB 传输），推荐 **[v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)**。多板同步需要 v2026.11.07.2 及以上，每次都读到 USB-C 电流需要桥接固件 1.0.1。见 [固件兼容性](docs/zh-CN/firmware-compatibility.md)。
 
-## 目录
+## 亮点
 
-1. [功能](#功能)
-2. [快速上手](#快速上手)
-3. [命令行](#命令行)
-4. [测试结果](#测试结果)
-5. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
-6. [GNU Radio 与 SoapySDR](#gnu-radio-与-soapysdr)
-7. [MATLAB](#matlab)
-8. [从源码构建与打包](#从源码构建与打包)
-9. [工程目录](#工程目录)
-10. [文档索引](#文档索引)
-
-## 功能
-
-| 类别 | 内容 |
-|---|---|
-| 多板同步 | `och sync`：无外部参考时菊花链共享 10 MHz（REF_OUT → 10M_EXT）并由主板 TRIG 同步；或所有板共用 10 MHz + PPS（原子钟、GPSDO）。含锁定检查、AD9361 多片同步和公共时间装载，需固件 SDK_CMD_1.2，见 [多板同步](docs/zh-CN/multi-board-sync.md) |
-| 硬件时间戳 | 64 位样点时间（1 tick = 1 样点）、外部 / 内部 PPS 对时、定时 RX、定时 TX 突发、带样点时间的事件，见 [硬件时间戳](docs/zh-CN/timestamps.md) |
-| 设备与射频 | 设备发现、状态查询；RX/TX LO、增益、衰减、带宽、通道配置 |
-| IQ 数据流 | 单/双通道 RX、TX 与全双工；文件采集与回放、测试正弦、吞吐统计 |
-| 数据完整性 | 每个 16 KiB 块带 16 字节头（序号、有效帧数、样点时间、校验）；溢出丢样数由时间戳差精确给出，以 epoch 和元数据标记间断 |
-| USB IQ 格式 | 默认 12bit packed；2TX2RX 可选 8bit signed，降低带宽占用 |
-| 桥接固件升级 | `och firmware update` 通过 USB 升级 CH32H417 桥接固件，中断后可重来（需桥接固件 1.0.0+） |
-| FIR 与时钟 | AD9361 硬件 FIR 装载与启停、采样率与六级时钟链配置 |
-| 采样率就近 | BBPLL 小数分频无法精确实现的速率自动改用最近的整 Hz 速率并提示，如 11.2 MSPS → 11200011 Hz |
-| 运行中改参 | 不销毁流句柄，协调暂停 → 应用配置 → 恢复 |
-| 校正与参考 | RX 直流 / IQ 跟踪；ADF4002 内/外 10 MHz 参考；RX/TX 独立外部 LO |
-| PPS 驯服 | 仅 PPS 时由 CH32 PA4 DAC 驯服 40 MHz 晶振（相位锁定 ±1 µs）；与 10 MHz 同用时仅作频偏校验 |
-| 监控与板控 | PPS 频偏监控（±1 ppm LOCK）、RGB 状态灯、按温度调速的风扇 |
-| USB 链路 | USB 3.0 SuperSpeed；USB 2.0 High-Speed 适用于低采样率 |
-| SoapySDR 插件 | `driver=omnicore`，接入 GNU Radio（gr-soapy）、SDR++、SDRangel、Python 等，见 [SoapySDR 插件](docs/zh-CN/soapy.md) |
-| MATLAB 工具箱 | MATLAB R2018a+ 直接采集、发射、定时收发、全双工，System object 与 Simulink，不需要任何工具箱，见 [MATLAB 工具箱](docs/zh-CN/matlab.md) |
+- **满速收发**：USB 3.0 下 2T2R 最高 61.44 MSPS（8bit），12bit 为 44 MSPS；低采样率也可用 USB 2.0 High-Speed。[测试结果](docs/zh-CN/benchmarks.md)
+- **精确的数据边界**：每个 16 KiB 块带块头和 64 位样点时间，丢样数精确可知，间断以 epoch 标记。
+- **硬件时间**：PPS 对时、定时 RX、定时 TX 突发、带样点时间的事件。[硬件时间戳](docs/zh-CN/timestamps.md)
+- **多板同步**：菊花链或公共 10 MHz + PPS，含锁定检查与 AD9361 多片同步。[多板同步](docs/zh-CN/multi-board-sync.md)
+- **运行中改参**：改频率、增益、采样率或 FIR 不必销毁流，同频段切频约 4 ms。[API](docs/zh-CN/api.md#运行中修改参数)
+- **时钟**：外部 10 MHz 参考、RX/TX 独立外部 LO、PPS 驯服 40 MHz 晶振。[参考与外部 LO](docs/zh-CN/reference-lo.md) · [PPS](docs/zh-CN/pps.md)
+- **接入常用工具**：`och` 命令行、C ABI + C++ 包装、SoapySDR（GNU Radio、SDR++、SDRangel、Python）、MATLAB 与 Simulink。
+- **USB 升级桥接固件**：`och firmware update`。[桥接固件升级](docs/zh-CN/firmware-update.md)
 
 ## 快速上手
 
 ### 1. 安装
 
-**Windows**：运行 `OmniCoreHost-0.8.0-win64-setup.exe`（[Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases)），默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
+从 [Releases](https://github.com/Liren66/OmniCore-SDR-Host/releases) 下载对应平台的发布包。
+
+<details>
+<summary><b>Windows 10/11 x64</b></summary>
+
+运行 `OmniCoreHost-0.8.0-win64-setup.exe`，默认安装到 `C:\Program Files\OmniCore Host` 并加入 PATH。安装包含 `och.exe`、运行库、头文件、MinGW/MSVC 导入库、CMake 包配置、示例与文档，以及驱动助手：
 
 ```powershell
 och-driver check      # 只检查，不修改系统
 och-driver install    # 为 VID 1A86 / PID 5537 安装 libusbK（需 UAC）
 ```
 
-**Linux**：
+驱动细节与日志见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.zh-CN.txt)。
+
+</details>
+
+<details>
+<summary><b>Linux x86_64</b></summary>
 
 ```bash
-sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
-bash tools/build-linux.sh
-sudo cmake --install build/linux --prefix /opt/omnicore/0.8.0
+tar -xzf OmniCoreHost-0.8.0-linux-x86_64.tar.gz
+sudo mkdir -p /opt/omnicore && sudo mv OmniCoreHost-linux /opt/omnicore/0.8.0
 sudo ln -sfn /opt/omnicore/0.8.0/bin/och /usr/local/bin/och
-sudo install -m 0644 packaging/linux/60-omnicore.rules /etc/udev/rules.d/
+sudo install -m 0644 /opt/omnicore/0.8.0/share/omnicore/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
 
-**macOS**：解压 `OmniCoreHost-0.8.0-macos-universal.tar.gz`（arm64 + x86_64 通用二进制，libusb 已静态链接，不需要 Homebrew），无需安装驱动：
+运行时需要系统的 `libusb-1.0-0`。USB 权限与源码构建见 [Linux 与 macOS 安装](docs/zh-CN/install.md)。
+
+</details>
+
+<details>
+<summary><b>macOS 12+（通用二进制）</b></summary>
+
+不需要驱动，也不需要 Homebrew（libusb 已静态链接）：
 
 ```bash
 tar -xzf OmniCoreHost-0.8.0-macos-universal.tar.gz
@@ -84,7 +80,7 @@ sudo mkdir -p /opt/omnicore && sudo mv OmniCoreHost-macos /opt/omnicore/0.8.0
 sudo ln -sfn /opt/omnicore/0.8.0/bin/och /usr/local/bin/och
 ```
 
-运行无需 sudo。USB 权限、目录布局、源码构建与性能参数见 [Linux 与 macOS 安装](docs/zh-CN/install.md)；Windows 见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.zh-CN.txt)。
+</details>
 
 ### 2. 连接设备
 
@@ -94,9 +90,6 @@ och find           # 枚举设备
 och info           # 身份、固件版本、USB 链路、RF 能力、时间基准、电源
 och selftest       # 数字接口自检（RX PRBS / TX 回环）
 ```
-
-<p align="center"><img src="docs/images/cli-info.png" width="640" alt="och info：OmniCore SDR 标题、设备身份、三类固件版本、RF 能力、时间基准与电源摘要"></p>
-<p align="center"><sub>实机截图：OCH 0.7.1，USB 3.0 SuperSpeed，Zynq <code>SDK_CMD_1.2_20261107_SYNC</code>，CH32 桥接 1.0.1，USB-C 3000 mA</sub></p>
 
 ### 3. 收发 IQ
 
@@ -117,25 +110,7 @@ och bench --rx --tx --channels 1,2 --sample-rate 30.72M --seconds 10
 > [!NOTE]
 > 发射命令会产生射频输出，请接负载或衰减后的测试回路。`Ctrl+C` 可随时停止；已有采集文件默认不覆盖（需 `--overwrite`）。
 
-### 设备固件要求
-
-安装包只含主机软件，不自动烧写板级固件。需要 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) v2026.11.07 及以上的 `BOOT.bin`（FPGA `CH32H417_IP` 1.3、`SDK_CMD_1.1` 及以上），推荐 v2026.11.08（`SDK_CMD_1.2`、桥接 1.0.1）；打开设备时检查 `transport=framed16k`，不满足则拒绝连接。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/zh-CN/firmware-update.md)。设备还需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/zh-CN/firmware-compatibility.md)。
-
 ## 命令行
-
-### 升级桥接固件
-
-CH32 桥接固件 1.0.0 及以上可直接通过 USB 升级，升级包从 [OmniCore-SDR-Firmware Releases](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) 下载：
-
-```bash
-och firmware info                                  # 当前版本与模式
-och firmware update OmniCore-Bridge-1.0.1.ocfw     # 约 5 秒，中断后可重新执行
-```
-
-`och firmware info` 显示 `legacy` 或 `Bootloader: none` 时，需先用 WCH-Link 烧录一次 `Merge.bin`。
-完整步骤见 [Firmware README：升级 CH32 桥接固件](https://github.com/Liren66/OmniCore-SDR-Firmware#升级-ch32-桥接固件)，命令与恢复说明见 [桥接固件升级](docs/zh-CN/firmware-update.md)。
-
-### 命令一览
 
 | 类别 | 命令 |
 |---|---|
@@ -146,7 +121,18 @@ och firmware update OmniCore-Bridge-1.0.1.ocfw     # 约 5 秒，中断后可重
 | 多板同步 | `sync --devices M,S1,...` · `sync --mode common` · `sync status` · `sync off` |
 | 桥接固件 | `firmware [info]` · `firmware check FILE` · `firmware update FILE` · `firmware boot` · `firmware enter` |
 
-全局选项：`--serial` 选择设备，`--json` 输出机器可读结果，`--no-color` 关闭颜色。数值支持 `k`/`M`/`G` 后缀，规范命令统一使用 Hz 和 dB。
+全局选项：`--serial` 选择设备，`--json` 输出机器可读结果，`--no-color` 关闭颜色。数值支持 `k`/`M`/`G` 后缀，规范命令统一使用 Hz 和 dB。见 [命令行参考](docs/zh-CN/cli.md) 与 [命令目录](docs/zh-CN/commands.md)。
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/cli-bench-running.png" alt="och bench 2T2R 12bit 44 MSPS 运行中：会话、RF 配置与实时进度"></td>
+<td width="50%" valign="top"><img src="docs/images/cli-bench-summary.png" alt="och bench 结束：吞吐汇总表与 RX / TX 分组统计，零故障"></td>
+</tr>
+<tr>
+<td align="center"><sub>运行中：会话信息、RF 配置和实时进度</sub></td>
+<td align="center"><sub>结束时：吞吐汇总表与分组统计</sub></td>
+</tr>
+</table>
 
 <details>
 <summary><b>常用控制示例</b></summary>
@@ -160,40 +146,17 @@ och set rx.dc-correction on          # RX 直流跟踪
 och set clock.ref-source external    # 外部 10 MHz 参考（J3）
 och set rx.lo-source external        # 外部 LO（RX: J11，TX: J10，输入为 2 倍 RF 频率）
 och set pps.input-enabled on         # PPS 输入（J6）；无 10 MHz 时驯服晶振
-och get pps.status
 och get clock.vcxo-status            # 调谐模式与 CH32 环路状态
 
 och fir rx load filter.ftr && och fir rx on
-och get core.temperature
-och rssi on                          # RSSI 默认关闭，先开启
-och rssi --count 0 --interval 0.2   # RX1/RX2 RSSI（相对 dB）
-och set fan.enabled on
+och rssi on && och rssi --count 0 --interval 0.2   # RX1/RX2 RSSI（相对 dB）
+och firmware update OmniCore-Bridge-1.0.1.ocfw      # 通过 USB 升级桥接固件，约 5 秒
 ```
-
-全部命令、范围与单位见 `och commands --json` 与 [命令目录](docs/zh-CN/commands.md)。
 
 </details>
 
-### 终端输出
-
-交互终端中按“标题 → 分组 → 字段”分层显示，带颜色、状态标签和实时进度条；重定向到文件时自动切换为纯 ASCII（≤ 78 列），`--json` 则只输出 JSON。事件每条一行，带硬件时间的事件附样点时间；结束时按方向给出吞吐与故障计数：
-
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/images/cli-bench-running.png" alt="och bench 2T2R 12bit 44 MSPS 运行中：会话、RF 配置与实时进度"></td>
-<td width="50%" valign="top"><img src="docs/images/cli-bench-summary.png" alt="och bench 结束：吞吐汇总表与 RX / TX 分组统计，零故障"></td>
-</tr>
-<tr>
-<td align="center"><sub>运行中：会话信息、RF 配置和实时进度</sub></td>
-<td align="center"><sub>结束时：吞吐汇总表与分组统计</sub></td>
-</tr>
-</table>
-
-以上为实机截图：Windows Terminal，OCH 0.6.2，固件 v2026.11.07.1，2T2R 12bit 44 MSPS（吞吐与 0.7.1 相同）。
-
-退出码：`0` 完成 · `1` 设备/传输错误 · `2` 参数错误 · `3` `bench --fail-fast` 提前结束 · `130` Ctrl+C 中断。性能是否达标请检查 JSON 的 `stability.pass`，而非仅看退出码。
-
-### IQ 文件格式
+<details>
+<summary><b>IQ 文件格式与退出码</b></summary>
 
 | 格式 | 每通道每样本 | 说明 |
 |---|---:|---|
@@ -202,15 +165,15 @@ och set fan.enabled on
 | `fc32` | 8 字节 | float32 I/Q，归一化到 ±1 |
 | `sc8` | 2 字节 | int8 I/Q，需要 `--iq-bits 8` |
 
-双通道按 `I1,Q1,I2,Q2` 交织，文件无容器头。采集时旁边生成 `.metadata.jsonl`，记录配置、每个 epoch 的文件位置、首样点硬件时间（`time_ticks`）、精确丢样数与最终统计——**溢出前后的数据不能当作连续采样拼接**，但可按 `time_ticks` 放回同一时间轴。
+双通道按 `I1,Q1,I2,Q2` 交织，文件无容器头。采集时旁边生成 `.metadata.jsonl`，记录配置、每个 epoch 的文件位置与硬件时间（`time_ticks`）以及精确丢样数——**溢出前后的数据不能当作连续采样拼接**，但可按 `time_ticks` 放回同一时间轴。
 
-![RX 数据边界](docs/images/zh-CN/rx-boundaries.svg)
+退出码：`0` 完成 · `1` 设备/传输错误 · `2` 参数错误 · `3` `bench --fail-fast` 提前结束 · `130` Ctrl+C 中断。性能是否达标请看 JSON 的 `stability.pass`，而非仅看退出码。
 
-完整参数见 [命令行参考](docs/zh-CN/cli.md)。
+</details>
 
 ## 测试结果
 
-`och bench` 零错误的最高采样率（OCH 0.6.1，固件 v2026.11.07.1，Windows 11，USB 3.0；更高档位以 300 秒长测确认）：
+`och bench` 零错误的最高采样率（OCH 0.6.1，Windows 11，USB 3.0；较高档位以 300 秒长测确认）：
 
 | 配置 | 采样率 / 通道 | RX / TX MB/s |
 |---|---:|---:|
@@ -221,14 +184,11 @@ och set fan.enabled on
 | 2 RX + 2 TX · 12bit | 44 MSPS | 264.2 / 264.2 |
 | 2 RX + 2 TX · 8bit | 61.44 MSPS | 245.2 / 245.1 |
 
-上限来自 FPGA 与 CH32 之间约 533 MB/s 的 UHSIF 总线（RX + TX 共享）。USB 2.0 High-Speed 下的稳定档位为单通道 14 MSPS、2T2R 12bit 3.5 MSPS、2T2R 8bit 5 MSPS。完整数据、Linux 测量、测试条件与功能测试见 [测试结果](docs/zh-CN/benchmarks.md)。结果与主机 USB 控制器、端口和线材有关，换环境后用 `och bench --json` 复核 `stability.pass`。
+上限来自 FPGA 与 CH32 之间约 533 MB/s 的 UHSIF 总线（RX + TX 共享）。USB 2.0 High-Speed 下的稳定档位为单通道 14 MSPS、2T2R 12bit 3.5 MSPS、2T2R 8bit 5 MSPS。结果与主机 USB 控制器、端口和线材有关，见 [测试结果](docs/zh-CN/benchmarks.md)。
 
 ## C/C++ 开发
 
-| 头文件 | 说明 |
-|---|---|
-| `include/omnicore/och.h` | 纯 C ABI，不跨 DLL 传递 STL / 异常，便于 MSVC、MinGW、C#、Python、MATLAB MEX 调用 |
-| `include/omnicore/och.hpp` | 仅头文件的 C++17 RAII 包装 |
+`include/omnicore/och.h` 是纯 C ABI（不跨 DLL 传递 STL / 异常，便于 MSVC、MinGW、C#、Python、MATLAB MEX 调用）；`include/omnicore/och.hpp` 是仅头文件的 C++17 RAII 包装。
 
 ```cmake
 find_package(OmniCoreHost 0.8 CONFIG REQUIRED)
@@ -249,11 +209,8 @@ rx.start();
 // rx.recv(...) 或 och::rx_lease 零拷贝读取；元数据中的 epoch / flags 标记数据间断
 ```
 
-运行中改参由同进程管理线程发起，流句柄保持不变，RX 以新 epoch 标记间断。只改频率、增益或衰减时不暂停流，同频段单次切频约 4 ms（见 [快速调谐](docs/zh-CN/api.md#快速调谐)）：
-
-![运行中改参](docs/images/zh-CN/reconfigure.svg)
-
-### 硬件时间
+<details>
+<summary><b>硬件时间：PPS 对时、定时 RX 与定时 TX</b></summary>
 
 ![硬件时间：PPS 对时、定时 RX 与定时 TX](docs/images/zh-CN/timestamps.svg)
 
@@ -269,36 +226,32 @@ och_tx_metadata md = {sizeof md, OCH_TX_HAS_TIME | OCH_TX_START_OF_BURST | OCH_T
 och_send_burst(tx, samples, n, &md, &accepted, 1000);   // 在样点时间 T2 发射
 ```
 
-RX 元数据的 `time_ticks` 是每批第一个样点的时间；突发完成、迟到、欠流以带 `hw_time` 的事件上报。详见 [硬件时间戳](docs/zh-CN/timestamps.md)。
+</details>
 
-示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp) · [扫频瀑布图与实时演示界面](docs/zh-CN/sweep.md)。接口与生命周期详见 [API 参考](docs/zh-CN/api.md)。
+<details>
+<summary><b>架构</b></summary>
 
-从源码构建时示例默认一起编译（`-DOCH_BUILD_EXAMPLES=OFF` 可关闭），可执行文件在构建目录的 `examples/` 下（Windows 与 `omnicore.dll` 同目录）。已安装的 OCH 也可以单独编译示例：
+![OmniCore Host 架构](docs/images/zh-CN/architecture.svg)
 
-```bash
-cmake -S <安装目录>/examples -B build-examples -DCMAKE_PREFIX_PATH=<安装目录>
-cmake --build build-examples
-```
+</details>
+
+示例：[接收](examples/receive.cpp) · [发射](examples/transmit.cpp) · [运行中改参](examples/reconfigure.cpp) · [8bit 全双工](examples/duplex_iq8.cpp) · [扫频瀑布图与实时演示](docs/zh-CN/sweep.md)。另见 [API 参考](docs/zh-CN/api.md)、[架构与性能](docs/zh-CN/architecture.md) 与 [从源码构建](docs/zh-CN/development.md)。
 
 ## GNU Radio 与 SoapySDR
 
-`bindings/soapy/` 是 OmniCoreSDR 的 [SoapySDR](https://github.com/pothosware/SoapySDR) 插件，驱动名 `omnicore`。装好后，GNU Radio（gr-soapy）、SDR++、SDRangel 以及 SoapySDR 的 Python / C++ 接口都能直接使用这块板。插件只调用公开的 C 接口（`omnicore/och.h`），和 `och` 命令行用的是同一套库。
-
-插件需要和机器上的 SoapySDR 用同一版本、同一种编译器编译，所以只提供源码，各平台的发布包里都不带：
+`bindings/soapy/` 是驱动名为 `omnicore` 的 [SoapySDR](https://github.com/pothosware/SoapySDR) 插件，GNU Radio（gr-soapy）、SDR++、SDRangel 以及 SoapySDR 的 Python / C++ 接口都能直接使用这块板。插件要和本机的 SoapySDR 一起编译，所以只提供源码：
 
 ```bash
-# 先装 SoapySDR 开发包：Debian/Ubuntu 为 libsoapysdr-dev，macOS 为 brew install soapysdr
-cmake -S . -B build -DOCH_BUILD_SOAPY=ON
-cmake --build build -j
+cmake -S . -B build -DOCH_BUILD_SOAPY=ON && cmake --build build -j
 sudo cmake --install build --prefix /usr/local     # macOS（Homebrew）用 --prefix "$(brew --prefix)"
-SoapySDRUtil --find="driver=omnicore"              # 能列出设备即装好
+SoapySDRUtil --find="driver=omnicore"
 ```
 
-GNU Radio 用 Soapy Custom Source / Sink，Driver 填 `omnicore`；全双工时 source 和 sink 的 Device Arguments 要写相同的 `rx_mask`、`tx_mask`。示例流图在 `examples/soapy/`。已在 macOS 上实机验收（收发、全双工 2T2R、8bit 61.44 MSPS、GNU Radio 流图），Linux、Windows 只在 CI 中编译。设备参数、增益约定、定时收发、Windows 编译方法和排错见 [SoapySDR 插件](docs/zh-CN/soapy.md)。
+GNU Radio 全双工时，source 和 sink 要写相同的 `rx_mask`、`tx_mask`。已在 macOS 实机验收，Linux、Windows 只在 CI 中编译。见 [SoapySDR 插件](docs/zh-CN/soapy.md)。
 
 ## MATLAB
 
-`bindings/matlab/` 是 MATLAB 工具箱：MEX 网关 `omnicore_mex` 加 `+omnicore` 包，同样只调用公开的 C 接口。发布页的 `omnicore-matlab-<版本>-<平台>.zip` 解压即用（自带运行库）；Windows 安装包也可以勾选安装到 `<安装目录>\matlab`。
+`bindings/matlab/` 是支持 MATLAB R2018a+、不需要任何其他工具箱的工具箱：`omnicore.Device`、`RxStream` / `TxStream`，以及可用于 Simulink 的 `Receiver` / `Transmitter` System object。从发布页下载 `omnicore-matlab-<版本>-<平台>.zip`，加入路径即可：
 
 ```matlab
 addpath('<解压目录>/omnicore-matlab');
@@ -307,75 +260,20 @@ dev = omnicore.Device('SampleRate', 30.72e6, 'RxFrequency', 2.45e9);
 delete(dev)
 ```
 
-提供 `omnicore.Device`（射频参数、一次性采集、突发 / 定时 / 循环发射、硬件时间与 PPS、事件）、`RxStream` / `TxStream`（连续收发），以及 `omnicore.Receiver` / `omnicore.Transmitter` 两个 System object（可作为 Simulink 的 MATLAB System 模块）。从源码编译用 `-DOCH_BUILD_MATLAB=ON`，或者在 MATLAB 里运行 `build_omnicore_mex`。
+工具箱自带 MATLAB 帮助页面（`omnicore.doc`，英文，`doc/zh-CN/` 下有中文版）和完整示例：调频收音机、FM 自发自收、QPSK 视频传输、简易示波器，不接设备时可用 `'Simulate', true` 运行。见 [MATLAB 工具箱](docs/zh-CN/matlab.md)。
 
-工具箱自带 MATLAB 帮助格式的参考文档（英文，`doc/zh-CN/` 下另有中文版；`omnicore.doc` 打开，也出现在帮助浏览器的“补充软件”中），以及几个完整的应用示例：调频广播收音机 `fm_radio`、FM 自发自收 `fm_loopback`、QPSK 数字视频传输 `video_link`、简易示波器 `sdr_scope`；它们都可以用 `'Simulate', true` 在不接设备时运行。
+## 文档
 
-macOS（R2024b，Apple Silicon）上已做实机验收：收发、10 分钟帧式全双工、8bit 2T2R 61.44 MSPS、Simulink、内部 PPS 对时。Windows、Linux 由 CI 编译并做不接设备的测试。用法、参数和排错见 [MATLAB 工具箱](docs/zh-CN/matlab.md)。
+完整文档见 **<https://liren66.github.io/OmniCore-SDR-Host/zh-CN/>**（源文件在 [`docs/zh-CN/`](docs/zh-CN/)，英文版在 [`docs/`](docs/)）。
 
-## 从源码构建与打包
-
-需要 CMake 3.20+、Ninja 与 C++17 x64 工具链（Windows 使用 MSYS2 MinGW-w64，默认 `C:\msys64\mingw64\bin`）。
-
-```powershell
-# Windows：编译并安装到 build/stage
-powershell -File tools/build.ps1 -Configuration Release
-
-# 生成安装包 dist/OmniCoreHost-<版本>-win64-setup.exe 及 .sha256
-powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/stage
-```
-
-Linux 用 `bash tools/build-linux.sh`（安装到 `dist/OmniCoreHost-linux`），macOS 用 CMake + Ninja，依赖与步骤见 [Linux 与 macOS 安装](docs/zh-CN/install.md#从源码构建)。三个平台的发布包都由 `.github/workflows/release.yml` 生成。
-
-加 `-DOCH_BUILD_SOAPY=ON` 会同时编译 SoapySDR 插件（需要 SoapySDR 开发包，见上一节）。默认关闭，`tools/build.ps1`、`tools/build-linux.sh` 和安装包都不包含插件。
-
-加 `-DOCH_BUILD_MATLAB=ON` 会编译 MATLAB 工具箱（需要 MATLAB R2018a+），`--target omnicore_matlab_zip` 生成发布用的 zip。发布流水线（`.github/workflows/release.yml`）为三个平台各生成一个 zip，并把 Windows 版放进安装包的可选 MATLAB 任务。
-
-打包脚本会校验 stage 内容与版本号，加入驱动助手、libusbK 与许可证，生成 MSVC 导入库（需 VS Build Tools 的 `lib.exe`），并写入 `PAYLOAD_SHA256.txt`。Inno Setup 6.2.2 已随工程提供，详见 [安装包构建说明](packaging/windows/BUILD_INSTALLER.txt)。
-
-## 工程目录
-
-```text
-OmniCoreHost/
-├── include/omnicore/   公共 C ABI (och.h) 与 C++ 包装 (och.hpp)
-├── apps/
-│   └── och/            och 命令行
-├── src/
-│   ├── capi/           公共 C 接口入口（extern "C"，按模块分文件）
-│   ├── core/           设备、配置事务、流线程、射频与板控
-│   ├── dsp/            IQ 编解码
-│   ├── protocol/       16 KiB 成帧块解析与生成
-│   └── transport/      传输层：win/ libusbK（Windows）、posix/ libusb（Linux、macOS）、fake/ 离线测试
-├── bindings/
-│   ├── common/         各插件共用的映射、交织、RX 时间与 TX 突发逻辑及其离线测试
-│   ├── matlab/         MATLAB 工具箱：MEX 网关（mex/）、+omnicore 包、参考文档（doc/）、示例、测试与实机验收脚本
-│   └── soapy/          SoapySDR 插件（driver=omnicore）与实机验收脚本（hwtest/）
-├── examples/           C++ 示例、扫频瀑布图（sweep，含 Python 绘图与网页演示）、FTR 示例、GNU Radio 流图（soapy/）
-├── tests/              离线测试（成帧解析、FakeLink 传输、多板同步编排）与硬件时间戳板上测试
-├── docs/               使用与开发文档、插图
-├── cmake/              CMake 包配置模板
-├── tools/              构建脚本（含在 macOS / Linux 上检查 Windows 版能否编译的交叉编译脚本）、吞吐扫描（bench_sweep.py）
-├── packaging/
-│   ├── windows/        Inno 安装包脚本、MSVC 导入库生成、驱动助手源码（driver/）
-│   └── linux/          udev 规则
-└── third_party/        libusbK / libwdi 及其许可证、Inno Setup 编译器
-```
-
-## 文档索引
-
-| 使用 | 开发 | 专题 |
-|---|---|---|
-| [命令行参考](docs/zh-CN/cli.md) | [API 参考](docs/zh-CN/api.md) | [FIR 与时钟](docs/zh-CN/fir.md) |
-| [命令目录](docs/zh-CN/commands.md) | [架构与性能](docs/zh-CN/architecture.md) | [参考时钟与外部 LO](docs/zh-CN/reference-lo.md) |
-| [Windows 安装](packaging/windows/INSTALL_WINDOWS.zh-CN.txt) | [设备协议](docs/zh-CN/protocol.md) | [PPS 监控](docs/zh-CN/pps.md) |
-| [Linux 与 macOS 安装](docs/zh-CN/install.md) | [固件兼容性](docs/zh-CN/firmware-compatibility.md) | [板级控制](docs/zh-CN/board-control.md) |
-| [排错与能力边界](docs/zh-CN/troubleshooting.md) | [测试结果](docs/zh-CN/benchmarks.md) | [8bit USB IQ](docs/zh-CN/iq8.md) |
-| [桥接固件升级](docs/zh-CN/firmware-update.md) | [硬件时间戳](docs/zh-CN/timestamps.md) | [多板同步](docs/zh-CN/multi-board-sync.md) |
-| [SoapySDR 插件](docs/zh-CN/soapy.md) | [扫频瀑布图](docs/zh-CN/sweep.md) | |
-| [MATLAB 工具箱](docs/zh-CN/matlab.md) | [更新记录](CHANGELOG.md) | |
+| 入门 | 功能 | 集成 | 参考 |
+|---|---|---|---|
+| [安装](docs/zh-CN/install.md) | [硬件时间戳](docs/zh-CN/timestamps.md) | [C/C++ API](docs/zh-CN/api.md) | [命令目录](docs/zh-CN/commands.md) |
+| [命令行参考](docs/zh-CN/cli.md) | [多板同步](docs/zh-CN/multi-board-sync.md) | [SoapySDR 插件](docs/zh-CN/soapy.md) | [设备协议](docs/zh-CN/protocol.md) |
+| [排错](docs/zh-CN/troubleshooting.md) | [扫频瀑布图](docs/zh-CN/sweep.md) | [MATLAB 工具箱](docs/zh-CN/matlab.md) | [架构与性能](docs/zh-CN/architecture.md) |
+| [桥接固件升级](docs/zh-CN/firmware-update.md) | [8bit USB IQ](docs/zh-CN/iq8.md) · [FIR 与时钟](docs/zh-CN/fir.md) | [Windows 安装](packaging/windows/INSTALL_WINDOWS.zh-CN.txt) | [测试结果](docs/zh-CN/benchmarks.md) |
+| [固件兼容性](docs/zh-CN/firmware-compatibility.md) | [参考与外部 LO](docs/zh-CN/reference-lo.md) · [PPS](docs/zh-CN/pps.md) | [从源码构建](docs/zh-CN/development.md) | [板级控制](docs/zh-CN/board-control.md) · [更新记录](CHANGELOG.md) |
 
 ## 许可证
 
-Copyright (C) 2026 OmniCoreSDR contributors
-
-本工程源码采用 [GNU 通用公共许可证 第 3 版](LICENSE)（`SPDX-License-Identifier: GPL-3.0-or-later`）：你可以按自由软件基金会发布的 GPL 第 3 版，或（由你选择）任何更新的版本，重新分发和/或修改本程序。本程序按“原样”提供，不附带任何担保。分发副本或衍生作品时须使用相同许可证并提供对应源代码。提交到本项目的贡献同样按 GPL-3.0-or-later 授权。libusbK、libwdi 等第三方组件沿用各自许可证，见 `third_party/driver/NOTICES.txt`。
+Copyright (C) 2026 OmniCoreSDR contributors。本工程源码采用 [GNU 通用公共许可证第 3 版或更新版本](LICENSE)（`SPDX-License-Identifier: GPL-3.0-or-later`），提交到本项目的贡献同样按此许可证授权。本程序按“原样”提供，不附带任何担保。libusbK、libwdi 等第三方组件沿用各自许可证，见 `third_party/driver/NOTICES.txt`。
