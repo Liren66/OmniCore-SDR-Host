@@ -2,20 +2,20 @@
 
 ## 链接与 ABI
 
-公共 C 头文件为 omnicore/och.h；Windows 链接 omnicore.dll 的对应工具链导入库。omnicore/och.hpp 是调用方编译的 C++17 RAII 包装。发行 SDK 同时提供由 DLL 导出表生成的原生 MSVC omnicore.lib，以及 MinGW 的 libomnicore.dll.a；它们不能靠改扩展名互换。
+公共 C 头文件为 omnicore/och.h。Windows 链接 omnicore.dll 的对应工具链导入库；Linux 链接 libomnicore.so.1，macOS 链接 libomnicore.1.dylib（两者的 `och` 程序都用相对 RPATH 找到库）。omnicore/och.hpp 是调用方编译的 C++17 RAII 包装。发行 SDK 同时提供由 DLL 导出表生成的原生 MSVC omnicore.lib，以及 MinGW 的 libomnicore.dll.a；它们不能靠改扩展名互换。
 
 适配器项目可以通过安装包的 CMake 配置选取对应导入库：
 
 ~~~cmake
 cmake_minimum_required(VERSION 3.20)
 project(my_receiver LANGUAGES CXX)
-find_package(OmniCoreHost 0.3 CONFIG REQUIRED)
+find_package(OmniCoreHost 0.8 CONFIG REQUIRED)
 add_executable(my_receiver receive.cpp)
 target_compile_features(my_receiver PRIVATE cxx_std_17)
 target_link_libraries(my_receiver PRIVATE OmniCore::omnicore)
 ~~~
 
-配置时将 CMAKE_PREFIX_PATH 指向 OmniCore Host 安装目录。运行时让安装目录的 bin 在 PATH 中，或把匹配版本的 DLL 放到应用目录。实际 MinGW/MSVC 消费者构建验证范围以发行验证报告为准。
+配置时将 CMAKE_PREFIX_PATH 指向 OmniCore Host 安装目录。Windows 运行时让安装目录的 bin 在 PATH 中，或把匹配版本的 DLL 放到应用目录。发布流水线用安装包里的 MSVC 导入库编译 MATLAB MEX，这是目前实际验证过的 MSVC 用法。
 
 带 struct_size 的输出结构先清零并设为 sizeof(结构体)；配置/流参数优先调用 och_default_config、och_default_stream_args 初始化。ABI 版本为 OCH_ABI_VERSION，软件版本来自 och_version()。插件不要直接依赖内部结构。
 
@@ -66,13 +66,13 @@ TX 重配时丢弃旧排队数据并取消旧 USB 请求，避免把旧配置下
 - 成功后发出 OCH_EVENT_RECONFIGURED，消息为 `retune complete streams_continued=1 ...`。
 - 能力表（system_info?）在 open 时读取并缓存；外部 LO 选择也会缓存，直到 set_lo_source 或 raw 修改命令使它失效。
 
-实测（USB3，30.72 MSPS RX 流运行中）：同频段 1 MHz 步进约 11 ms，2400↔900 MHz 跨增益表约 47 ms，仅改 RX 增益约 7 ms，期间 RX 速率保持 30.71 MS/s。0.4.5 的同类调用约 275 ms。时间主要花在 115200 波特控制串口的往返上。
+实测（USB3，RX 流运行中，控制串口 3.125 MBd）：同频段切频约 4 ms，跨增益表切频约 25 ms（主要是 SPI 写增益表），期间 RX 不中断。时间主要花在控制串口往返和 AD9361 的 VCO 校准与锁定等待上；各命令的往返时间见 [固件兼容性](firmware-compatibility.md#rx-rssi-与控制串口波特率)，连续扫频的分项耗时见 [扫频示例](sweep.md#实测2026-11-14)。控制串口还是 115200 波特的旧固件上，同频段切频约 11 ms。
 
 OCH_EVENT_RECONFIGURED（新增值 6）报告成功重配的恢复方向、间断/丢弃及主机测得的耗时，失败通过 OCH_EVENT_TRANSPORT 报告。事件是控制操作的观察记录，IQ 边界以 RX 元数据为准。单通道 RX、零 IQ TX 和双向模式已完成实机改参恢复测试。其中耗时属于主机 API 和观察时间，不是硬件采样间断，也没有固定的毫秒级延迟保证。
 
 硬件变更或恢复失败时，双方流停止，设备配置缓存失效，不自动回滚并重新发射。应用应保留错误详情，停止并等待 IO 线程退出，销毁旧流，在确认设备状态后显式 configure 并重新创建/启动流；若 SDK 报告 rollback=failed / applied=unknown，需按 FIR 说明先完成 rf.reinit。参数校验失败或租借导致的 BUSY 不属于已执行硬件事务失败。
 
-这项能力不提供跨进程控制服务：另开一个 och.exe 不能修改正在接收的软件所持设备。原始 och_command 修改仍禁止在存在流对象时执行，不能用 raw 命令绕过协调接口。参见 [持续接收并改参示例](../examples/reconfigure.cpp)。ABI 仍为 1，已有公共结构布局不变；新语义需匹配 0.3 或更新 DLL，RX correction 新增函数须匹配含这些导出的 DLL。
+这项能力不提供跨进程控制服务：另开一个 och 进程不能修改正在接收的软件所持设备。原始 och_command 修改仍禁止在存在流对象时执行，不能用 raw 命令绕过协调接口。参见 [持续接收并改参示例](../examples/reconfigure.cpp)。ABI 仍为 1，已有公共结构布局不变；新语义需匹配 0.3 或更新 DLL，RX correction 新增函数须匹配含这些导出的 DLL。
 
 ## RX 直流与 IQ 校正
 

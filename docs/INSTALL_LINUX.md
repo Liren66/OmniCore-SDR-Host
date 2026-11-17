@@ -1,6 +1,6 @@
 # Linux 使用与构建
 
-原有 Windows libusbK 后端继续保留。Linux 版提供相同的 `och` 命令行、C ABI 1 和 C++ 包装，使用系统 libusb 1.0 异步传输。
+Linux 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，使用系统 libusb 1.0 异步传输。
 
 ## 已验证环境
 

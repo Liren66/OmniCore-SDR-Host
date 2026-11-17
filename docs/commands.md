@@ -82,7 +82,7 @@ TX1、TX2 各有两个 tone，全部 12 个属性都可 get/set。频率以整�
 
 ## 时钟、系统与 USB
 
-隔离版 0.4.0 新增 `och get usb.iq-bits` / `och set usb.iq-bits 8|12`，映射 `iq_format?` / `iq_format=8|12`。8bit 需要匹配 SDK/FPGA、RX/TX mask 都为 3 和 USB TX source；格式改变前双向全停。常规流用 `--iq-bits 8` 自动协调设置。详见 [8bit 扩展](iq8.md)。
+`och get usb.iq-bits` / `och set usb.iq-bits 8|12`，映射 `iq_format?` / `iq_format=8|12`。8bit 需要匹配 SDK/FPGA、RX/TX mask 都为 3 和 USB TX source；格式改变前双向全停。常规流用 `--iq-bits 8` 自动协调设置。详见 [8bit 扩展](iq8.md)。
 
 | 规范名称 | 操作 | 参数与含义 | SDK 原名 |
 |---|---|---|---|

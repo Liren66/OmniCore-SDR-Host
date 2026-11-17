@@ -1,6 +1,6 @@
 # 硬件时间戳与定时收发（OCH 0.6.0）
 
-需要 FPGA CH32H417_IP 1.3 和配套 SDK（`SDK_CMD_1.1`）。0.6.0 起成帧是唯一的 USB 传输格式：每个 16 KiB 块带 16 字节头和样点时间，不再有 16 KiB 递增起始头；`och_config.usb_framing` 被忽略。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`。
+需要 FPGA CH32H417_IP 1.3 和配套 SDK（`SDK_CMD_1.1` 及以上）。0.6.0 起成帧是唯一的 USB 传输格式：每个 16 KiB 块带 16 字节头和样点时间，不再有 16 KiB 递增起始头；`och_config.usb_framing` 被忽略。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`。
 
 时间单位是样点（tick）：1 tick = 1/采样率。修改采样率后时间作废，需要重新设置，同时会产生 `OCH_EVENT_TIME_INVALIDATED` 事件。
 
@@ -16,7 +16,7 @@ och_set_time(dev, 0, 1);                             // 下一个 PPS 沿把时�
 och_time_status t = {sizeof t}; och_get_time(dev, &t); // now / last_pps / pps_count / valid
 ```
 
-多台设备同步：共享 J3 的 10 MHz 和 J6 的 PPS，各台都执行 `och_set_time(dev, 0, 1)`。
+多台设备对时：用 `och sync` / `och_multi_sync()`，它负责参考源、锁定检查、AD9361 MCS，并在同一个沿上装载时间，见 [多板同步](multi-board-sync.md)。只需要粗略对齐时，也可以共享 J3 的 10 MHz 和 J6 的 PPS，各台都执行 `och_set_time(dev, 0, 1)`。
 
 ## RX
 
@@ -70,7 +70,7 @@ SoapySDR 插件把上面的能力对应到 Soapy 接口：`getHardwareTime` / `s
 ## 测试
 
 ```bash
-g++ -std=c++17 -I src tests/frame_parser_test.cpp src/protocol/frame.cpp && ./a.out
+ctest --test-dir <build>                 # 离线测试，含成帧解析 frame_parser
 g++ -std=c++17 -I include tests/hw_timestamp_test.cpp -L<build> -lomnicore -o hw_timestamp_test
 ```
 

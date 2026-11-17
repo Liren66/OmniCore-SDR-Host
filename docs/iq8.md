@@ -1,6 +1,6 @@
 # 2TX2RX 可选 signed8 USB IQ
 
-本功能随 OCH 0.4.0 发布。默认 12bit、原单/双通道模式、板控、RGB 15%/25% 兼容及 ABI 1 均保留。已完成下列 USB 持续传输、应用转换和控制恢复实测；存在启动恢复的项目与全程无错项目分别记录。8bit 需要匹配的 FPGA IP 1.1 / revision 10 与支持 iq_format 的 SDK。
+8bit USB IQ 自 OCH 0.4.0 起提供，默认仍为 12bit，ABI 1 不变。需要固件的 `system_info?` 同时报告 `iq_format=1` 与 `iq8_2t2r=1`；当前要求的 FPGA `CH32H417_IP` 1.3 已包含 8bit 通路。
 
 ## Wire 与数值
 

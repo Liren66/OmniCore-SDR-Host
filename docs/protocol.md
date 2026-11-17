@@ -20,7 +20,7 @@ RX 校正扩展要求 `system_info?` 含 `rx_correction=1`。`rx_dc_correction?`
 
 USB 请求完成边界不是文本行或 IQ 会话边界，一行可以跨请求，一次请求也可以带多行。EP83 信息的非实时限制见 [电源信息](cli.md#usb-c-电源信息)。
 
-隔离版 0.4.0 的 8bit 扩展使用 `iq_format?` / `iq_format=12|8`，能力为 `iq_format=1 iq8_2t2r=1`。默认 12bit，只有 RX/TX mask 均为 3 才能选择 8bit。按 I1,Q1,I2,Q2 顺序传输原 12bit 值的高 8 位，TX 恢复低 4 位零；每时间帧 4 字节。SDK 内部块可能包含两个时间帧，不能用内部块宽替代应用帧宽。格式切换要求双向全停，通常运行可分别启停。CH32 固件不改。详见 [8bit 协议与兼容](iq8.md)。
+8bit 扩展使用 `iq_format?` / `iq_format=12|8`，能力为 `iq_format=1 iq8_2t2r=1`。默认 12bit，只有 RX/TX mask 均为 3 才能选择 8bit。按 I1,Q1,I2,Q2 顺序传输原 12bit 值的高 8 位，TX 恢复低 4 位零；每时间帧 4 字节。SDK 内部块可能包含两个时间帧，不能用内部块宽替代应用帧宽。格式切换要求双向全停，通常运行可分别启停。CH32 固件不改。详见 [8bit 协议与兼容](iq8.md)。
 
 ## 命令封装 v1
 

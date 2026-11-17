@@ -52,7 +52,7 @@ RX 的 RECONFIGURED、START、DISCONTINUITY 标志意味着新数据段，下游
 
 持续 TX 的生产者应在重配 TIMEOUT 后继续 send。核心会在新配置和 4 块零 IQ 预填完成后提前放行生产者，再先恢复 RX、最后启动 TX。若上层一直等待 configure 返回才恢复供样，启动阶段仍可能耗尽预填；零 IQ 块不能代替持续生产者。
 
-另开 och.exe config/set 无法控制现有软件所持的设备：设备仍独占，本版没有跨进程控制服务。在应用进程内使用 typed API；och_command 写操作在有流时仍被拒绝。参见 [改参示例](../examples/reconfigure.cpp)。
+另开 och config/set 无法控制现有软件所持的设备：设备仍独占，本版没有跨进程控制服务。在应用进程内使用 typed API；och_command 写操作在有流时仍被拒绝。参见 [改参示例](../examples/reconfigure.cpp)。
 
 ## FIR 文件或时钟被拒绝
 

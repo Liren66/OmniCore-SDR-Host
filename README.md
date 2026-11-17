@@ -247,7 +247,7 @@ och bench --rx --tx --iq-bits 8 --channels 1,2 --sample-rate 61.44M \
 | 2 RX + 2 TX · 12bit | **44 MSPS** | 300 秒 × 2 | 264.2 / 264.2 | 264.0 | 0 |
 | 2 RX + 2 TX · 8bit | 61.44 MSPS | 60 秒 | 245.2 / 245.1 | 245.8 | 0 |
 
-上限来自 FPGA 与 CH32 之间的 UHSIF 总线：RX 与 TX 共享约 532 MB/s，总流量 522–528 MB/s 时稳定。高一档的结果：2T2R 12bit 44.5 MSPS、1T2R 59 MSPS 出现 RX 溢出 / TX 欠流；2T1R 58.5 MSPS 10 秒通过，但 300 秒内有 1 次 RX 溢出和 3 次 TX 欠流。0.6.0 发布时的档位搜索（61.44 / 56 / 50 / 46 / 42）跳过了这些中间速率，因此当时记为 56 与 42 MSPS。块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响。`tools/bench_sweep.py` 已改为细扫档位，可复现这张表。
+上限来自 FPGA 与 CH32 之间的 UHSIF 总线：RX 与 TX 共享约 533 MB/s，总流量 522–528 MB/s 时稳定。高一档的结果：2T2R 12bit 44.5 MSPS、1T2R 59 MSPS 出现 RX 溢出 / TX 欠流；2T1R 58.5 MSPS 10 秒通过，但 300 秒内有 1 次 RX 溢出和 3 次 TX 欠流。0.6.0 发布时的档位搜索（61.44 / 56 / 50 / 46 / 42）跳过了这些中间速率，因此当时记为 56 与 42 MSPS。块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响。`tools/bench_sweep.py` 已改为细扫档位，可复现这张表。
 
 下面各节为 0.4.x（起始头模式、固件 `SDK_CMD_1.0_20261024_IQ8`）的历史测量，Linux 与 USB2 尚未在 0.6.x 成帧传输下复测。
 
@@ -338,7 +338,7 @@ USB2 测试的 TX 为 1 MHz 正弦、幅度 0.25、衰减 60 dB。启动后 1 �
 | `include/omnicore/och.hpp` | 仅头文件的 C++17 RAII 包装 |
 
 ```cmake
-find_package(OmniCoreHost 0.6 CONFIG REQUIRED)
+find_package(OmniCoreHost 0.8 CONFIG REQUIRED)
 target_link_libraries(myapp PRIVATE OmniCore::omnicore)
 ```
 
@@ -356,7 +356,7 @@ rx.start();
 // rx.recv(...) 或 och::rx_lease 零拷贝读取；元数据中的 epoch / flags 标记数据间断
 ```
 
-运行中改参由同进程管理线程发起，流句柄保持不变，RX 以新 epoch 标记间断。只改频率、增益或衰减时不暂停流，单次切频约 11 ms（见 [快速调谐](docs/api.md#快速调谐046)）：
+运行中改参由同进程管理线程发起，流句柄保持不变，RX 以新 epoch 标记间断。只改频率、增益或衰减时不暂停流，同频段单次切频约 4 ms（见 [快速调谐](docs/api.md#快速调谐046)）：
 
 ![运行中改参](docs/images/reconfigure.svg)
 

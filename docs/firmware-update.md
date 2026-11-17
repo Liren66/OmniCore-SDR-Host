@@ -38,7 +38,7 @@ Bootloader 优先使用 USB3，失败时退回 USB2。若 10 秒内没有主机�
 ```c
 och_firmware_info fw = { sizeof fw };
 och_firmware_query(NULL, &fw);                       /* 不打开设备，不访问 SDK */
-och_firmware_update(NULL, "OmniCore-Bridge-1.0.0.ocfw", progress_cb, user);
+och_firmware_update(NULL, "OmniCore-Bridge-1.0.1.ocfw", progress_cb, user);
 ```
 
 `och_firmware_read_image` 校验文件，`och_firmware_enter_bootloader` / `och_firmware_start_app` 切换模式，

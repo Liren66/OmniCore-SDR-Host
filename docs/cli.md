@@ -38,9 +38,9 @@
     USB link                  5.0 Gbit/s  SuperSpeed
 
   Firmware ───────────────────────────────────────────────────────────────────
-    Zynq SDK                  SDK_CMD_1.1_20261107_EVTCOUNT
+    Zynq SDK                  SDK_CMD_1.2_20261107_SYNC
     FPGA IP                   CH32H417_IP 1.3  (framed 16 KiB, hardware time)
-    CH32 bridge               1.0.0  (bootloader 1.0.0)
+    CH32 bridge               1.0.1  (bootloader 1.0.0)
 
   RF ─────────────────────────────────────────────────────────────────────────
     Channels                  2 RX / 2 TX
@@ -53,7 +53,7 @@
     Now                       39,462,912,000  (1284.6 s at 30.720 MSPS)
 
   Power ──────────────────────────────────────────────────────────────────────
-    USB-C at startup          3000 mA available
+    USB-C                     3000 mA available
 
   · Link speed is negotiated; RX and TX share one USB link and sample clock.
 ~~~
@@ -162,7 +162,7 @@ FIR 与 clock 的文件格式、事务边界及实际时钟限制见 [FIR 与时
 
 参考与 LO source 接受 `internal/external` 或 `0/1`，默认内部。外部 LO 的名义 RF 范围为 70 MHz..4 GHz，物理输入为其两倍；外部状态下频率命令只声明频率，不能调节信号源。返回内部恢复此前内部 PLL 频率。ADF4002 MUXOUT 只接 D5，软件无法回读锁定或 LED 亮灭，`locked=-1` / `led_on=-1` 必须保持未知。通信自检的 `gpio_verified=1` 仅证明 GPIO pad 回读，需观察 D5 三次闪烁补充芯片响应证据。详见 [参考与外部 LO](reference-lo.md)。
 
-find 只枚举 Windows 中匹配的设备，不打开 USB 管道探测链路速度。未查询的速度在默认文本中显示 unknown；为保持兼容，JSON 的 usb_speed_mbps 仍为 0，含义同样是未查询。需要确认实际链路时运行 info；不要把枚举阶段的 0 当成传输速度或断线证据。
+find 只枚举系统中匹配的设备（Windows、Linux、macOS 相同），不打开 USB 管道探测链路速度。未查询的速度在默认文本中显示 unknown；为保持兼容，JSON 的 usb_speed_mbps 仍为 0，含义同样是未查询。需要确认实际链路时运行 info；不要把枚举阶段的 0 当成传输速度或断线证据。
 
 ## USB-C 电源信息
 
