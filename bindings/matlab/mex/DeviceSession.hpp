@@ -1,6 +1,7 @@
-// One open OmniCoreSDR (och_device) and its cached configuration (MEX_PLAN.md 3.1, 6.1), plus
-// the device event thread (5.4): it polls och_poll_event, passes TX events to tx_events() for
-// the TX session and keeps the latest device events for Device.events (3.5). The thread calls
+// One open OmniCoreSDR (och_device) and its cached configuration, plus the device event thread.
+// och_poll_event is one device-wide queue and reading consumes an event, so this single thread
+// polls it, passes TX events to tx_events() for the TX session and keeps the latest device events
+// for Device.events. The thread calls
 // only och_* functions, never the MATLAB API.
 #pragma once
 #include "ConfigRequest.hpp"

@@ -1,5 +1,6 @@
-// TX events from the device event thread to the binding calls (MEX_PLAN.md 5.4, PYTHON_PLAN.md
-// 5.3). The event thread pushes; transmit / the TX stream status call drain. Pure C++ (no MATLAB
+// TX events from the device event thread to the binding calls. och_poll_event is one device-wide
+// queue and reading consumes an event, so a single thread per device drains it and hands the TX
+// events on: the event thread pushes; transmit / the TX stream status call drain. Pure C++ (no MATLAB
 // or Python), tested offline in tests/tx_events_test.cpp.
 //
 // The core emits TX_STARVED whenever its host TX queue runs empty with no USB transfer pending,

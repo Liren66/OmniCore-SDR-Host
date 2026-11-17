@@ -1,5 +1,5 @@
 classdef (TestTags = {'Hardware'}) RxHardwareTest < matlab.unittest.TestCase
-    %RXHARDWARETEST M2 checks on a connected OmniCoreSDR: receive and RxStream (MEX_PLAN.md 8).
+    %RXHARDWARETEST RX checks on a connected OmniCoreSDR: receive and RxStream.
     %   No RF connection is needed. Skipped when no device is connected. Run with:
     %       results = runtests('RxHardwareTest')
     %   OMNICORE_TEST_SERIAL selects a device when several are connected. The long acceptance

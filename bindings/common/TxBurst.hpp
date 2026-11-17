@@ -1,4 +1,5 @@
-// TX burst bookkeeping for the bindings' write calls (SoapySDR writeStream: SOAPY_PLAN.md 4.3).
+// TX burst bookkeeping for the bindings' write calls (SoapySDR writeStream, MATLAB TxStream write):
+// burst start / end flags and how much is queued, which decides when the delayed och_start may run.
 // Pure logic on och flag values; tested offline in tests/interleave_test.cpp.
 #pragma once
 #include <cstddef>

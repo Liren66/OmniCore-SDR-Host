@@ -1,4 +1,4 @@
-// Errors and warnings of the MEX gateway (MEX_PLAN.md 2.2).
+// Errors and warnings of the MEX gateway (identifiers omnicore:<reason>, see docs/matlab.md).
 //
 // mexErrMsgIdAndTxt and mexWarnMsgIdAndTxt (when the user turned that warning into an error)
 // longjmp out of the MEX function and skip C++ destructors. So the gateway never calls them while

@@ -1,4 +1,4 @@
-// MATLAB TX input -> interleaved och samples (MEX_PLAN.md 5.2). Pure C++ on raw pointers, tested
+// MATLAB TX input -> interleaved och samples. Pure C++ on raw pointers, tested
 // offline in tests/tx_convert_test.cpp.
 //
 // The input is an N x channels array, column-major; complex data is interleaved (re, im) as in

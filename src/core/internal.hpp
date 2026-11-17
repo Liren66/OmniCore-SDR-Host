@@ -387,7 +387,10 @@ struct och::core::Stream {
     // Exceptions: retuned is set by control (running retune) and consumed by the worker;
     // epoch_base and dropped_pending are also used by control while the worker is stopped;
     // epoch is read by the control thread in timebase.cpp without synchronisation, a known
-    // race (see REFACTOR_PLAN.md reading notes).
+    // race: timed_event() reads d.rx->rx_state.epoch, a plain uint64_t that rx_frame() writes on
+    // the worker thread, and reads d.rx without state_mutex, so a concurrent och_destroy_stream
+    // could in theory free the stream under it. Still to fix (e.g. an atomic epoch, and syncing
+    // with the control thread before a stream is destroyed); the value only labels events.
     struct RxState {
         explicit RxState(size_t frame_bytes) : fparser(frame_bytes) {}
         // Framed transport: 16-byte header per 16 KiB block (the only transport).

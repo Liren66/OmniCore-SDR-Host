@@ -1,8 +1,8 @@
-// Handle table (MEX_PLAN.md 6.1, 6.2). MATLAB holds uint64 ids, never pointers: an unknown or
+// Handle table. MATLAB holds uint64 ids, never pointers: an unknown or
 // stale id is an error, not a crash. Ids are never reused within a MATLAB session.
 //
 // One DeviceSession per serial: opening an already open device returns the same id and counts a
-// reference, so several MATLAB objects (a Receiver and a Transmitter, M4) share one och_device
+// reference, so several MATLAB objects (a Receiver and a Transmitter for full duplex) share one och_device
 // instead of colliding on its exclusive lock. The session closes when the last reference goes.
 //
 // Streams (RxStream, TxStream) have ids of their own and belong to a device session: when the session

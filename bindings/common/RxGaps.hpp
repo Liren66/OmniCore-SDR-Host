@@ -1,6 +1,6 @@
 // What one RX call (MATLAB receive / RxStream.read, Python receive / read) reports next to its
-// samples: the time of the first sample and where samples were lost (MEX_PLAN.md 3.2 meta,
-// PYTHON_PLAN.md 3.2). Pure logic on och_metadata values, tested offline in
+// samples: the time of the first sample and where samples were lost (MATLAB's `meta` struct:
+// Time, TimeTicks, Overflow, Gaps, Late, Reconfigured). Pure logic on och_metadata values, tested offline in
 // tests/rx_gaps_test.cpp.
 //
 // Unlike the Soapy plugin, nothing is held back: a call returns every sample it received in one

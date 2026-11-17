@@ -1,4 +1,4 @@
-"""S2 hardware acceptance for the OmniCore SoapySDR module (RX only). Needs one device.
+"""Hardware acceptance for the OmniCore SoapySDR module (RX only). Needs one device.
 
     SOAPY_SDR_PLUGIN_PATH=<build>/bindings/soapy python3 bindings/soapy/hwtest/rx_accept.py
 """

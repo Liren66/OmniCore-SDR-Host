@@ -1,5 +1,5 @@
 function m3_accept(varargin)
-%M3_ACCEPT M3 acceptance runs on a connected OmniCoreSDR (MEX_PLAN.md 8, M3).
+%M3_ACCEPT Long TX acceptance runs (transmitRepeat, timed bursts) on a connected OmniCoreSDR.
 %   m3_accept() runs the checks that need no RF connection; m3_accept(Name, Value) with
 %     'Serial'    device serial ('' = the only one)
 %     'Minutes'   length of the repeat run, default 10
@@ -8,7 +8,7 @@ function m3_accept(varargin)
 %   Needs the staged toolbox folder (and, for 'Loopback', bindings/matlab/examples) on the path. Prints one line per check and errors on the
 %   first failure.
 %     1. transmitRepeat of a tone for 'Minutes': no underflow. 2R RX reads alongside; its
-%        overflows are listed for information (full duplex for 10 minutes is the M4 check)
+%        overflows are listed for information (the 10-minute full-duplex run is in m4_accept)
 %     2. 20 timed bursts 0.1 s apart: every acknowledgement at start + N (hardware time)
 %     3. (Loopback) timed TX burst + timed RX: the burst appears at the same sample every time
 

@@ -20,7 +20,9 @@ namespace omnicore_bindings {
 
     // RX: integer dB. The core accepts -3..76, but the AD9361 gain table caps it by RX LO band;
     // a rejected gain makes the core stop every stream, so the module never sends one.
-    // Limits measured on hardware (SOAPY_PLAN.md 8.4).
+    // Limits measured on hardware (2026-11-12, RX stream idle, every value configured in turn):
+    // 73 dB up to 1300 MHz, 71 dB from 1310 to 4000 MHz, 62 dB from 4010 MHz; -3 dB works in every
+    // band. A GNU Radio slider at 72 dB and 2.45 GHz stopped all streams before this cap existed.
     constexpr double rx_gain_min = -3, rx_gain_step = 1;
     inline double rx_gain_max(double rx_lo_hz) {
         return rx_lo_hz <= 1300e6 ? 73 : rx_lo_hz <= 4000e6 ? 71 : 62;

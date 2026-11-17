@@ -1,4 +1,4 @@
-"""S4 hardware acceptance: 2T2R full duplex through gr-soapy, 12-bit and 8-bit. Needs one device.
+"""Hardware acceptance: 2T2R full duplex through gr-soapy, 12-bit and 8-bit. Needs one device.
 
     SOAPY_SDR_PLUGIN_PATH=<build>/bindings/soapy python3 bindings/soapy/hwtest/duplex_accept.py [--cable]
 
@@ -74,7 +74,9 @@ class Duplex(gr.top_block):
         self.src = soapy.source("driver=omnicore", "fc32", 2, dev_args, "", [""] * 2, [""] * 2)
         self.snk = soapy.sink("driver=omnicore", "fc32", 2, dev_args, "", [""] * 2, [""] * 2)
         for ch in range(2):
-            # The calls GRC always makes (SOAPY_PLAN.md 9.2).
+            # The calls GRC-generated code always makes: bandwidth 0 must mean "no change" and
+            # disabling AGC / DC / IQ correction must be accepted; otherwise a GRC flow graph sets
+            # the bandwidth to 200 kHz or fails to start.
             for b in (self.src, self.snk):
                 b.set_sample_rate(ch, rate)
                 b.set_bandwidth(ch, 0)
@@ -172,7 +174,7 @@ def run_config(label, dev_args, rate):
 
     # 10 s with a TX LO change and back. The core pauses the whole transport for it (about 30 ms), so RX
     # loses samples (usually a ~23 ms gap, sometimes a second ~165 ms one; more at the 8-bit USB limit); each comes back as an OVERFLOW with a fresh rx_time tag. TX must keep
-    # its rate without write timeouts (SOAPY_PLAN.md 8.5).
+    # its rate without write timeouts (writeStream retries until its timeout really passed).
     def tx_retune():
         tb.snk.set_frequency(0, FREQ - 10e6)
         time.sleep(0.5)

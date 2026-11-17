@@ -1,4 +1,4 @@
-// TX for MATLAB (MEX_PLAN.md 3.2, 3.3, 5.2, 5.3): one-shot transmit, the TxStream writes, and
+// TX for MATLAB: one-shot transmit, the TxStream writes, and
 // repeated transmission on a background thread.
 //
 // The och stream is created by the first write after construction or stop(), with the sample

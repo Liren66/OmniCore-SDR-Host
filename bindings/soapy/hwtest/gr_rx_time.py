@@ -1,5 +1,7 @@
 """gr-soapy source: prints rx_time / rx_rate / rx_freq tags at start, after a retune and after a
-sample-rate change (SOAPY_PLAN.md 4.2). Needs one device and GNU Radio 3.10+.
+sample-rate change. gr-soapy tags only at start, after set_frequency / set_sample_rate /
+set_hardware_time and after an OVERFLOW return, so these are the moments to check. Needs one device
+and GNU Radio 3.10+.
 
     SOAPY_SDR_PLUGIN_PATH=<build>/bindings/soapy python3 bindings/soapy/hwtest/gr_rx_time.py
 """

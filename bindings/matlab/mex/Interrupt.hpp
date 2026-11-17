@@ -1,7 +1,7 @@
-// Ctrl+C inside long MEX calls (MEX_PLAN.md 5.5).
+// Ctrl+C inside long MEX calls.
 //
 // MATLAB handles Ctrl+C only between MEX calls, so a receive of many seconds cannot be stopped.
-// With OMNICORE_MEX_CTRL_C (CMake OCH_MATLAB_CTRL_C, off by default; MEX_PLAN.md 10.2) the waits
+// With OMNICORE_MEX_CTRL_C (CMake OCH_MATLAB_CTRL_C, off by default for the reason below) the waits
 // check MATLAB's interrupt flag through utIsInterruptPending: undocumented, exported by libut
 // unchanged for many releases, but not guaranteed. The call then ends with omnicore:Interrupted;
 // the RX / TX streams it used are stopped as usual. Without it, waits still come in slices of at

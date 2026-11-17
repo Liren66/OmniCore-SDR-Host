@@ -1,5 +1,5 @@
 function m5_accept(varargin)
-%M5_ACCEPT M5 acceptance runs on a connected OmniCoreSDR (MEX_PLAN.md 8, M5).
+%M5_ACCEPT Time, PPS and clock-source acceptance runs on a connected OmniCoreSDR.
 %   m5_accept() uses the board's internal PPS. m5_accept('External', true) needs a 10 MHz
 %   reference and a PPS on the board's inputs and uses them instead. 'Serial' selects a device.
 %   Needs the staged toolbox folder on the path. Errors on the first failure.

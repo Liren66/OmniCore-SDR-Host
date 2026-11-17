@@ -1,4 +1,5 @@
-// RF parameters of a binding (MEX_PLAN.md 3.1, PYTHON_PLAN.md 3.1) -> one och_config. Pure logic
+// RF parameters of a binding (MATLAB Device properties / configure, Python keyword arguments) ->
+// one och_config. Pure logic
 // without MATLAB, Python or a device, tested offline in tests/config_request_test.cpp and, with
 // MATLAB's names, bindings/matlab/tests/config_request_test.cpp.
 //

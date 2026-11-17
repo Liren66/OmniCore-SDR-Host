@@ -1,4 +1,4 @@
-// MEX gateway for OmniCoreSDR (MEX_PLAN.md). Built only on the public C API
+// MEX gateway for OmniCoreSDR (user documentation: docs/matlab.md). Built only on the public C API
 // (include/omnicore/och.h) with the R2018a interleaved-complex MEX API.
 //
 //   omnicore_mex(command, args...)

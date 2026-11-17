@@ -1,6 +1,6 @@
 classdef (TestTags = {'Hardware'}) TxHardwareTest < matlab.unittest.TestCase
-    %TXHARDWARETEST M3 checks on a connected OmniCoreSDR: transmit, transmitRepeat, TxStream, timed
-    %   RX and TX (MEX_PLAN.md 8). No RF connection is needed (the TX output is not checked; use a
+    %TXHARDWARETEST TX checks on a connected OmniCoreSDR: transmit, transmitRepeat, TxStream, timed
+    %   RX and TX. No RF connection is needed (the TX output is not checked; use a
     %   50 ohm load or an antenna, at the default low TxGain). Skipped when no device is connected.
     %       results = runtests('TxHardwareTest')
     %   The 10-minute repeat run is in hwtest/m3_accept.m.

@@ -40,7 +40,8 @@ OmniCoreDevice::OmniCoreDevice(const SoapySDR::Kwargs &args) {
         config_ = och_struct<och_config>();
         och_default_config(&config_);
         // rx_mask / tx_mask: preset both directions so gr-soapy full duplex can start its
-        // second block while the first one streams (SOAPY_PLAN.md 3.4).
+        // second block while the first one streams: GNU Radio starts source and sink one after the
+        // other, and the core changes a channel mask only while no och_stream exists.
         config_.rx_mask = parse_mask(args, "rx_mask", config_.rx_mask);
         config_.tx_mask = parse_mask(args, "tx_mask", config_.tx_mask);
         const auto iq_bits = args.find("iq_bits");

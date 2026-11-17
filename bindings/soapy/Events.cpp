@@ -1,4 +1,6 @@
-// Device event thread: drains och_poll_event and logs each event (SOAPY_PLAN.md 4.5).
+// Device event thread: och_poll_event is one device-wide queue and reading consumes an event, so
+// this thread drains it (100 ms polls), queues TX events for readStreamStatus and logs every event.
+// RX_GAP and HOST_OVERFLOW need nothing more: readStream already reports them from the metadata.
 #include "OmniCoreDevice.hpp"
 #include <SoapySDR/Logger.hpp>
 #include <chrono>
