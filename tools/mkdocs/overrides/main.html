@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{#-
+  Chinese pages search their own index (zh-CN/search/search_index.json, split out by
+  tools/mkdocs/hooks.py). Material loads the index and resolves result links from the "base" in
+  #__config, so point it at the zh-CN/ folder before the bundle reads it. Theme preferences use a
+  separate scope (__md_scope) and are unaffected.
+-#}
+{% block config %}
+  {{ super() }}
+  {% if config.theme.language == "zh-CN" %}
+    <script>
+      (function () {
+        var el = document.getElementById("__config");
+        var cfg = JSON.parse(el.textContent);
+        cfg.base = cfg.base + "/zh-CN/";  // trailing slash: Material resolves URLs against it
+        el.textContent = JSON.stringify(cfg);
+      })();
+    </script>
+  {% endif %}
+{% endblock %}
