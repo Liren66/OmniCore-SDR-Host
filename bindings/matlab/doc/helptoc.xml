@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <toc version="2.0">
   <tocitem target="index.html">OmniCoreSDR for MATLAB
-    <tocitem target="getting_started.html">入门</tocitem>
-    <tocitem target="examples.html">示例</tocitem>
-    <tocitem target="functions.html">函数和类
+    <tocitem target="getting_started.html">Getting Started</tocitem>
+    <tocitem target="examples.html">Examples</tocitem>
+    <tocitem target="functions.html">Functions and Classes
       <tocitem target="omnicore.Device.html">omnicore.Device
         <tocitem target="omnicore.Device.configure.html">configure</tocitem>
         <tocitem target="omnicore.Device.receive.html">receive</tocitem>
@@ -20,10 +20,10 @@
       <tocitem target="omnicore.version.html">omnicore.version</tocitem>
       <tocitem target="omnicore.doc.html">omnicore.doc</tocitem>
     </tocitem>
-    <tocitem target="data_formats.html">样点格式与缩放</tocitem>
-    <tocitem target="streaming.html">流、全双工与丢样</tocitem>
-    <tocitem target="time_pps.html">硬件时间与 PPS</tocitem>
+    <tocitem target="data_formats.html">Sample Formats and Scaling</tocitem>
+    <tocitem target="streaming.html">Streams, Full Duplex, and Dropped Samples</tocitem>
+    <tocitem target="time_pps.html">Hardware Time and PPS</tocitem>
     <tocitem target="simulink.html">Simulink</tocitem>
-    <tocitem target="errors.html">错误与警告</tocitem>
+    <tocitem target="errors.html">Errors and Warnings</tocitem>
   </tocitem>
 </toc>

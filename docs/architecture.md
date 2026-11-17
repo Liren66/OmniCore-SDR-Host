@@ -1,107 +1,109 @@
-# 架构与性能设计
+# Architecture and Performance Design
 
-## 分层
+## Layers
 
-![OmniCore Host 架构](images/architecture.svg)
+![OmniCore Host architecture](images/architecture.svg)
 
 ~~~text
-应用层：OnAir（原生接入）/ MATLAB / GNU Radio（SoapySDR）/ 其他程序
+Applications: OnAir (native) / MATLAB / GNU Radio (SoapySDR) / other programs
                               │
-                  C ABI：omnicore/och.h
-                  C++：omnicore/och.hpp
+                  C ABI: omnicore/och.h
+                  C++:   omnicore/och.hpp
                               │
-       Device 控制 / 协调重配置 / Stream 生命周期 / Event 与 Metadata
+   Device control / coordinated reconfiguration / Stream lifetime / Events and metadata
                 ┌─────────────┴──────────────┐
-           RX 数据通路                    TX 数据通路
-   USB完成 → 块头解析 → 有界环形队列  有界环形队列 → 成帧 → USB并行OUT
+          RX data path                   TX data path
+ USB completion → header parse →    bounded ring queue → framing →
+     bounded ring queue                 parallel USB OUT
               ↓                           ↑
-      当前wire租借 或应用格式转换     应用格式转当前wire
+   lease of current wire format   application format → current wire
+   or application format conversion
                 └─────────────┬──────────────┘
-     libusbK 后端（Windows）/ libusb 后端（Linux、macOS）
+     libusbK backend (Windows) / libusb backend (Linux, macOS)
                               │
              CH32H417 USB 3.0/2.0 ↔ FPGA ↔ AD9361
-                         ZYNQ 控制接口
+                      ZYNQ control interface
 ~~~
 
-CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux / macOS 共用的 libusb 1.0。运行中改参的生命周期（下文“设备协调重配置”）就是为持续收样的应用设计的。[OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) 是 OnAir 的 fork，直接调用 C ABI 原生接入，支持 RX、TX 与全双工，单独发布，不在本仓库中。核心库本身不依赖 SoapySDR，插件是可选的单独模块。
+The CLI and application adapters call the same public interface. The SoapySDR plugin (`bindings/soapy/`, see [SoapySDR Plugin](soapy.md)) and the MATLAB toolbox (`bindings/matlab/`, see [MATLAB Toolbox](matlab.md)) are such adapters: they only use the public C interface, enforced by the `bindings_use_public_api` test, and share the mapping and streaming logic in `bindings/common/`. The public API does not expose libusbK handles, Windows OVERLAPPED, or FPGA registers, leaving room to replace the backend in the future. The current backends are Windows libusbK and libusb 1.0 shared by Linux / macOS. The runtime reconfiguration lifecycle ("Device-coordinated reconfiguration" below) is designed for applications that receive samples continuously. [OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) is a fork of OnAir that calls the C ABI directly for native support, including RX, TX, and full duplex; it is released separately and is not in this repository. The core library itself does not depend on SoapySDR; the plugin is an optional separate module.
 
-控制面逐条发送 SDK 命令并分离异步 EVT；数据面使用独立的 RX/TX USB 请求队列和生产者/消费者。一个 RX 流只能有一个应用消费者，一个 TX 流只能有一个应用生产者。RX 与 TX 可以并发。设备配置、打开、关闭、创建/销毁流应由应用管理线程串行执行。
+The control plane sends SDK commands one at a time and separates asynchronous EVTs; the data plane uses independent RX/TX USB request queues and producers/consumers. An RX stream can have only one application consumer, and a TX stream only one application producer. RX and TX can run concurrently. Device configuration, open, close, and creating/destroying streams should be done serially from an application management thread.
 
-AD9361 硬件 FIR 和时钟链也属于控制面。CLI 在打开设备前解析 FTR，公共 C API 接收 signed16 数组，核心分块上传、提交 CRC 并检查 SDK 的验证结果。管理线程可通过 typed FIR/clock 接口协调重配，不在高速 IQ 处理线程里重配硬件。改变 Fs 会改变既有 FIR 的 Hz 频响，基座不把配置验证当作频响设计或测量。
+The AD9361 hardware FIR and clock chain also belong to the control plane. The CLI parses FTR before opening the device, the public C API accepts signed16 arrays, and the core uploads in chunks, submits the CRC, and checks the SDK's verification result. The management thread can coordinate reconfiguration through the typed FIR/clock interfaces; hardware is never reconfigured from the high-speed IQ processing threads. Changing Fs changes the frequency response in Hz of an existing FIR, and the core does not treat configuration verification as frequency-response design or measurement.
 
-## 设备协调重配置
+## Device-coordinated reconfiguration
 
-![运行中改参](images/reconfigure.svg)
+![Runtime reconfiguration](images/reconfigure.svg)
 
-设备对象拥有共享配置及双方流的协调权。应用保持流句柄和 IO 线程，在管理线程调用原有 configure，或 typed FIR、clock、sample-rate 设置接口。核心执行如下事务：
+The device object owns the shared configuration and coordinates the streams in both directions. The application keeps its stream handles and I/O threads, and calls the existing configure, or the typed FIR, clock, and sample-rate setters, from its management thread. The core performs the following transaction:
 
-1. 校验请求；有流时拒绝改变任何方向的通道 mask 或 USB IQ 位数。有未释放的 RX 租借则返回 BUSY，硬件不变。同参数 configure 直接成功，不打断收发。
-2. 保存双方原始运行状态，阻止新数据操作进入，唤醒正在等待的 recv/acquire/send；临时中断用 TIMEOUT 表达，已部分接受的 send 返回 OK。
-3. 暂停原本运行的方向，取消并完成旧 USB 请求清理，清掉旧数据会话。配置、流句柄、格式及已分配的 USB/主机大缓冲各有明确所有者，不靠应用销毁流来改参。
-4. 写入变更的 RF 参数或指定 FIR/clock 事务。configure 仅下发实际变化，减少重复时钟/带宽设置和无关校准。
-5. 丢弃旧 RX 队列和旧 TX 排队/取消请求数据。活动 TX 预填 4 个零 IQ 块后，提前放行持续生产者补队列；先恢复 RX，最后启动 TX，发布成功事件。未 start 或已显式 stop 的流保持原状态。恢复失败时重新关闭 TX 数据入口并停止双方。
+1. Validate the request; while streams exist, reject changes to the channel mask of either direction or to the USB IQ bit width. If an RX lease has not been released, return BUSY without touching the hardware. A configure with identical parameters succeeds immediately without interrupting streaming.
+2. Save the original running state of both directions, block new data operations from entering, and wake any recv/acquire/send that is waiting; the temporary interruption is expressed as TIMEOUT, and a send that has been partially accepted returns OK.
+3. Pause the directions that were running, cancel and finish cleaning up the old USB requests, and clear the old data session. The configuration, stream handles, formats, and already allocated large USB/host buffers each have a clear owner; changing parameters does not rely on the application destroying streams.
+4. Write the changed RF parameters or the given FIR/clock transaction. configure only sends what actually changed, reducing repeated clock/bandwidth settings and unrelated calibrations.
+5. Discard the old RX queue and the old TX queued/cancelled request data. For an active TX, prefill 4 zero-IQ blocks, then let the continuous producer start refilling the queue early; resume RX first and start TX last, then publish a success event. Streams that were not started, or were explicitly stopped, keep their state. If resuming fails, close the TX data entry again and stop both directions.
 
-当前 CH32 跨会话清理约束仍存在，因此一次参数修改可能中断双方收发；这里没有声称无缝 LO 跳频或独立方向的时钟。调用方应把停顿作为正常数据间断处理。大缓冲保持分配可以避免每次调谐重新分配大块内存，但硬件校准、USB 调度和 SDK 响应仍决定实际恢复时间。单通道实机测试已验证原流继续收发及间断标记，不承诺固定毫秒延迟。
+The current CH32 cross-session cleanup constraint still applies, so a single parameter change may interrupt streaming in both directions; this is not a claim of seamless LO hopping or per-direction clocks. Callers should handle the pause as a normal data discontinuity. Keeping the large buffers allocated avoids reallocating large blocks of memory on every tune, but hardware calibration, USB scheduling, and SDK responses still determine the actual recovery time. Single-channel hardware tests have verified that the original streams keep running and that discontinuities are marked; no fixed millisecond latency is promised.
 
-例外是只改 LO、RX 增益或 TX 衰减的请求（有 TX 流时，TX LO 变化除外）。这类请求跳过第 2、3、5 步，直接写参数，流不停；下一个 RX 块带 RECONFIGURED | DISCONTINUITY，见 [API 快速调谐](api.md#快速调谐)。
+The exception is a request that only changes the LO, RX gain, or TX attenuation (except a TX LO change while a TX stream exists). Such requests skip steps 2, 3, and 5 and write the parameter directly without stopping the stream; the next RX block carries RECONFIGURED | DISCONTINUITY. See [API: Fast tuning](api.md#fast-tuning).
 
-RX 在恢复后的第一个成帧块开启下一个单调递增的 epoch，首块额外带 RECONFIGURED，并带 START、DISCONTINUITY 与 HAS_TIME。已知的主机队列丢弃计入 host_dropped_samples，重配原因不冒充设备溢出。块头时间戳照常给出；但改变采样率会使硬件时间作废（`OCH_EVENT_TIME_INVALIDATED`），需要重新对时。
+After resuming, RX starts the next monotonically increasing epoch at the first framed block; that first block additionally carries RECONFIGURED, along with START, DISCONTINUITY, and HAS_TIME. Known host queue drops are counted in host_dropped_samples, and a reconfiguration is never reported as a device overflow. Block header timestamps are provided as usual, but changing the sample rate invalidates the hardware time (`OCH_EVENT_TIME_INVALIDATED`), which then needs to be aligned again.
 
-TX 清除旧配置下的待发数据，不重放取消请求。只有原本正在发射的流在恢复前预填 4 个 transfer_bytes 大小的零 IQ 块，计入 tx_padding_samples。核心在启动硬件前解除 TX 的重配置阻塞，允许原生产者补充队列；RX 的启动控制交互先完成，TX 最后启动，避免固定零块在生产者仍被阻塞时耗尽。恢复不是精确 burst 边界，已接受的数据也可能在重配中被丢弃。没有活动 TX 的事务绝不自行启动发射。
+TX discards data pending under the old configuration and does not replay cancelled requests. Only a stream that was transmitting before is prefilled with 4 zero-IQ blocks of transfer_bytes each before resuming, counted in tx_padding_samples. The core lifts the TX reconfiguration block before starting the hardware, letting the original producer refill the queue; the RX start control exchange completes first and TX starts last, so the fixed zero blocks are not used up while the producer is still blocked. Resuming is not an exact burst boundary, and data already accepted may also be discarded during reconfiguration. A transaction with no active TX never starts transmitting on its own.
 
-硬件变更或恢复失败会停止双方并使配置缓存失效，不自动回滚发射。调用方保存错误，结束 IO 线程并销毁旧流，确认设备状态后显式重新 configure、创建和启动。原始 och_command 修改仍只允许没有流对象时执行，避免绕过协调器。
+If a hardware change or resume fails, both directions are stopped and the configuration cache is invalidated; transmission is not rolled back automatically. The caller saves the error, ends the I/O threads, destroys the old streams, and after confirming the device state explicitly configures, creates, and starts again. Raw och_command modifications are still only allowed when no stream objects exist, so they cannot bypass the coordinator.
 
-这是单个 SDK 设备对象内的协调机制。独立的 och 进程仍遵循设备独占，没有为另一个软件的现有流提供 IPC；OnAir 这类应用需要在自己的数据源内持有同一个 OCH device，并把界面上的调参交给管理线程。原生数据源可直接使用 C ABI / C++ 包装。
+This is a coordination mechanism inside a single SDK device object. Separate och processes still respect device exclusivity, and no IPC is provided for another program's existing streams; applications like OnAir need to hold the same OCH device inside their own data source and hand UI parameter changes to the management thread. Native data sources can use the C ABI / C++ wrapper directly.
 
-## 缓冲与复制
+## Buffering and copying
 
-![USB IQ 格式与请求对齐](images/wire-format.svg)
+![USB IQ formats and request alignment](images/wire-format.svg)
 
-默认每方向配置 64 MiB 的有界主机缓冲、32 个 USB 请求、196608 B 请求长度（12 个成帧块）。USB 请求长度须为 16384 B 的倍数：每个 16 KiB 块 = 16 B 头 + 16368 B 载荷，载荷同时整除 12bit 双通道 6 B 帧、单通道 3 B 帧和 8bit 双通道 4 B 帧，因此块内总是整数个样点。定时 RX（`OCH_RX_TIMED`）改用 128 个 16 KiB 请求：CH32 桥在最后一块后不发短包，较大的请求会让有限长度突发的末块一直挂在未完成的请求里。请求缓冲和主机环形队列在开始前分配，避免不断创建 USB 请求。
+By default each direction is configured with a 64 MiB bounded host buffer, 32 USB requests, and a request length of 196608 B (12 framed blocks). USB request lengths must be a multiple of 16384 B: each 16 KiB block = 16 B header + 16368 B payload, and the payload divides evenly into 12-bit dual-channel 6 B frames, single-channel 3 B frames, and 8-bit dual-channel 4 B frames, so a block always contains a whole number of samples. Timed RX (`OCH_RX_TIMED`) uses 128 requests of 16 KiB instead: the CH32 bridge sends no short packet after the last block, so with larger requests the final block of a finite-length burst would stay stuck in an incomplete request. Request buffers and the host ring queues are allocated before starting, avoiding constantly creating USB requests.
 
-Windows 和 USB 调度不提供硬实时截止时间保证。设计目标是用并行请求、有限缓冲和可观察的错误状态提高持续收发的稳定性；超过缓冲余量的停顿仍需要上层按间断恢复。
+Windows and USB scheduling provide no hard real-time deadline guarantees. The design goal is to improve the stability of continuous streaming with parallel requests, bounded buffers, and observable error states; stalls longer than the buffer headroom still need the upper layer to recover from a discontinuity.
 
-och_rx_acquire/release 暴露已经去除头的当前 wire 内存区（默认 packed12，显式 8bit 为 SC8），省去向应用缓冲再次复制和格式转换。它不是 USB DMA 到应用的端到端零拷贝：USB 完成缓冲到核心队列仍有复制。租借期间不得同时 recv/acquire/destroy 同一流。长时间持有租借会消耗缓冲余量，适配器应尽快处理或复制到自己的受控队列后释放。
+och_rx_acquire/release expose the current wire-format memory with headers already removed (packed12 by default, SC8 when 8-bit is explicitly selected), saving another copy into the application buffer and the format conversion. This is not end-to-end zero-copy from USB DMA to the application: there is still a copy from the USB completion buffer into the core queue. While a lease is held, the same stream must not be recv'd/acquired/destroyed concurrently. Holding a lease for a long time consumes buffer headroom; adapters should process it quickly, or copy it into their own controlled queue and release it.
 
-双 RX 61.44 MSPS 为 368.64 MB/s，64 MiB 大约覆盖 182 ms。缓冲可吸收短暂停顿，无法让低于平均数据率的下游无限接收。RX 队列满时保留已经排队/租借的内容并丢弃新到数据，不覆盖消费者正在读取的内存；恢复交付时报告主机丢样统计及间断元数据。TX 队列满时对应用 send 施加背压，可能部分接受或超时。
+Dual RX at 61.44 MSPS is 368.64 MB/s, and 64 MiB covers about 182 ms. Buffers can absorb short stalls but cannot let a downstream slower than the average data rate receive indefinitely. When the RX queue is full, content already queued/leased is kept and newly arriving data is dropped, so memory a consumer is reading is never overwritten; when delivery resumes, host drop statistics and discontinuity metadata are reported. When the TX queue is full, backpressure is applied to the application's send, which may be partially accepted or time out.
 
-| 模式 | 每方向 wire 速率 |
+| Mode | Wire rate per direction |
 |---|---:|
-| 双 RX 61.44 MSPS | RX 368.64 MB/s |
-| 双 TX 61.44 MSPS | TX 368.64 MB/s |
-| 双 RX + 双 TX 30.72 MSPS | RX/TX 各 184.32 MB/s |
-| 单 RX + 单 TX 61.44 MSPS | RX/TX 各 184.32 MB/s |
-| 8bit 双 RX + 双 TX 30.72 MSPS | RX/TX 各 122.88 MB/s |
+| Dual RX 61.44 MSPS | RX 368.64 MB/s |
+| Dual TX 61.44 MSPS | TX 368.64 MB/s |
+| Dual RX + dual TX 30.72 MSPS | RX/TX 184.32 MB/s each |
+| Single RX + single TX 61.44 MSPS | RX/TX 184.32 MB/s each |
+| 8-bit dual RX + dual TX 30.72 MSPS | RX/TX 122.88 MB/s each |
 
-上表未注明 8bit 的行均为默认 12bit。sc16 输出每通道每复样本 4 B，fc32 为 8 B，应用格式大小不受 wire 位数影响；双 RX 满速保存对应约 491.52 MB/s 和 983.04 MB/s。磁盘、文件系统缓存和插件处理能力必须单独考虑。bench 使用当前 wire 租借/释放且不写盘，便于区分 USB/核心能力与磁盘或转换开销。8bit 的格式、能力与启动水位约束见 [8bit 扩展](iq8.md)。
+Rows in the table not marked 8-bit use the default 12-bit. sc16 output is 4 B per complex sample per channel and fc32 is 8 B; the application format size does not depend on the wire bit width, so saving dual RX at full speed corresponds to about 491.52 MB/s and 983.04 MB/s respectively. Disk, file system cache, and plugin processing capacity must be considered separately. bench uses leases/release of the current wire format and does not write to disk, making it easier to separate USB/core capacity from disk or conversion overhead. For the 8-bit format, capabilities, and start threshold constraints, see [8-bit extension](iq8.md).
 
-## RX 成帧与间断
+## RX framing and discontinuities
 
-![RX 数据边界](images/rx-boundaries.svg)
+![RX data boundaries](images/rx-boundaries.svg)
 
-0.6.0 起 USB 上只有成帧格式（需要 FPGA `CH32H417_IP` 1.3）。每个 16 KiB 块以 16 B 头开始：魔数 `'OC'`、标志、校验、16 位块序号、有效帧数和 64 位首样点时间，格式见 [设备协议](protocol.md#成帧块格式)。核心逐块校验头部，只把有效帧交给消费者；块头本身不进入 IQ 数据。
+Since 0.6.0, the framed format is the only format on USB (requires FPGA `CH32H417_IP` 1.3). Each 16 KiB block starts with a 16 B header: magic `'OC'`, flags, checksum, 16-bit block sequence number, valid frame count, and 64-bit time of the first sample; see [Device Protocol](protocol.md#framed-block-format) for the format. The core verifies the header of every block and only passes valid frames to the consumer; the block headers themselves never enter the IQ data.
 
-- **连续性**：下一块的时间应等于上一块的时间加有效帧数。时间连续且没有 SOB/GAP/LATE 标志时，数据属于同一个 epoch。
-- **设备溢出**：FPGA FIFO 满时，当前块补零结束，下一块带 GAP 标志。核心开启新 epoch，置 DISCONTINUITY | DEVICE_OVERFLOW，`device_dropped_samples` = 新块时间 − 预期时间，是**精确值**。RX 不再重启，TX 不受影响。
-- **校验失败**：头部魔数或校验错误时，核心按字节重新搜索合法块头并计入 `resyncs`。正常运行时该计数应为 0。
-- **主机溢出**：环形队列满时丢弃新数据，计入 `host_dropped_samples` 并置 HOST_OVERFLOW | DISCONTINUITY；时间戳继续推进，丢样数同样准确。
+- **Continuity**: the next block's time should equal the previous block's time plus its valid frame count. When the time is continuous and there are no SOB/GAP/LATE flags, the data belongs to the same epoch.
+- **Device overflow**: when the FPGA FIFO is full, the current block is finished with zero padding and the next block carries the GAP flag. The core starts a new epoch and sets DISCONTINUITY | DEVICE_OVERFLOW, with `device_dropped_samples` = new block time − expected time, an **exact value**. RX no longer restarts, and TX is not affected.
+- **Checksum failure**: when the header magic or checksum is wrong, the core searches byte by byte for a valid block header and counts it in `resyncs`. This count should be 0 in normal operation.
+- **Host overflow**: when the ring queue is full, new data is dropped, counted in `host_dropped_samples`, and HOST_OVERFLOW | DISCONTINUITY is set; timestamps keep advancing, so the drop count is exact as well.
 
-同一次 recv 不跨 epoch 或已知间断。应用应在 START/DISCONTINUITY 上重置需要连续相位的处理状态；`time_ticks` 可把各段放回同一时间轴。硬件时间、定时 RX/TX 的用法见 [硬件时间戳](timestamps.md)。
+A single recv never spans an epoch or a known discontinuity. Applications should reset processing state that needs continuous phase on START/DISCONTINUITY; `time_ticks` lets the segments be placed back on the same timeline. For using hardware time and timed RX/TX, see [Hardware Timestamps](timestamps.md).
 
-## TX 的显式启动与停止
+## Explicit TX start and stop
 
-应用先创建 TX 流并 send 数据预填，再 start 显式发射。CLI 在 start 前已启动生产者，并积累最多 32 MiB wire 数据，避免控制命令往返和线程启动耗时超过几块预填数据的播放时间。正常欠供时不会隐藏生成连续零样本；协调重配置仅为恢复原本活动的 TX 插入上述有界预填零块，并保留可观察统计。未启动的流不会自动启动射频。CLI 使用预生成且周期闭合的复数正弦，避免在实时循环内调用 sin/cos。
+The application first creates a TX stream and sends data to prefill it, then calls start to transmit explicitly. The CLI starts its producer before start and accumulates up to 32 MiB of wire data, so that the control command round trip and thread start-up time do not exceed the playback time of a few prefilled blocks. Normal starvation never silently generates continuous zero samples; coordinated reconfiguration only inserts the bounded zero prefill blocks described above to resume a TX that was active, and keeps observable statistics. A stream that was not started never starts RF on its own. The CLI uses a pre-generated complex sine with a closed period, avoiding calls to sin/cos inside the real-time loop.
 
-start 时核心先等待 FPGA TX FIFO 达到约一个成帧块（每块组数 − 16），再请求 SDK 开始播放；成帧后的 TX 由 FPGA 从第一块开始连续播放。
+On start, the core first waits for the FPGA TX FIFO to reach about one framed block (groups per block − 16), then asks the SDK to start playback; after framing, the FPGA plays TX continuously from the first block.
 
-文件结束调用 flush：只为 16 KiB 块对齐补入必要的零 IQ，数量记入 tx_padding_samples，并等待已提交 OUT 完成。持续源按时停止则先关闭硬件，取消剩余队列，不故意排空使 TX 在停止前饿死。USB 完成表示设备接收了传输，不等于某个样本已经从 DAC 发出；accepted 样本数仅是进入主机队列的量。需要精确时隙发射时使用 `och_send_burst`：带 HAS_TIME 的突发在指定样点开始，结束时产生带样点时间的 `OCH_EVENT_TX_BURST_ACK`，迟到的突发不发射并产生 `OCH_EVENT_TX_LATE`。
+At the end of a file, flush is called: it only pads the zero IQ needed to align to a 16 KiB block, counts it in tx_padding_samples, and waits for submitted OUT transfers to complete. A continuous source that stops on time closes the hardware first and cancels the remaining queue, rather than deliberately draining it and starving TX before it stops. A USB completion means the device received the transfer, not that a given sample has left the DAC; the accepted sample count is only the amount that entered the host queue. For transmission in exact time slots, use `och_send_burst`: a burst with HAS_TIME starts at the given sample, its end produces an `OCH_EVENT_TX_BURST_ACK` with the sample time, and a late burst is not transmitted and produces `OCH_EVENT_TX_LATE`.
 
-因此有限文件 EOF 在排空到关闭硬件的间隙可能产生尾部欠流及主机欠供事件。它们保留在日志与统计中，由调用方根据 EOF 状态识别，不能静默抹去，也不能与连续流中段错误混为一个验收结论。
+So at the EOF of a finite file, the gap between draining and closing the hardware may produce trailing underflow and host starvation events. They are kept in the log and statistics, and the caller identifies them using the EOF state; they must not be silently erased, nor lumped together with errors in the middle of a continuous stream into a single acceptance verdict.
 
-流对象显式 stop 后不复用，应销毁后重新创建。受当前 CH32 USB 中止后状态约束，一方向停止后要重开该方向，需先停止另一方向，以便清理跨会话缓冲；核心会拒绝不满足条件的重开。运行中改参使用设备协调器同时处理双方和跨会话清理，属于内部暂停/恢复，不等同于应用显式 stop。
+A stream object is not reused after an explicit stop; destroy it and create a new one. Because of the CH32 state after a USB abort, reopening a direction after it has stopped requires stopping the other direction first so the cross-session buffers can be cleaned up; the core rejects reopens that do not meet this condition. Runtime reconfiguration uses the device coordinator to handle both directions and the cross-session cleanup together; it is an internal pause/resume and is not the same as an explicit application stop.
 
-## 插件扩展边界
+## Plugin extension boundaries
 
-后续插件负责第三方软件的设备枚举、参数映射、缓冲策略和数据类型转换。它可以使用 C++ 包装，也可以直接调用 C ABI。硬件公共状态（共享采样率、射频 LO、通道 mask）由设备对象管理，不能由不同插件假定独立时钟。
+Future plugins are responsible for device enumeration, parameter mapping, buffering policy, and data type conversion for third-party software. They can use the C++ wrapper or call the C ABI directly. Shared hardware state (shared sample rate, RF LO, channel masks) is managed by the device object, and different plugins must not assume independent clocks.
 
-适配器必须向上层传播间断、设备错误、主机队列溢出和 TX 欠供，不可只交付 IQ 而丢弃元数据。0.6.0 起每批 RX 样点带硬件时间（`time_ticks`），适配器应向上层传递，以支持定时收发和 PPS 对时。多设备同步由 `och_multi_sync` 完成（共享 10 MHz、AD9361 多芯片同步 MCS、公共时间装载），见 [多板同步](multi-board-sync.md)；MCS 只对齐采样时钟，各板 LO 相位仍不相干。
+Adapters must propagate discontinuities, device errors, host queue overflows, and TX starvation to the upper layer, and must not deliver only the IQ while dropping the metadata. Since 0.6.0, every batch of RX samples carries hardware time (`time_ticks`), which adapters should pass upward to support timed RX/TX and PPS time alignment. Multi-device sync is done by `och_multi_sync` (shared 10 MHz, AD9361 multi-chip sync MCS, common time loading); see [Multi-Board Sync](multi-board-sync.md). MCS only aligns the sample clocks, and the LO phases of different boards remain incoherent.

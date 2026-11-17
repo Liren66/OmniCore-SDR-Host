@@ -1,34 +1,34 @@
-# 设备控制与数据协议参考
+# Device Control and Data Protocol Reference
 
-本文记录 OmniCore Host 使用的设备协议，供维护控制后端和开发适配器时参考。常规应用应调用 [C/C++ API](api.md)，使用者应优先选择 [规范命令](commands.md) 和 [FIR/时钟命令](fir.md)。本工程与安装包不包含 ZYNQ SDK 源码副本、ELF、BOOT.bin 或 FPGA bitstream，也不自动下载板上固件。
+This page documents the device protocol used by OmniCore Host, as a reference for maintaining the control backend and developing adapters. Ordinary applications should call the [C/C++ API](api.md), and users should prefer the [canonical commands](commands.md) and the [FIR/clock commands](fir.md). This project and the installer contain no copy of the ZYNQ SDK source, ELF, BOOT.bin, or FPGA bitstream, and never download board firmware automatically.
 
-## 能力与端点
+## Capabilities and endpoints
 
-不能仅按固件名字判断扩展是否存在。通过 `host_protocol?` 确认 `host_protocol=1`，通过 `system_info?` 确认 `transport=framed16k`（0.6.0 起必需；旧固件的 `header_on=rx_start_and_overflow_recovery` 不再接受）；硬件时间 API 还要求 `hw_time=1`，FIR 和安全时钟配置分别要求 `fir_upload=1`、`clock_config=1`。
+Whether an extension exists cannot be judged from the firmware name alone. Confirm `host_protocol=1` with `host_protocol?`, and `transport=framed16k` with `system_info?` (required since 0.6.0; the older firmware's `header_on=rx_start_and_overflow_recovery` is no longer accepted); the hardware time API also requires `hw_time=1`, and FIR and safe clock configuration require `fir_upload=1` and `clock_config=1` respectively.
 
-RX 校正扩展要求 `system_info?` 含 `rx_correction=1`：`rx_dc_correction?` / `rx_dc_correction=0|1` 同时控制 AD9361 RF 与基带直流跟踪，`rx_iq_correction?` / `rx_iq_correction=0|1` 控制 RX 正交跟踪，回应的同名标量为 0/1，后面可附加状态字段。SDK setter 要求流已停止，OCH 的 C/C++ 接口负责协调现有会话；语义见 [API：RX 直流与 IQ 校正](api.md#rx-直流与-iq-校正)。
+The RX correction extension requires `system_info?` to contain `rx_correction=1`: `rx_dc_correction?` / `rx_dc_correction=0|1` controls the AD9361 RF and baseband DC tracking together, and `rx_iq_correction?` / `rx_iq_correction=0|1` controls RX quadrature tracking. The replies contain a scalar of the same name with value 0/1, optionally followed by status fields. The SDK setters require streams to be stopped, and OCH's C/C++ interface coordinates the existing session; for the semantics see [API: RX DC and IQ correction](api.md#rx-dc-and-iq-correction).
 
-| USB 端点 | 用途 |
+| USB endpoint | Purpose |
 |---|---|
-| 0x01 OUT | TX 成帧块：16 B 头（HAS_TIME/SOB/EOB、序号、样点时间）+ packed12 或 2TX2RX signed8 IQ |
-| 0x81 IN | RX 成帧块：16 B 头（标志、序号、有效帧数、首样点时间）+ packed12/signed8 IQ |
-| 0x02 OUT | CH32/ZYNQ 控制命令文本 |
-| 0x82 IN | 命令响应与异步 EVT |
-| 0x83 IN | 可选的现有 CH32 调试日志；电源查询读取启动快照 |
+| 0x01 OUT | TX framed blocks: 16 B header (HAS_TIME/SOB/EOB, sequence number, sample time) + packed12 or 2TX2RX signed8 IQ |
+| 0x81 IN | RX framed blocks: 16 B header (flags, sequence number, valid frame count, first-sample time) + packed12/signed8 IQ |
+| 0x02 OUT | CH32/ZYNQ control command text |
+| 0x82 IN | Command responses and asynchronous EVTs |
+| 0x83 IN | Optional existing CH32 debug log; the power query reads the boot snapshot |
 
-USB 请求完成边界不是文本行或 IQ 会话边界，一行可以跨请求，一次请求也可以带多行。EP83 信息的非实时限制见 [电源信息](cli.md#usb-c-电源信息)。
+USB request completion boundaries are not text line or IQ session boundaries: a line may span requests, and one request may carry several lines. For the non-real-time limitations of the EP83 information, see [Power information](cli.md#usb-c-power-information).
 
-8bit 扩展使用 `iq_format?` / `iq_format=12|8`，能力为 `iq_format=1 iq8_2t2r=1`。默认 12bit，只有 RX/TX mask 均为 3 才能选择 8bit。按 I1,Q1,I2,Q2 顺序传输原 12bit 值的高 8 位，TX 恢复低 4 位零；每时间帧 4 字节。SDK 内部块可能包含两个时间帧，不能用内部块宽替代应用帧宽。格式切换要求双向全停，通常运行可分别启停。CH32 固件不改。详见 [8bit 协议与兼容](iq8.md)。
+The 8-bit extension uses `iq_format?` / `iq_format=12|8`, with the capabilities `iq_format=1 iq8_2t2r=1`. 12-bit is the default, and 8-bit can only be selected when both the RX and TX masks are 3. The high 8 bits of the original 12-bit values are sent in I1,Q1,I2,Q2 order, and TX restores the low 4 bits as zeros; each time frame is 4 bytes. An SDK internal block may contain two time frames, so the internal block width must not be used in place of the application frame width. Switching formats requires both directions to be fully stopped; in normal operation they can be started and stopped separately. The CH32 firmware is unchanged. See [8-bit protocol and compatibility](iq8.md).
 
-## 命令封装 v1
+## Command wrapper v1
 
-主机发送一条 LF 结束的 ASCII 命令；控制台也接受 CR/CRLF，PL UART 输出使用 CRLF。包含封装且不含换行的输入行最长 127 字符，普通命令体允许 ASCII 可打印字符和水平 TAB，禁止 NUL、内嵌换行、非 ASCII 字节或嵌套封装。
+The host sends one ASCII command terminated by LF; the console also accepts CR/CRLF, and PL UART output uses CRLF. An input line including the wrapper and excluding the newline is at most 127 characters; the command body allows printable ASCII characters and horizontal TAB, and forbids NUL, embedded newlines, non-ASCII bytes, and nested wrappers.
 
 ~~~text
 @<id> <original command>
 ~~~
 
-id 为 1..4294967295 的十进制 uint32，不带符号或进制前缀；前导零允许，响应使用规范十进制。id 后至少一个空格或 TAB，命令体不能为空，其首个非空白字符不能是 `@`。
+id is a decimal uint32 in 1..4294967295, without sign or radix prefix; leading zeros are allowed, and responses use canonical decimal. At least one space or TAB follows the id, the command body cannot be empty, and its first non-whitespace character cannot be `@`.
 
 ~~~text
 @42 rx_samp_freq?
@@ -37,24 +37,24 @@ rx_samp_freq=30720000
 RSP id=42 end result=0
 ~~~
 
-每设备只能有一个未完成命令。只有匹配 id 的 begin/end 完成该事务；其他 id 不能完成它，缺 begin 的匹配 end 属于协议错误。重复记录不得改变已完成结果。响应体保留原 SDK 格式，主机把响应行标准化为 LF，累计响应和未结束控制行均限制为 32768 字节。
+Each device may have only one outstanding command. Only begin/end with the matching id complete that transaction; other ids cannot complete it, and a matching end without a begin is a protocol error. Duplicate records must not change a completed result. The response body keeps the original SDK format; the host normalizes response lines to LF, and both the accumulated response and an unterminated control line are limited to 32768 bytes.
 
-`result` 是原回调的有符号返回值，通常 0 表示分派成功、-1 表示失败。某些旧回调通过正文打印错误而仍返回 0，因此主机也将 `ERR`、`Error:`、`Invalid` 等既有错误正文视为失败。语法错误封装不会分派，可能只输出 `Invalid host envelope: ...`，没有 RSP；主机必须在发送前验证输入。
+`result` is the signed return value of the original callback; usually 0 means dispatch succeeded and -1 means failure. Some older callbacks print an error in the body yet still return 0, so the host also treats existing error bodies such as `ERR`, `Error:`, and `Invalid` as failures. A wrapper with a syntax error is not dispatched and may only output `Invalid host envelope: ...` without an RSP; the host must validate input before sending.
 
-不能用“若干毫秒没有新字节”判断成功。必须收到完整事务结束记录，否则报告超时/失败。超时后控制会话视为不可继续使用，应等待设备完成响应，再关闭并重新打开，避免把迟到响应用于下一条命令。
+Success must not be judged by "no new bytes for some milliseconds". A complete transaction end record must be received, otherwise a timeout/failure is reported. After a timeout, the control session is considered unusable; wait for the device to finish responding, then close and reopen, so a late response is never taken as the reply to the next command.
 
-## 异步事件
+## Asynchronous events
 
-`EVT ` 开头的行是异步事件，可在命令前、响应中间或响应后到达。控制线程把它送入有界事件队列，不附加到响应体，也不据此完成命令；队列未及时消费时 `event_drops` 可增加。
+Lines starting with `EVT ` are asynchronous events and may arrive before a command, in the middle of a response, or after it. The control thread puts them into a bounded event queue; they are not appended to the response body and never complete a command. `event_drops` may increase if the queue is not consumed in time.
 
-FPGA 的定时事件带样点时间，由 SDK 按以下格式上报，OCH 映射为对应的 `och_event.type`，并填入 `hw_time`、`code` 和 `block`：
+Timed FPGA events carry the sample time and are reported by the SDK in the format below; OCH maps them to the corresponding `och_event.type` and fills in `hw_time`, `code`, and `block`:
 
 ~~~text
 EVT tseq=<n> type=<name> src=fpga_time code=<n> block=<seq> time=<ticks> lost_before=<0|1>
 EVT tseq=<n> type=time_invalidated src=sdk old_rate=<Hz> new_rate=<Hz>
 ~~~
 
-| SDK type | code | OCH 事件 |
+| SDK type | code | OCH event |
 |---|---|---|
 | `tx_burst_ack` | 0x01 | `OCH_EVENT_TX_BURST_ACK` |
 | `tx_underflow` | 0x02 | `OCH_EVENT_TX_UNDERFLOW` |
@@ -64,79 +64,79 @@ EVT tseq=<n> type=time_invalidated src=sdk old_rate=<Hz> new_rate=<Hz>
 | `rx_late_command` / `rx_command_ignored` | 0x11 / 0x12 | `OCH_EVENT_RX_LATE` |
 | `time_invalidated` | — | `OCH_EVENT_TIME_INVALIDATED` |
 
-## 成帧块格式
+## Framed block format
 
-![16 KiB 块格式](images/wire-format.svg)
+![16 KiB block format](images/wire-format.svg)
 
-IQ 端点上的每个 16384 B 块 = 16 B 头 + 16368 B 载荷。块头为 4 个小端 u32：
+Each 16384 B block on the IQ endpoints = 16 B header + 16368 B payload. The block header is 4 little-endian u32 words:
 
 ~~~text
-h0 = 0x4F43_0000 | flags<<8 | check     字节序：check, flags, 'C', 'O'
-h1 = seq<<16 | valid                    valid = 本块有效帧数，其后补零
-h2 = time[31:0]，h3 = time[63:32]       本块第一个样点的时间，1 tick = 1 个样点
-check = 字节 1..15 的 XOR
+h0 = 0x4F43_0000 | flags<<8 | check     byte order: check, flags, 'C', 'O'
+h1 = seq<<16 | valid                    valid = number of valid frames in this block, zero-padded after
+h2 = time[31:0], h3 = time[63:32]       time of the first sample in this block, 1 tick = 1 sample
+check = XOR of bytes 1..15
 ~~~
 
-| 方向 | flags |
+| Direction | flags |
 |---|---|
-| RX | bit0 TIME_VALID，bit1 SOB，bit2 GAP（此块之前丢过样），bit3 EOB，bit4 LATE，bit5 PAD |
-| TX | bit0 HAS_TIME，bit1 SOB，bit3 EOB；`valid=0` 的块被丢弃 |
+| RX | bit0 TIME_VALID, bit1 SOB, bit2 GAP (samples were dropped before this block), bit3 EOB, bit4 LATE, bit5 PAD |
+| TX | bit0 HAS_TIME, bit1 SOB, bit3 EOB; blocks with `valid=0` are discarded |
 
-| wire 格式 | 每帧 | 每块帧数 |
+| Wire format | Per frame | Frames per block |
 |---|---:|---:|
-| 12bit 单通道 | 3 B | 5456 |
-| 12bit 双通道 | 6 B | 2728 |
-| 8bit 双通道 | 4 B | 4092 |
+| 12-bit single-channel | 3 B | 5456 |
+| 12-bit dual-channel | 6 B | 2728 |
+| 8-bit dual-channel | 4 B | 4092 |
 
-USB 请求完成边界总是 16 KiB 的整数倍，因此块头总在请求内对齐；核心仍按字节流解析，遇到校验失败会重新搜索块头。
+USB request completion boundaries are always a whole multiple of 16 KiB, so block headers are always aligned within requests; the core still parses as a byte stream and searches for a block header again when a checksum fails.
 
-时间相关的 SDK 命令（`time_now?/=`、`time_next_pps=`、`time_last_pps?`、`time_source=`、`time_status?`、`rx_timed=`、`rx_stream=`、`rx_stream_stop!`）由 OCH 的时间 API 调用，详见 [硬件时间戳](timestamps.md) 和 Firmware 仓库的 `docs/sdk-commands.md`。
+Time-related SDK commands (`time_now?/=`, `time_next_pps=`, `time_last_pps?`, `time_source=`, `time_status?`, `rx_timed=`, `rx_stream=`, `rx_stream_stop!`) are called by OCH's time API; see [Hardware Timestamps](timestamps.md) and `docs/sdk-commands.md` in the Firmware repository.
 
-现有控制台的 UART 接收有有限软件缓冲，错误/溢出时丢弃已排队和部分解析命令，到后续行边界重新同步，并可能输出：
+UART receive in the existing console has a limited software buffer. On error/overflow it discards queued and partially parsed commands, resynchronizes at the next line boundary, and may output:
 
 ~~~text
 Error: UART receive overflow/error; queued and partial commands discarded.
 ~~~
 
-这不支持无限流水发送，主机仍须等待每次 RSP 完成。
+Unlimited pipelined sending is not supported; the host must still wait for each RSP to complete.
 
-## 控制串口
+## Control UART
 
-Zynq PL 的 UART16550（SDK `console.h` 中的 `CONSOLE_BAUD_RATE`）与 CH32 USART1（UHSIF 工程 `Common/usbss_uart1_bridge.h` 中的 `UART1_BRIDGE_BAUD`）之间的控制链路，从 115200 提高到 **3.125 MBd**。两边必须相同，并且必须同时更新：一边新、一边旧时，`och find` 仍能看到设备，但 `och info` 会因 `host_protocol?` 超时而失败。
+The control link between the Zynq PL UART16550 (`CONSOLE_BAUD_RATE` in the SDK's `console.h`) and the CH32 USART1 (`UART1_BRIDGE_BAUD` in the UHSIF project's `Common/usbss_uart1_bridge.h`) was raised from 115200 to **3.125 MBd**. Both sides must match and must be updated together: with one side new and the other old, `och find` still sees the device, but `och info` fails because `host_protocol?` times out.
 
-| 一侧 | 时钟 | 波特率公式 | 上限 |
+| Side | Clock | Baud rate formula | Limit |
 |---|---|---|---|
-| Zynq AXI UART16550 | 100 MHz（`XPAR_AXI_UART16550_0_CLOCK_FREQ_HZ`） | 100 MHz / (16 × 整数除数) | 6.25 MBd |
-| CH32H417 USART1 | HCLK 100 MHz（SYSCLK 400 MHz / 4） | HCLK / (16 × USARTDIV)，USARTDIV 带 4 位小数 | 6.25 MBd（手册标称 9 Mbps 需要更高的 HCLK） |
+| Zynq AXI UART16550 | 100 MHz (`XPAR_AXI_UART16550_0_CLOCK_FREQ_HZ`) | 100 MHz / (16 × integer divisor) | 6.25 MBd |
+| CH32H417 USART1 | HCLK 100 MHz (SYSCLK 400 MHz / 4) | HCLK / (16 × USARTDIV), USARTDIV with 4 fractional bits | 6.25 MBd (the 9 Mbps rated in the manual needs a higher HCLK) |
 
-由于 16550 只支持整数除数，两边都能精确实现的速率只有 6.25 MBd / N：6.25M、3.125M、2.083M、1.5625M……SDK 用编译期检查保证这一点。选 3.125 MBd（N=2）而不是 6.25 MBd，是因为 Zynq 控制台轮询接收，16 字节 FIFO 在 3.125 MBd 下约 51 µs 填满，在 6.25 MBd 下只需约 26 µs；而再翻倍每条命令只能多省约 0.1 ms。如果 FIFO 溢出，SDK 会回复 `Error: UART receive overflow`，不会悄悄丢掉命令。CH32 的 8 KiB 接收环形缓冲在 3.125 MBd 下必须每约 26 ms 处理一次，主循环满足这个要求。
+Because the 16550 only supports integer divisors, the only rates both sides can hit exactly are 6.25 MBd / N: 6.25M, 3.125M, 2.083M, 1.5625M, and so on; the SDK enforces this with a compile-time check. 3.125 MBd (N=2) was chosen over 6.25 MBd because the Zynq console receives by polling: the 16-byte FIFO fills in about 51 µs at 3.125 MBd but only about 26 µs at 6.25 MBd, while doubling again would only save about another 0.1 ms per command. If the FIFO overflows, the SDK replies `Error: UART receive overflow` rather than silently dropping the command. The CH32's 8 KiB receive ring buffer must be serviced about every 26 ms at 3.125 MBd, which the main loop satisfies.
 
-### 实测
+### Measurements
 
-USB3，RX 双通道 30.72 MSPS 流运行中：
+USB3, with a dual-channel 30.72 MSPS RX stream running:
 
-| 项目 | 115200 | 3.125 MBd |
+| Item | 115200 | 3.125 MBd |
 |---|---|---|
-| 命令往返（`rx_lo_freq?`） | 7.2 ms | 0.6 ms |
-| `system_info?`（916 B） | 81 ms | 3.4 ms |
+| Command round trip (`rx_lo_freq?`) | 7.2 ms | 0.6 ms |
+| `system_info?` (916 B) | 81 ms | 3.4 ms |
 | `rx_rssi?` | — | 1.1 ms |
-| `rx_lo_freq=`（同频段） | 11.2 ms | 3.8 ms |
-| `och_configure` 流运行中切频 | 11.3 ms | 4.0 ms |
-| 跨增益表切频 | 32.7 ms | 25.4 ms（主要是 SPI 写增益表） |
+| `rx_lo_freq=` (same band) | 11.2 ms | 3.8 ms |
+| `och_configure` retune while streaming | 11.3 ms | 4.0 ms |
+| Retune across gain tables | 32.7 ms | 25.4 ms (mostly SPI writes of the gain table) |
 
-满速双通道：RX 2 通道 61.44 MSPS（12bit，368.6 MB/s）运行 60 秒，开启 RSSI 并每 10 ms 读取一次，共 3,538 次，全部有效，平均 1.26 ms、最长 3.15 ms；吞吐 61.44 MS/s/通道，无间断、无设备或主机溢出、无丢样，与不读 RSSI 时完全一致。
+Full-speed dual channel: RX on 2 channels at 61.44 MSPS (12-bit, 368.6 MB/s) for 60 s, with RSSI enabled and read every 10 ms, 3,538 reads in total, all valid, average 1.26 ms, maximum 3.15 ms; throughput 61.44 MS/s per channel with no discontinuities, no device or host overflows, and no dropped samples, exactly the same as without reading RSSI.
 
-压力测试：连续 4,530 条命令（包括 9.7 KB 的 `help?` 回复），没有出错，也没有 UART 溢出；长回复约 0.3 MB/s，即线路速率上限；期间 RX 保持 30.72 MS/s。
+Stress test: 4,530 consecutive commands (including the 9.7 KB `help?` reply) with no errors and no UART overflows; long replies run at about 0.3 MB/s, the line-rate ceiling; RX stayed at 30.72 MS/s throughout.
 
-## CH32 诊断与跨会话清理
+## CH32 diagnostics and cross-session cleanup
 
-主机使用现有诊断协议 v4 的 vendor IN 请求：`bmRequestType=0xC0`、`bRequest=0xD0`。`wValue=0` 读取诊断，前两个 uint32 为 magic `0x53444731` 和版本 4；`wValue=2` 请求流缓冲清理。
+The host uses the vendor IN requests of the existing diagnostic protocol v4: `bmRequestType=0xC0`, `bRequest=0xD0`. `wValue=0` reads diagnostics, where the first two uint32 are the magic `0x53444731` and version 4; `wValue=2` requests stream buffer cleanup.
 
-清理仅在 RX/TX 都停止时执行，并排空残留 RX 数据。因此同一方向 stop 后若要重新开始，需要先停另一方向；核心不会为重开一边而清掉另一边正在使用的数据。此能力是板上既有协议，不表示主机安装器会升级 CH32。
+Cleanup only runs when both RX and TX are stopped, and drains any residual RX data. So to restart the same direction after a stop, you first need to stop the other direction; the core will not flush data the other direction is using just to reopen one side. This capability is an existing protocol on the board and does not mean the host installer updates the CH32.
 
-## FIR 分块事务
+## FIR chunked transactions
 
-以下命令仍放在 `@id` 封装里；扩展字段均为十进制整数，不能使用浮点、指数或十六进制。主机要串行管理整个事务，不能让不同调用方交叉上传。
+The following commands are still sent inside the `@id` wrapper; extension fields are all decimal integers, with no floating point, exponents, or hexadecimal. The host must manage the whole transaction serially and must not let different callers interleave uploads.
 
 ~~~text
 rx_fir_begin=<token>,<taps>,<factor>,<gain_dB>
@@ -146,15 +146,15 @@ fir_commit=<token>,<enable>,<crc32>
 fir_abort=<token>
 ~~~
 
-token 为非零 uint32，RX/TX 共用一个暂存槽。空闲时有效 begin 会替换遗留暂存状态，原 token 随即无效。begin/data 只修改 RAM；系数从 offset=0 开始连续上传，每行 1..8 个 -32768..32767 的 signed16 整数。无效块不改变状态。commit 要求已收到全部 taps、token 匹配、enable 为 0/1、CRC32 匹配。
+token is a non-zero uint32, and RX/TX share one staging slot. When idle, a valid begin replaces any leftover staged state and the old token becomes invalid. begin/data only modify RAM; coefficients are uploaded contiguously starting from offset=0, with 1..8 signed16 integers in -32768..32767 per line. An invalid chunk does not change state. commit requires all taps to have been received, a matching token, enable of 0/1, and a matching CRC32.
 
-CRC 为反射 IEEE CRC32，多项式 `0xEDB88320`，初值和最终异或均为 `0xFFFFFFFF`。只序列化声明的系数，每个 int16 二补码、小端低字节在前，不包含元数据或填充；ASCII 字节 `12345678` 对应的 CRC 为 `0x9AE0DAAF`。
+The CRC is the reflected IEEE CRC32 with polynomial `0xEDB88320`, and an initial value and final XOR of `0xFFFFFFFF`. Only the declared coefficients are serialized, each int16 as two's complement, little-endian with the low byte first, without metadata or padding; the CRC of the ASCII bytes `12345678` is `0x9AE0DAAF`.
 
-taps 为 16..128 且是 16 的倍数，factor 为 1/2/4；TX factor=1 最多 64 taps。RX gain 为 -12/-6/0/6 dB，TX gain 为 -6/0 dB。同方向两个物理通道使用同组配置，实际 tap 上限还受时钟预算影响。不合法组合必须失败，不能静默将采样率改为 1/1.5 MSPS。
+taps is 16..128 and a multiple of 16, and factor is 1/2/4; TX factor=1 allows at most 64 taps. RX gain is -12/-6/0/6 dB and TX gain is -6/0 dB. Both physical channels of the same direction use the same configuration, and the actual tap limit is also affected by the clock budget. Invalid combinations must fail; the sample rate must not be silently changed to 1/1.5 MSPS.
 
-成功提交消耗 token；被拒绝或失败的 FIR commit 保留 token，允许显式 retry/abort。成功提交后再 abort 会得到 token mismatch，不能把清理错误替换原错误。
+A successful commit consumes the token; a rejected or failed FIR commit keeps the token, allowing an explicit retry/abort. An abort after a successful commit gets a token mismatch, and that cleanup error must not replace the original error.
 
-### FIR 查询与启停
+### FIR query and enable
 
 ~~~text
 rx_fir_config?
@@ -164,11 +164,11 @@ rx_fir_read=<offset> <c0> ...
 fir_enable=<rx_enable>,<tx_enable>
 ~~~
 
-TX 使用对应 `tx_` 前缀。read 的 count 为 1..8 且不能超过已配置 taps，返回已通过 SPI 校验的 RAM 快照；每次查询不重新读取 SPI。commit 会先读回两个物理通道的系数，并检查 taps、gain、enable 和时钟。
+TX uses the corresponding `tx_` prefix. The count of read is 1..8 and cannot exceed the configured taps; it returns the RAM snapshot that passed SPI verification, and does not re-read SPI on each query. commit first reads back the coefficients of both physical channels and checks taps, gain, enable, and clocks.
 
-config=0 表示内置示例预设，config=1 表示自定义上传。旧的 `rx_fir_config=0` / `tx_fir_config=0` 恢复示例系数并关闭该方向 FIR，保持另一方向和共享采样率。`rx_fir_en=` / `tx_fir_en=` 通过相同检查事务修改启停，`fir_enable=` 则在一次事务内设置两边。
+config=0 means the built-in example preset, and config=1 means a custom upload. The old `rx_fir_config=0` / `tx_fir_config=0` restore the example coefficients and turn off the FIR for that direction, keeping the other direction and the shared sample rate. `rx_fir_en=` / `tx_fir_en=` change enable through the same checked transaction, while `fir_enable=` sets both sides in one transaction.
 
-## 时钟事务
+## Clock transactions
 
 ~~~text
 clock_sample_rate=<Hz>
@@ -181,21 +181,21 @@ clock_chain?
 clock_chain ref=<Hz> unit=Hz rx=<six CSV rates> tx=<six CSV rates>
 ~~~
 
-`clock_sample_rate` 计算合法共享链，不能降速回退。完整链的时钟暂存槽与 FIR 槽独立，begin 替换旧 token；commit 要求同一 token 已提交两个方向，并在应用之前消耗 token。所有频率为正 uint32 Hz，RX/TX 的 BBPLL 与最终采样率必须相同，Fs 不高于 61.44 MHz。
+`clock_sample_rate` computes a valid shared chain and never falls back to a lower rate. The clock staging slot for a complete chain is separate from the FIR slot, and begin replaces the old token; commit requires both directions to have been submitted with the same token, and consumes the token before applying. All frequencies are positive uint32 Hz, the BBPLL and final sample rate of RX/TX must be the same, and Fs must not exceed 61.44 MHz.
 
-设备检查 BBPLL 715..1430 MHz、ADC 25..640 MHz、DAC 不高于 320 MHz、可用整数分频/半带因子、FIR 因子和有效 taps 运算预算。AD9361 参考钟仍为板上 40 MHz；可通过独立 ADF4002 命令选择外部 10 MHz 驯服。PPS 频率监控见 [PPS 协议字段](pps.md)；用 PPS 装载硬件时间见 [硬件时间戳](timestamps.md)。
+The device checks BBPLL 715..1430 MHz, ADC 25..640 MHz, DAC no higher than 320 MHz, the available integer divider/half-band factors, the FIR factor, and the computation budget for the effective taps. The AD9361 reference clock is still the on-board 40 MHz; disciplining it to an external 10 MHz can be selected with the separate ADF4002 commands. For PPS frequency monitoring see [PPS protocol fields](pps.md); for loading hardware time on PPS see [Hardware Timestamps](timestamps.md).
 
-## 应用、校验与恢复
+## Apply, verification, and recovery
 
-硬件修改要求双向 USB 和 TX 输出都已停止；否则返回 busy，不隐式停止仍运行的流。写入前 SDK 保存双向 FIR、启停、时钟与带宽，校验拟议组合、编程、双通道 SPI 读回，再检查时钟/带宽以及 RX PRBS、TX 数字回环。这些检查证明数字配置完整性，不是通阻带、群延迟或模拟 RF 性能测量。
+Hardware changes require both USB directions and TX output to be stopped; otherwise busy is returned, and streams still running are not stopped implicitly. Before writing, the SDK saves the FIR, enable state, clocks, and bandwidth of both directions, validates the proposed combination, programs it, reads back both channels over SPI, and then checks clocks/bandwidth plus RX PRBS and TX digital loopback. These checks prove the integrity of the digital configuration; they are not measurements of passband/stopband, group delay, or analog RF performance.
 
-失败时尝试检查并恢复原状态：
+On failure it attempts to check and restore the original state:
 
 ~~~text
 ERR fir_or_clock_apply ... rollback=verified applied=restored ...
 ERR fir_or_clock_apply ... rollback=failed applied=unknown ...
 ~~~
 
-后一种情况把 RF/数字状态标为无效，成功 `rf_reinit!` 前禁止流。主机在任何失败硬件修改后使配置缓存失效，应用应确认恢复并重新配置。`rf_reinit!` 可重载 RAM 中保留的当前自定义 FIR/时钟；断电或重新下载 ELF 会丢失 RAM 自定义状态。
+In the latter case the RF/digital state is marked invalid, and streaming is forbidden until `rf_reinit!` succeeds. The host invalidates its configuration cache after any failed hardware change, and the application should confirm recovery and reconfigure. `rf_reinit!` can reload the current custom FIR/clocks kept in RAM; a power cycle or reloading the ELF loses the custom state in RAM.
 
-主机源码构建和安装均不编译、下载或写入 SDK、CH32、FPGA、BOOT.bin 或启动 Flash。板级固件在 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) 仓库，须按其自身流程构建和发布。
+Neither building the host from source nor installing it compiles, downloads, or writes the SDK, CH32, FPGA, BOOT.bin, or boot flash. The board firmware lives in the [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) repository and must be built and released following its own procedure.

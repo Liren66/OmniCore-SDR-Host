@@ -1,155 +1,155 @@
-# 测试结果
+# Benchmarks
 
-本文汇总 OmniCore Host 的实测数据：USB 吞吐（USB3 / USB2，Windows / Linux）和功能测试。
+This page collects measured data for OmniCore Host: USB throughput (USB3 / USB2, Windows / Linux) and functional tests.
 
 > [!NOTE]
-> 下列结果来自所列主机，USB 吞吐与主机控制器、端口和线材有关，更换环境后建议用 `och bench --json` 复核 `stability.pass`。测试只覆盖数据链路与控制功能，不包含 RF 功率、EVM、灵敏度等射频指标。
+> The results below come from the hosts listed. USB throughput depends on the host controller, port, and cable; after changing setups, recheck `stability.pass` with `och bench --json`. The tests only cover the data link and control functions, not RF metrics such as RF power, EVM, or sensitivity.
 
-## 计算口径
+## How results are computed
 
-吞吐使用 `och bench` 测量，取整个流生命周期的平均值（含启停开销），MB/s 为十进制。理论 wire 速率 = 采样率 × 通道数 × 每样本字节（12bit 为 3，8bit 为 2）。“错误”指主机丢样、USB 传输错误、设备溢出 / 欠流、事件丢失与 TX 断供的合计。
+Throughput is measured with `och bench` and averaged over the whole stream lifetime (including start/stop overhead); MB/s is decimal. Theoretical wire rate = sample rate × channels × bytes per sample (3 for 12-bit, 2 for 8-bit). "Errors" is the sum of host drops, USB transfer errors, device overflows / underflows, lost events, and TX starvation.
 
-## USB 3.0 · Windows · 成帧传输（当前）
+## USB 3.0 · Windows · framed transport (current)
 
-固件 v2026.11.07.1（`CH32H417_IP` 1.3，位流与 v2026.11.07 相同），OCH 0.6.1，Windows 11，USB 3.0，2026-11-07。`och bench` 零错误的最高采样率：先按 0.5 MS/s 细扫（每档 10 秒 × 2–3 次），再在最高档做 300 秒长测。USB MB/s 含每块 16 B 头，理论值不含块头。
+Firmware v2026.11.07.1 (`CH32H417_IP` 1.3, same bitstream as v2026.11.07), OCH 0.6.1, Windows 11, USB 3.0, 2026-11-07. Highest sample rate with zero errors in `och bench`: first a fine sweep in 0.5 MS/s steps (10 s × 2–3 runs per setting), then a 300-second run at the highest setting. USB MB/s includes the 16 B header per block; the theoretical value does not.
 
-| 配置 | 采样率 / 通道 | 测试 | RX / TX MB/s | 理论 MB/s | 错误 |
+| Configuration | Sample rate / channel | Test | RX / TX MB/s | Theoretical MB/s | Errors |
 |---|---:|---|---:|---:|---:|
-| 1 RX | 61.44 MSPS | 5 秒 | 184.1 / — | 184.3 | 0 |
-| 2 RX | 61.44 MSPS | 60 秒 | 368.5 / — | 368.6 | 0 |
-| 1 RX + 1 TX | 61.44 MSPS | 5 秒 | 183.9 / 183.8 | 184.3 | 0 |
-| 1 RX + 2 TX | **58 MSPS** | 300 秒 | 174.2 / 348.3 | 174.0 / 348.0 | 0 |
-| 2 RX + 1 TX | **58.5 MSPS** | 300 秒 × 2 | 351.3 / 175.7 | 351.0 / 175.5 | 0 |
-| 2 RX + 2 TX · 12bit | **44 MSPS** | 300 秒 × 2 | 264.2 / 264.2 | 264.0 | 0 |
-| 2 RX + 2 TX · 8bit | 61.44 MSPS | 60 秒 | 245.2 / 245.1 | 245.8 | 0 |
+| 1 RX | 61.44 MSPS | 5 s | 184.1 / — | 184.3 | 0 |
+| 2 RX | 61.44 MSPS | 60 s | 368.5 / — | 368.6 | 0 |
+| 1 RX + 1 TX | 61.44 MSPS | 5 s | 183.9 / 183.8 | 184.3 | 0 |
+| 1 RX + 2 TX | **58 MSPS** | 300 s | 174.2 / 348.3 | 174.0 / 348.0 | 0 |
+| 2 RX + 1 TX | **58.5 MSPS** | 300 s × 2 | 351.3 / 175.7 | 351.0 / 175.5 | 0 |
+| 2 RX + 2 TX · 12-bit | **44 MSPS** | 300 s × 2 | 264.2 / 264.2 | 264.0 | 0 |
+| 2 RX + 2 TX · 8-bit | 61.44 MSPS | 60 s | 245.2 / 245.1 | 245.8 | 0 |
 
-上限来自 FPGA 与 CH32 之间的 UHSIF 总线：RX 与 TX 共享约 533 MB/s，总流量 522–528 MB/s 时稳定。高一档的结果：2T2R 12bit 44.5 MSPS、1T2R 59 MSPS 出现 RX 溢出 / TX 欠流；2T1R 58.5 MSPS 10 秒通过，但 300 秒内有 1 次 RX 溢出和 3 次 TX 欠流。0.6.0 发布时的档位搜索（61.44 / 56 / 50 / 46 / 42）跳过了这些中间速率，因此当时记为 56 与 42 MSPS。块头开销（16 / 16384 ≈ 0.1%）对带宽没有可测影响。`tools/bench_sweep.py` 已改为细扫档位，可复现这张表。
+The limit comes from the UHSIF bus between the FPGA and the CH32: RX and TX share about 533 MB/s, and total traffic of 522–528 MB/s is stable. Results one step higher: 2T2R 12-bit at 44.5 MSPS and 1T2R at 59 MSPS showed RX overflows / TX underflows; 2T1R at 58.5 MSPS passed 10 s but had 1 RX overflow and 3 TX underflows within 300 s. The setting search at the 0.6.0 release (61.44 / 56 / 50 / 46 / 42) skipped these intermediate rates, which is why 56 and 42 MSPS were recorded at that time. The block header overhead (16 / 16384 ≈ 0.1%) has no measurable effect on bandwidth. `tools/bench_sweep.py` now uses the fine sweep and can reproduce this table.
 
 ## USB 2.0 High-Speed
 
-USB2 下 RX 与 TX 共享 480 Mbit/s 链路预算。CLI 的 `och info --json` 中的 `usb2_reference` 与流开始时的参考值提示都来自本节的数据（`apps/och/usb2_reference.hpp`）。USB2 需要支持 USBHS 的 CH32 固件，见 [固件兼容性](firmware-compatibility.md#需要多端同时更新的功能)。
+On USB2, RX and TX share a 480 Mbit/s link budget. `usb2_reference` in the CLI's `och info --json` and the reference hints shown when a stream starts both come from the data in this section (`apps/och/usb2_reference.hpp`). USB2 needs CH32 firmware with USBHS support; see [Firmware Compatibility](firmware-compatibility.md#features-that-need-several-components-updated-together).
 
-![USB2 吞吐实测](images/usb2-throughput.svg)
+![USB2 measured throughput](images/usb2-throughput.svg)
 
-### 成帧传输复测（OCH 0.7.1，2026-11-08）
+### Retest with framed transport (OCH 0.7.1, 2026-11-08)
 
-OmniCore Host 0.7.1，Zynq 固件 `SDK_CMD_1.2_20261107_SYNC`（成帧传输，板子运行 OmniCore SDR Linux 1.3.1），CH32 桥接 1.0.1（v2026.11.08），普通 USB 2.0 A 口，480 Mbit/s。下文 300 秒长测的各档位每项连续运行 30 秒：
+OmniCore Host 0.7.1, Zynq firmware `SDK_CMD_1.2_20261107_SYNC` (framed transport, board running OmniCore SDR Linux 1.3.1), CH32 bridge 1.0.1 (v2026.11.08), ordinary USB 2.0 Type-A port, 480 Mbit/s. Each of the settings from the 300-second runs below was run continuously for 30 s:
 
-| 配置 | USB IQ | 采样率 MSPS/通道 | RX / TX MB/s | 故障 |
+| Configuration | USB IQ | Sample rate MSPS/channel | RX / TX MB/s | Faults |
 |---|---:|---:|---:|---:|
-| 1 RX | 12bit | 14 | 42.0 / — | 0 |
-| 2 RX | 12bit | 7 | 42.0 / — | 0 |
-| 1 TX | 12bit | 14 | — / 42.0 | 0 |
-| 2 TX | 12bit | 6.5 | — / 39.0 | 0 |
-| 1 RX + 1 TX | 12bit | 7 | 21.0 / 21.0 | 0 |
-| 2 RX + 2 TX | 12bit | 3.5 | 21.0 / 21.0 | 0 |
-| 2 RX + 2 TX | 8bit | 5 | 20.0 / 20.0 | 0 |
+| 1 RX | 12-bit | 14 | 42.0 / — | 0 |
+| 2 RX | 12-bit | 7 | 42.0 / — | 0 |
+| 1 TX | 12-bit | 14 | — / 42.0 | 0 |
+| 2 TX | 12-bit | 6.5 | — / 39.0 | 0 |
+| 1 RX + 1 TX | 12-bit | 7 | 21.0 / 21.0 | 0 |
+| 2 RX + 2 TX | 12-bit | 3.5 | 21.0 / 21.0 | 0 |
+| 2 RX + 2 TX | 8-bit | 5 | 20.0 / 20.0 | 0 |
 
-- 16 字节块头只占 0.1% 带宽，成帧传输后 USB2 档位不变。本次每项 30 秒，未重做 300 秒长测。
-- RX PRBS、TX 回环自检通过；`och firmware info` 正常。
-- USB-C 状态经 EP3 OUT 查询（桥接 1.0.1 的 USB2 端点）：`och info` 连续 10 次均可读，约 0.1 s。普通 USB2 A 口不声明 1.5 A / 3 A，显示 `USB default current`（寄存器 08=0x00）；同一块板接 USB3 Type-C 口时为 3000 mA（08=0x30）。
+- The 16-byte block header takes only 0.1% of bandwidth, so the USB2 settings are unchanged with framed transport. Each item ran for 30 s this time; the 300-second runs were not repeated.
+- RX PRBS and TX loopback self-tests passed; `och firmware info` works normally.
+- USB-C status queried over EP3 OUT (the USB2 endpoint in bridge 1.0.1): `och info` could read it 10 times in a row, about 0.1 s each. An ordinary USB2 Type-A port does not advertise 1.5 A / 3 A and shows `USB default current` (register 08=0x00); the same board on a USB3 Type-C port shows 3000 mA (08=0x30).
 
-### 300 秒长测（OCH 0.4.3，2026-10-25）
+### 300-second runs (OCH 0.4.3, 2026-10-25)
 
-| 配置 | USB IQ | 稳定采样率 MSPS/通道 | RX / TX MB/s | 启动恢复 | 1 秒后新增错误 |
+| Configuration | USB IQ | Stable sample rate MSPS/channel | RX / TX MB/s | Start-up recoveries | New errors after 1 s |
 |---|---:|---:|---:|---:|---:|
-| 1 RX | 12bit | **14** | 41.998 / — | 2 | 0 |
-| 2 RX | 12bit | **7** | 41.998 / — | 0 | 0 |
-| 1 TX | 12bit | **14** | — / 41.987 | 0 | 0 |
-| 2 TX | 12bit | **6.5** | — / 38.988 | 0 | 0 |
-| 1 RX + 1 TX | 12bit | **7** | 20.999 / 20.993 | 1 | 0 |
-| 2 RX + 2 TX | 12bit | **3.5** | 20.999 / 20.993 | 0 | 0 |
-| 2 RX + 2 TX | 8bit | **5** | 19.999 / 19.994 | 1 | 0 |
+| 1 RX | 12-bit | **14** | 41.998 / — | 2 | 0 |
+| 2 RX | 12-bit | **7** | 41.998 / — | 0 | 0 |
+| 1 TX | 12-bit | **14** | — / 41.987 | 0 | 0 |
+| 2 TX | 12-bit | **6.5** | — / 38.988 | 0 | 0 |
+| 1 RX + 1 TX | 12-bit | **7** | 20.999 / 20.993 | 1 | 0 |
+| 2 RX + 2 TX | 12-bit | **3.5** | 20.999 / 20.993 | 0 | 0 |
+| 2 RX + 2 TX | 8-bit | **5** | 19.999 / 19.994 | 1 | 0 |
 
-每项均连续运行 300 秒；单通道使用 CH1，双通道使用 CH1 + CH2，采样率为每通道。测试主机为 ThinkPad E14 Gen 7 / Core Ultra 7 255H / Windows 11（build 26200），USB 驱动为 libusbK，固件为 `SDK_CMD_1.0_20261024_IQ8`。
+Each item ran continuously for 300 s; single-channel uses CH1, dual-channel uses CH1 + CH2, and sample rates are per channel. The test host was a ThinkPad E14 Gen 7 / Core Ultra 7 255H / Windows 11 (build 26200), with the libusbK USB driver and firmware `SDK_CMD_1.0_20261024_IQ8`.
 
-### 测试条件
+### Test conditions
 
-- `bench` 使用原生 packed12 或 signed8，默认每方向 64 MiB 缓冲、32 × 196608 B USB 请求；不包含磁盘写入或应用格式转换。
-- RX/TX LO 为 1 GHz、带宽 18 MHz；TX 为 1 MHz 复正弦，幅度 0.25，衰减 60 dB。
-- 以 0.5 MSPS 步进选择采样率，表中为本机完成 300 秒测试的稳定档位。
-- 前 1 秒内允许 RX 溢出及完整恢复，之后零新增错误；平均吞吐至少为理论 wire 速率的 98%。
-- 启动阶段的溢出必须在前 1 秒内被观察到（0.6.0 起为 `RX GAP` 事件，0.4.x 测试时为溢出通知与重同步），原始计数保留。任何阶段的 TX 欠流、主机丢样、传输错误、事件丢失、TX 断供或补零都不能计为通过。
+- `bench` uses native packed12 or signed8, with the default 64 MiB buffer and 32 × 196608 B USB requests per direction; no disk writes or application format conversion.
+- RX/TX LO at 1 GHz, bandwidth 18 MHz; TX is a 1 MHz complex sine, amplitude 0.25, attenuation 60 dB.
+- Sample rates were chosen in 0.5 MSPS steps; the table shows the stable settings that completed the 300-second test on this machine.
+- RX overflow with full recovery is allowed within the first second, with zero new errors after that; average throughput must be at least 98% of the theoretical wire rate.
+- Start-up overflows must be observed within the first second (as `RX GAP` events since 0.6.0; as overflow notifications and resyncs in the 0.4.x tests), and raw counts are kept. TX underflow, host drops, transfer errors, lost events, TX starvation, or zero padding at any stage count as failures.
 
-`observed_seconds` 为 CLI 取出事件时的主机观察时间，从流启动调用返回后计时，不是硬件样本时间。RX/TX 共享设备故障计数，不能将双向计数相加。本次验证传输统计，未检查 RF 波形精度或位级连续性；换主机或 USB 拓扑需重新确认。
+`observed_seconds` is the host observation time when the CLI picked up the event, measured from the return of the stream start call; it is not hardware sample time. RX/TX share the device fault counts, so the counts of the two directions must not be added together. This run verified transport statistics, not RF waveform accuracy or bit-level continuity; a different host or USB topology needs to be confirmed again.
 
-### 终端输出
+### Terminal output
 
-USB2 与 USB3 的 `och info` 使用相同的设备信息布局。采样率表放在文档中，JSON 保留实测参考供脚本读取。
+`och info` uses the same device information layout on USB2 and USB3. The sample-rate table lives in the documentation, and the JSON keeps the measured reference for scripts.
 
-![USB2 设备信息](images/cli-usb2-info.png)
+![USB2 device information](images/cli-usb2-info.png)
 
-8bit 双通道全双工 5 MSPS 的 300 秒测试，启动恢复 1 次，后续零新增错误：
+300-second test of 8-bit dual-channel full duplex at 5 MSPS, with 1 start-up recovery and zero new errors afterwards:
 
-![USB2 吞吐测试输出](images/cli-usb2-bench.png)
+![USB2 throughput test output](images/cli-usb2-bench.png)
 
-终端图由 CLI 自身的显示代码根据测量记录绘制，省略的段落以 `...` 标出。
+The terminal images were drawn from the measurement records by the CLI's own display code; omitted sections are marked with `...`.
 
-### 复现
+### Reproducing
 
 ```powershell
 och bench --rx --tx --channels 1,2 --sample-rate 3.5M --seconds 300 --attenuation 60 --fail-fast
 och bench --rx --tx --channels 1,2 --iq-bits 8 --sample-rate 5M --seconds 300 --attenuation 60 --fail-fast
 ```
 
-`--fail-fast` 在第 1 秒之后观察到两次相隔不超过 2 秒的 RX 溢出通知时正常停流，保存统计并返回退出码 3；恢复通知不重复计数。未触发提前停止的候选继续测满请求时长。
+`--fail-fast` stops the stream normally after the first second when it observes two RX overflow notifications no more than 2 s apart, saves the statistics, and returns exit code 3; recovery notifications are not counted twice. Candidates that do not trigger an early stop run for the full requested duration.
 
-## 功能测试
+## Functional tests
 
-| 项目 | 平台 | 结果 |
+| Item | Platform | Result |
 |---|---|---|
-| 硬件时间戳（0.6.0） | Windows | `hw_timestamp_test` 6 项通过：内部 PPS 间隔恰为采样率（61.44 / 30.72 / 7.68 MSPS）、PPS 装载精确、RX 时间戳连续、定时 RX 首样点精确、定时 TX 经数据口回环延迟逐突发恒定、迟到突发不发射 |
-| 数字接口自检 | Windows / Linux | RX PRBS 与 TX 数字回环通过 |
-| CLI 功能检查 | Linux | 20 / 20 通过：设备信息、时钟、FIR、温度、SC16 / FC32 / packed12 采集与元数据、独占访问、Ctrl+C 退出与重开、文件保护、循环回放、非法参数 |
-| 运行中改参 | Windows / Linux | RX、零 IQ TX、双向及 FIR / 时钟操作后原流恢复收发，以新 epoch 标记间断 |
-| 参考与外部 LO | Windows | 参考 / LO 11 项检查与 3 次运行中切换通过；ADF4002 D5 自检闪烁序列确认 |
-| RX 校正 | Windows | DC / IQ 跟踪 18 项检查与 6 次运行中切换通过 |
-| PPS 监控 | Windows | 真实 PPS 下 30.72 MSPS 读数 122880000–122880001 Hz，频偏收敛至 0–0.008 ppm |
-| PPS 驯服晶振 | Windows | 4 种调谐模式与 300 次参考切换握手零丢失；空闲、RX 2×2 与 IQ8 全双工各 2 分钟全程锁定，相位 ≤ 158 ns，频偏 ≤ 0.016 ppm |
-| SDK 集成 | Linux | 独立 C / C++ CMake 工程链接发布包并运行；移动安装目录后仍可运行 |
-| 桥接固件 USB 升级 | Windows | USB3：连续 15 次成功，约 5 秒/次；USB2（480 Mbit/s）：连续 6 次成功，约 10 秒/次（Bootloader 先尝试 USB3）。两种链路下写入中途结束进程后设备停在 Bootloader，重新升级恢复；升级后 SDK 控制与 IQ 收发正常 |
+| Hardware timestamps (0.6.0) | Windows | All 6 checks of `hw_timestamp_test` pass: internal PPS interval exactly equals the sample rate (61.44 / 30.72 / 7.68 MSPS), PPS loading is exact, RX timestamps are continuous, the first sample of timed RX is exact, timed TX through the data-port loopback has a constant delay from burst to burst, and late bursts are not transmitted |
+| Digital interface self-test | Windows / Linux | RX PRBS and TX digital loopback pass |
+| CLI functional checks | Linux | 20 / 20 pass: device info, clocks, FIR, temperature, SC16 / FC32 / packed12 capture and metadata, exclusive access, Ctrl+C exit and reopen, file protection, looped playback, invalid arguments |
+| Runtime reconfiguration | Windows / Linux | After RX, zero-IQ TX, bidirectional, and FIR / clock operations, the original streams resume, with the discontinuity marked by a new epoch |
+| Reference and external LO | Windows | 11 reference / LO checks and 3 switches during streaming pass; ADF4002 D5 self-test blink sequence confirmed |
+| RX correction | Windows | 18 DC / IQ tracking checks and 6 switches during streaming pass |
+| PPS monitoring | Windows | With real PPS at 30.72 MSPS, reading 122880000–122880001 Hz, offset converging to 0–0.008 ppm |
+| PPS-disciplined oscillator | Windows | 4 tuning modes and 300 reference-switch handshakes with zero losses; locked throughout 2 minutes each of idle, RX 2×2, and IQ8 full duplex, phase ≤ 158 ns, offset ≤ 0.016 ppm |
+| SDK integration | Linux | Standalone C / C++ CMake projects link against the release package and run; still run after moving the install directory |
+| Bridge firmware USB update | Windows | USB3: 15 consecutive successes, about 5 s each; USB2 (480 Mbit/s): 6 consecutive successes, about 10 s each (the bootloader tries USB3 first). On both links, killing the process mid-write leaves the device in the bootloader, and updating again recovers it; after the update, SDK control and IQ streaming work normally |
 
-## 历史测量：0.4.x 起始头模式
+## Historical measurements: 0.4.x start-header mode
 
-以下为 0.4.x（16 KiB 递增起始头、固件 `SDK_CMD_1.0_20261024_IQ8`）时的测量。成帧传输的块头只占约 0.1% 带宽，Linux USB3 尚未在成帧传输下复测。
+The following measurements are from 0.4.x (16 KiB incrementing start header, firmware `SDK_CMD_1.0_20261024_IQ8`). The block header of the framed transport takes only about 0.1% of bandwidth; Linux USB3 has not yet been retested with framed transport.
 
-#### 测试环境
+#### Test environment
 
 | | Windows | Linux |
 |---|---|---|
-| 主机 | ThinkPad E14 Gen 7，Core Ultra 7 255H，32 GB | AMD Ryzen 5 5500U，6 核 12 线程 |
-| 系统 | Windows 11 25H2（build 26200） | Ubuntu 24.04.3，Linux 7.0 x86_64 |
-| USB 驱动 | libusbK 3.1.0.0 | libusb 1.0.27（usbfs） |
-| 编译器 | MinGW-w64 GCC，Release | GCC 13.3，Release |
-| 板卡固件 | `SDK_CMD_1.0_20261024_IQ8` | `SDK_CMD_1.0_20261024_IQ8` |
-| 缓冲配置 | 每方向 32 × 196608 B USB 请求，64 MiB 环形缓冲 | 同左，`usbfs_memory_mb=16`（系统默认） |
+| Host | ThinkPad E14 Gen 7, Core Ultra 7 255H, 32 GB | AMD Ryzen 5 5500U, 6 cores 12 threads |
+| OS | Windows 11 25H2 (build 26200) | Ubuntu 24.04.3, Linux 7.0 x86_64 |
+| USB driver | libusbK 3.1.0.0 | libusb 1.0.27 (usbfs) |
+| Compiler | MinGW-w64 GCC, Release | GCC 13.3, Release |
+| Board firmware | `SDK_CMD_1.0_20261024_IQ8` | `SDK_CMD_1.0_20261024_IQ8` |
+| Buffer configuration | 32 × 196608 B USB requests per direction, 64 MiB ring buffer | Same, `usbfs_memory_mb=16` (system default) |
 
 #### USB 3.0 · Windows
 
-![USB3 吞吐实测（Windows）](images/throughput.svg)
+![USB3 measured throughput (Windows)](images/throughput.svg)
 
-| 配置 | USB IQ | 时长 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
+| Configuration | USB IQ | Duration | RX / TX MB/s | Theoretical MB/s | Ratio RX / TX | Errors |
 |---|---:|---:|---:|---:|---:|---:|
-| 2 RX · 61.44 MSPS | 12bit | 5 秒 | 367.2 / — | 368.6 | 99.6% / — | 0 |
-| 1 RX · 61.44 MSPS | 12bit | 5 秒 | 183.6 / — | 184.3 | 99.6% / — | 0 |
-| 2 TX · 61.44 MSPS | 12bit | 5 秒 | — / 362.0 | 368.6 | — / 98.2% | 0 |
-| 2 RX + 2 TX · 30.72 MSPS | 12bit | 5 秒 | 183.4 / 180.9 | 184.3 | 99.5% / 98.1% | 0 |
-| 1 RX + 1 TX · 61.44 MSPS | 12bit | 5 秒 | 183.8 / 180.7 | 184.3 | 99.7% / 98.1% | 0 |
-| 2 RX + 2 TX · 50 MSPS | 8bit | 5 秒 | 199.2 / 196.3 | 200.0 | 99.6% / 98.1% | 0 |
-| 2 RX + 2 TX · 61.44 MSPS | 8bit | 300 秒 | 245.7 / 245.7 | 245.8 | 100.0% / 100.0% | 0 |
+| 2 RX · 61.44 MSPS | 12-bit | 5 s | 367.2 / — | 368.6 | 99.6% / — | 0 |
+| 1 RX · 61.44 MSPS | 12-bit | 5 s | 183.6 / — | 184.3 | 99.6% / — | 0 |
+| 2 TX · 61.44 MSPS | 12-bit | 5 s | — / 362.0 | 368.6 | — / 98.2% | 0 |
+| 2 RX + 2 TX · 30.72 MSPS | 12-bit | 5 s | 183.4 / 180.9 | 184.3 | 99.5% / 98.1% | 0 |
+| 1 RX + 1 TX · 61.44 MSPS | 12-bit | 5 s | 183.8 / 180.7 | 184.3 | 99.7% / 98.1% | 0 |
+| 2 RX + 2 TX · 50 MSPS | 8-bit | 5 s | 199.2 / 196.3 | 200.0 | 99.6% / 98.1% | 0 |
+| 2 RX + 2 TX · 61.44 MSPS | 8-bit | 300 s | 245.7 / 245.7 | 245.8 | 100.0% / 100.0% | 0 |
 
 #### USB 3.0 · Linux
 
-![USB3 吞吐实测（Linux）](images/linux-throughput.svg)
+![USB3 measured throughput (Linux)](images/linux-throughput.svg)
 
-| 配置 | USB IQ | 时长 | RX / TX MB/s | 理论 MB/s | 比例 RX / TX | 错误 |
+| Configuration | USB IQ | Duration | RX / TX MB/s | Theoretical MB/s | Ratio RX / TX | Errors |
 |---|---:|---:|---:|---:|---:|---:|
-| 2 RX · 61.44 MSPS | 12bit | 60 秒 | 368.6 / — | 368.6 | 99.98% / — | 0 |
-| 1 RX · 61.44 MSPS | 12bit | 60 秒 | 184.3 / — | 184.3 | 99.98% / — | 0 |
-| 2 TX · 61.44 MSPS | 12bit | 60 秒 | — / 368.1 | 368.6 | — / 99.85% | 0 |
-| 2 RX + 2 TX · 30.72 MSPS | 12bit | 60 秒 | 184.3 / 184.0 | 184.3 | 99.98% / 99.85% | 0 |
-| 1 RX + 1 TX · 61.44 MSPS | 12bit | 60 秒 | 184.3 / 184.0 | 184.3 | 99.98% / 99.85% | 0 |
-| 2 RX + 2 TX · 50 MSPS | 8bit | 300 秒 | 200.0 / 199.9 | 200.0 | 100.0% / 99.97% | 0 |
-| 2 RX + 2 TX · 61.44 MSPS | 8bit | 300 秒 | 245.8 / 245.7 | 245.8 | 100.0% / 99.97% | 0 |
+| 2 RX · 61.44 MSPS | 12-bit | 60 s | 368.6 / — | 368.6 | 99.98% / — | 0 |
+| 1 RX · 61.44 MSPS | 12-bit | 60 s | 184.3 / — | 184.3 | 99.98% / — | 0 |
+| 2 TX · 61.44 MSPS | 12-bit | 60 s | — / 368.1 | 368.6 | — / 99.85% | 0 |
+| 2 RX + 2 TX · 30.72 MSPS | 12-bit | 60 s | 184.3 / 184.0 | 184.3 | 99.98% / 99.85% | 0 |
+| 1 RX + 1 TX · 61.44 MSPS | 12-bit | 60 s | 184.3 / 184.0 | 184.3 | 99.98% / 99.85% | 0 |
+| 2 RX + 2 TX · 50 MSPS | 8-bit | 300 s | 200.0 / 199.9 | 200.0 | 100.0% / 99.97% | 0 |
+| 2 RX + 2 TX · 61.44 MSPS | 8-bit | 300 s | 245.8 / 245.7 | 245.8 | 100.0% / 99.97% | 0 |
 
-Linux 测试的 TX 发送零 IQ、衰减 89.75 dB；所有档位 `stability.pass=true`，未调整内核 USB 内存配额、实时调度或 CPU 电源策略。
+In the Linux tests, TX sent zero IQ with 89.75 dB attenuation; every setting had `stability.pass=true`, without adjusting the kernel USB memory quota, real-time scheduling, or CPU power policy.

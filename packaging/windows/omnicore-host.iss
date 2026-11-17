@@ -53,6 +53,7 @@ Source: "{#StageDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversio
 Source: "{#StageDir}\matlab\*"; DestDir: "{app}\matlab"; Tasks: matlab; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 Source: "{#StageDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\README.zh-CN.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\PAYLOAD_SHA256.txt"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -60,6 +61,7 @@ Source: "{#StageDir}\PAYLOAD_SHA256.txt"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\OmniCore Host terminal"; Filename: "{cmd}"; Parameters: "/K """"{app}\bin\och-shell.cmd"""""; WorkingDir: "{app}"
 Name: "{group}\Install OmniCoreSDR driver"; Filename: "{cmd}"; Parameters: "/K """"{app}\bin\och-driver.exe"" install"""; WorkingDir: "{app}"
 Name: "{group}\Installation guide"; Filename: "{app}\docs\INSTALL_WINDOWS.txt"
+Name: "{group}\Installation guide (Chinese)"; Filename: "{app}\docs\INSTALL_WINDOWS.zh-CN.txt"
 Name: "{group}\Uninstall OmniCore Host"; Filename: "{uninstallexe}"
 
 [Code]

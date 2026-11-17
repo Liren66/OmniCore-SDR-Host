@@ -1,10 +1,10 @@
-# C/C++ 开发接口
+# C/C++ Development Interface
 
-## 链接与 ABI
+## Linking and ABI
 
-公共 C 头文件为 omnicore/och.h。Windows 链接 omnicore.dll 的对应工具链导入库；Linux 链接 libomnicore.so.1，macOS 链接 libomnicore.1.dylib（两者的 `och` 程序都用相对 RPATH 找到库）。omnicore/och.hpp 是调用方编译的 C++17 RAII 包装。发行 SDK 同时提供由 DLL 导出表生成的原生 MSVC omnicore.lib，以及 MinGW 的 libomnicore.dll.a；它们不能靠改扩展名互换。
+The public C header is omnicore/och.h. On Windows, link the import library for your toolchain that corresponds to omnicore.dll; on Linux link libomnicore.so.1, and on macOS libomnicore.1.dylib (on both, the `och` program finds the library through a relative RPATH). omnicore/och.hpp is a C++17 RAII wrapper compiled by the caller. The release SDK provides both a native MSVC omnicore.lib generated from the DLL export table and MinGW's libomnicore.dll.a; they cannot be swapped by renaming the extension.
 
-适配器项目可以通过安装包的 CMake 配置选取对应导入库：
+Adapter projects can pick the right import library through the installer's CMake configuration:
 
 ~~~cmake
 cmake_minimum_required(VERSION 3.20)
@@ -15,76 +15,76 @@ target_compile_features(my_receiver PRIVATE cxx_std_17)
 target_link_libraries(my_receiver PRIVATE OmniCore::omnicore)
 ~~~
 
-配置时将 CMAKE_PREFIX_PATH 指向 OmniCore Host 安装目录。Windows 运行时让安装目录的 bin 在 PATH 中，或把匹配版本的 DLL 放到应用目录。发布流水线用安装包里的 MSVC 导入库编译 MATLAB MEX，这是目前实际验证过的 MSVC 用法。
+When configuring, point CMAKE_PREFIX_PATH at the OmniCore Host install directory. At runtime on Windows, put the install directory's bin on PATH, or place a DLL of the matching version in the application directory. The release pipeline builds the MATLAB MEX with the MSVC import library from the installer; this is the MSVC usage that has actually been verified so far.
 
-带 struct_size 的输出结构先清零并设为 sizeof(结构体)；配置/流参数优先调用 och_default_config、och_default_stream_args 初始化。ABI 版本为 OCH_ABI_VERSION，软件版本来自 och_version()。插件不要直接依赖内部结构。
+Output structs with struct_size must first be zeroed and set to sizeof(struct); for configuration/stream arguments, prefer initializing with och_default_config and och_default_stream_args. The ABI version is OCH_ABI_VERSION, and the software version comes from och_version(). Plugins must not depend directly on internal structures.
 
-错误返回 och_result。och_last_error() 提供调用线程的失败详情，应立即复制；下一次失败可能覆盖。C++ 控制方法通过 och::check 抛异常，而 recv/send 保留 TIMEOUT/STOPPED 返回值供循环处理。
+Errors are returned as och_result. och_last_error() gives the failure details for the calling thread and should be copied immediately, since the next failure may overwrite it. C++ control methods throw exceptions through och::check, while recv/send keep the TIMEOUT/STOPPED return values for loops to handle.
 
-## 生命周期
+## Lifecycle
 
-1. list 枚举，open 用序列号打开。不指定序列号只选择唯一设备。
-2. configure 设置共享采样率、mask、LO、带宽、增益，不隐式发射。
-3. create_stream 为方向创建一次性流并分配缓冲。
-4. RX：start 后 recv 或 acquire/release。TX：send 预填后 start，再持续 send。
-5. TX 最后一个 send 后可 flush；flush 期间不得并发 send。
-6. stop，等待应用 IO 线程退出，释放租借，destroy_stream。
-7. 所有流销毁后 close；仍存在流时 close 返回 BUSY。
+1. list enumerates, and open opens by serial number. Without a serial number, it only selects the single device.
+2. configure sets the shared sample rate, masks, LO, bandwidth, and gain, and never transmits implicitly.
+3. create_stream creates a single-use stream for a direction and allocates its buffers.
+4. RX: after start, recv or acquire/release. TX: prefill with send, then start, then keep calling send.
+5. After the last TX send you can flush; no send may run concurrently during flush.
+6. stop, wait for the application's I/O threads to exit, release leases, then destroy_stream.
+7. close after all streams are destroyed; close returns BUSY while streams still exist.
 
-显式 stop 后不可再次 start，要销毁并重建。当前 CH32 缓冲恢复约束要求一方向停止后重开前先停另一方向；若另一方向仍活动则返回 BUSY。0.3 起，运行中的参数修改由设备统一协调，应用无需为每次改参 stop/destroy/create；内部暂停不会使原本运行的流成为一次性终止状态。详见下一节。
+After an explicit stop, a stream cannot be started again; destroy and recreate it. The current CH32 buffer recovery constraint requires that, after one direction stops, the other direction is stopped before reopening; if the other direction is still active, BUSY is returned. Since 0.3, parameter changes during streaming are coordinated by the device, so the application does not need to stop/destroy/create for every change; an internal pause does not put a stream that was running into a one-shot terminated state. See the next section.
 
-device 必须比其 stream 活得更久。示例把 device 声明在 stream 之前，依靠逆序析构。析构清理不用于报告关键错误，正常停止建议显式 stop/close 并处理返回值。
+The device must outlive its streams. The examples declare the device before the streams and rely on reverse-order destruction. Destructor cleanup is not used to report critical errors; for a normal stop, call stop/close explicitly and handle the return values.
 
-destroy_stream 返回 BUSY 表示仍有租借，句柄保留；OK 或 IO 都已销毁句柄，即使停止硬件时出现 IO 错误也不能再次 destroy。C++ close 已处理该所有权规则。设备 close 的 BUSY 则保留设备对象，待所属流销毁后重试。
+destroy_stream returning BUSY means there is still a lease and the handle is kept; OK or IO both mean the handle has been destroyed, so even if an IO error occurred while stopping the hardware, it must not be destroyed again. The C++ close already handles this ownership rule. A BUSY from device close keeps the device object; retry after its streams are destroyed.
 
-get_config 返回该句柄最近一次成功应用的配置请求，仅在该句柄已 configure 时可用。它不是所有射频寄存器的实时回读；例如 LO/时钟的硬件量化、AGC 实际增益变化不会自动反映在此缓存。需要核对实际状态时可查询对应 SDK 命令，不能把请求值当成测量值。
+get_config returns the most recently successfully applied configuration request for that handle, and is only available once that handle has been configured. It is not a live read-back of all RF registers; for example, hardware quantization of LO/clocks and actual AGC gain changes are not reflected automatically in this cache. To check the actual state, query the corresponding SDK command; requested values must not be treated as measurements.
 
-open 会取得设备所有权、确认协议版本、停止旧 USB 数据会话并使用现有 CH32 诊断接口清理跨会话数据。它不是完全无副作用的旁路观察接口。独立 CLI 的 info/get/config 也需要 open；如果已有 OCH 进程持有设备，第二个进程会被拒绝。list/find 仅枚举，不接管数据流。
+open takes ownership of the device, confirms the protocol version, stops any old USB data session, and uses the existing CH32 diagnostic interface to clean up cross-session data. It is not a completely side-effect-free observation interface. The standalone CLI's info/get/config also need open; if another OCH process already holds the device, the second process is refused. list/find only enumerate and do not take over the data streams.
 
-## 运行中修改参数
+## Changing parameters at runtime
 
-在持有设备的**同一进程**中，管理线程可直接调用 och_configure / device.configure，或 typed FIR、clock、sample-rate、RX correction、reference、LO source 设置接口。核心协调暂停 RX/TX、等待当前 IO 操作退出临界区、应用参数、清理跨会话数据，再恢复修改前正在运行的方向。原 och_stream 句柄、格式、USB 请求缓冲和主机大缓冲保持稳定，调用方继续使用同一个流对象。
+In the **same process** that holds the device, a management thread can call och_configure / device.configure directly, or the typed FIR, clock, sample-rate, RX correction, reference, and LO source setters. The core coordinates pausing RX/TX, waits for current I/O operations to leave their critical sections, applies the parameters, cleans up cross-session data, and then resumes the directions that were running before the change. The original och_stream handles, formats, USB request buffers, and large host buffers stay stable, and callers keep using the same stream objects.
 
-- 已有任意流对象时，rx_mask、tx_mask 都不能改变；改变通道布局必须先销毁所有流。流格式和缓冲尺寸仍在 create_stream 时确定。
-- configure 的有效配置与已成功应用的请求完全相同时直接返回，不中断收发。有变化时只写变更的射频配置，避免无关的时钟/带宽写入和校准；这不承诺每种参数都能无缝修改。
-- 仅恢复原本 running 的方向。尚未 start 的流仍未启动；已显式 stop 的流仍保持停止。只接收的应用不会因此自动发射。
-- 正在等待的 recv、acquire 或 send 可暂时返回 OCH_TIMEOUT；消费者/生产者保留同一个句柄并重试。重配置期间 TIMEOUT 可能立即返回，重试前建议短暂休眠（例如 1 ms），避免忙循环占用 CPU 和反复争抢 I/O 锁。send 已接受部分样本时仍返回 OCH_OK，必须按 accepted 前进，不能重复提交已接受前缀。
-- 有 RX 租借尚未 release 时返回 OCH_BUSY，硬件不变。使用租借的应用应先与消费者协调释放，再重试改参；不能一边持有指针一边等待重配置完成。
-- 控制和生命周期调用由一个管理线程串行执行。destroy/close 不得与该设备/流上的任何操作并发；flush 也不应与改参或 send 并发。
+- While any stream object exists, neither rx_mask nor tx_mask can change; changing the channel layout requires destroying all streams first. Stream format and buffer sizes are still fixed at create_stream.
+- When the effective configuration of configure is exactly the same as the request already applied, it returns immediately without interrupting streaming. When something changes, only the changed RF configuration is written, avoiding unrelated clock/bandwidth writes and calibrations; this does not promise that every parameter can be changed seamlessly.
+- Only directions that were running are resumed. Streams not yet started stay unstarted, and streams explicitly stopped stay stopped. Receive-only applications never start transmitting because of this.
+- A recv, acquire, or send that is waiting may temporarily return OCH_TIMEOUT; consumers/producers keep the same handle and retry. During reconfiguration, TIMEOUT may return immediately, so sleep briefly before retrying (e.g. 1 ms) to avoid a busy loop that burns CPU and repeatedly contends for the I/O lock. When send has accepted part of the samples, it still returns OCH_OK; advance by accepted and never resubmit the accepted prefix.
+- While an RX lease has not been released, OCH_BUSY is returned and the hardware is unchanged. Applications using leases should first coordinate with the consumer to release it, then retry the change; you cannot hold the pointer while waiting for reconfiguration to finish.
+- Control and lifecycle calls are executed serially by one management thread. destroy/close must not run concurrently with any operation on that device/stream; flush should not run concurrently with reconfiguration or send either.
 
-RX 重配时丢弃旧队列，已知的本地主机丢样计入 host_dropped_samples。恢复后的第一个成帧块开启新 epoch（单调递增），带 OCH_META_START | OCH_META_DISCONTINUITY | OCH_META_RECONFIGURED（值 32）| OCH_META_HAS_TIME。重配本身不伪装成 DEVICE_OVERFLOW；暂停期间没有采样，`time_ticks` 可给出新段在时间轴上的位置，但改变采样率后硬件时间作废（`OCH_EVENT_TIME_INVALIDATED`）。下游应在该边界清除滤波、同步和解调历史，并使用新配置解释后续数据。
+During RX reconfiguration the old queue is discarded, and known local host drops are counted in host_dropped_samples. The first framed block after resuming starts a new epoch (monotonically increasing), carrying OCH_META_START | OCH_META_DISCONTINUITY | OCH_META_RECONFIGURED (value 32) | OCH_META_HAS_TIME. The reconfiguration itself is never disguised as DEVICE_OVERFLOW; there is no sampling during the pause, and `time_ticks` gives the position of the new segment on the timeline, but changing the sample rate invalidates the hardware time (`OCH_EVENT_TIME_INVALIDATED`). Downstream code should clear filter, sync, and demodulation history at this boundary and interpret subsequent data with the new configuration.
 
-TX 重配时丢弃旧排队数据并取消旧 USB 请求，避免把旧配置下的样本重放到新配置。原本正在 TX 的方向恢复前自动预填 4 个 transfer_bytes 大小的零 IQ 块，样本数计入 tx_padding_samples；新配置与零块提交后，先放行原生产者继续 send，在硬件启动过程中补充队列，再先恢复 RX、最后启动 TX。生产者应在 TIMEOUT 后继续重试，不必等待管理线程的配置调用返回；若恢复失败，核心重新阻止 TX 数据操作并停止双方。尚未启动或已经停止的 TX 不会因此启动。此前 send 接受的样本不保证已从 DAC 发出，也可能在重配中丢弃。
+During TX reconfiguration, old queued data is discarded and old USB requests are cancelled, so samples from the old configuration are never replayed under the new one. A direction that was transmitting is automatically prefilled with 4 zero-IQ blocks of transfer_bytes each before resuming, with the samples counted in tx_padding_samples; after the new configuration and the zero blocks are submitted, the original producer is first allowed to continue sending, refilling the queue while the hardware starts, then RX resumes first and TX starts last. Producers should keep retrying after TIMEOUT and need not wait for the management thread's configuration call to return; if resuming fails, the core blocks TX data operations again and stops both directions. A TX that was not started or was already stopped is never started by this. Samples accepted by earlier sends are not guaranteed to have left the DAC, and may also be discarded during reconfiguration.
 
-### 快速调谐
+### Fast tuning
 
-如果相对上次成功的配置，只改了 rx_frequency、tx_frequency、rx_gain、tx_attenuation 中的若干项，configure 会**直接下发命令，不暂停流**：不清队列，不重置 USB 传输，不预填 TX 零块，epoch 不变。完成后，下一个 RX 块带 OCH_META_RECONFIGURED | OCH_META_DISCONTINUITY。这个边界是近似的：命令返回时还在 USB 队列里的样本（约 usb_queue_depth × transfer_bytes）可能已是新频率，也可能是 PLL 稳定过程中的数据。需要精确边界的应用应在标记附近丢弃一小段样本。
+If, relative to the last successful configuration, only some of rx_frequency, tx_frequency, rx_gain, and tx_attenuation changed, configure **sends the commands directly without pausing the streams**: queues are not flushed, USB transfers are not reset, no TX zero blocks are prefilled, and the epoch is unchanged. Afterwards, the next RX block carries OCH_META_RECONFIGURED | OCH_META_DISCONTINUITY. This boundary is approximate: samples still in the USB queue when the command returns (about usb_queue_depth × transfer_bytes) may already be at the new frequency, or may be data from while the PLL was settling. Applications that need an exact boundary should discard a short stretch of samples around the flag.
 
-- 有 TX 流时改 tx_frequency，仍走上面的暂停事务。原因是 TX LO 跳变超过 100 MHz 会触发 TX quad 校准，不宜在发射过程中进行。
-- 手动 RX 增益只在 LO 跨越 SDK 增益表频段（1.3 GHz / 4 GHz，边界 ±1 MHz 内按跨越处理）或增益本身变化时重写。
-- 快速调谐中途失败时，按重配置失败处理：停止双方，配置缓存失效。
-- 成功后发出 OCH_EVENT_RECONFIGURED，消息为 `retune complete streams_continued=1 ...`。
-- 能力表（system_info?）在 open 时读取并缓存；外部 LO 选择也会缓存，直到 set_lo_source 或 raw 修改命令使它失效。
+- Changing tx_frequency while a TX stream exists still goes through the pause transaction above, because a TX LO jump of more than 100 MHz triggers TX quad calibration, which should not happen while transmitting.
+- Manual RX gain is only rewritten when the LO crosses an SDK gain-table band (1.3 GHz / 4 GHz, treated as crossing within ±1 MHz of the boundary) or when the gain itself changes.
+- If fast tuning fails midway, it is handled as a reconfiguration failure: both directions stop and the configuration cache is invalidated.
+- On success, OCH_EVENT_RECONFIGURED is emitted with the message `retune complete streams_continued=1 ...`.
+- The capability table (system_info?) is read and cached at open; the external LO selection is also cached until set_lo_source or a raw modifying command invalidates it.
 
-实测（USB3，RX 流运行中，控制串口 3.125 MBd）：同频段切频约 4 ms，跨增益表切频约 25 ms（主要是 SPI 写增益表），期间 RX 不中断。时间主要花在控制串口往返和 AD9361 的 VCO 校准与锁定等待上；各命令的往返时间见 [设备协议：控制串口](protocol.md#控制串口)，连续扫频的分项耗时见 [扫频示例](sweep.md#实测2026-11-14)。控制串口还是 115200 波特的旧固件上，同频段切频约 11 ms。
+Measured (USB3, RX stream running, control UART at 3.125 MBd): about 4 ms for a retune within the same band, about 25 ms across gain tables (mostly SPI writes of the gain table), with no RX interruption. The time is mainly spent on control UART round trips and the AD9361's VCO calibration and lock wait; for the round-trip times of each command see [Device Protocol: Control UART](protocol.md#control-uart), and for a breakdown of continuous sweeping see the [sweep example](sweep.md#measured-results-2026-11-14). On older firmware where the control UART is still at 115200 baud, a same-band retune takes about 11 ms.
 
-OCH_EVENT_RECONFIGURED（新增值 6）报告成功重配的恢复方向、间断/丢弃及主机测得的耗时，失败通过 OCH_EVENT_TRANSPORT 报告。事件是控制操作的观察记录，IQ 边界以 RX 元数据为准。单通道 RX、零 IQ TX 和双向模式已完成实机改参恢复测试。其中耗时属于主机 API 和观察时间，不是硬件采样间断，也没有固定的毫秒级延迟保证。
+OCH_EVENT_RECONFIGURED (new value 6) reports the resumed directions of a successful reconfiguration, discontinuities/drops, and the duration measured by the host; failures are reported through OCH_EVENT_TRANSPORT. Events are observation records of control operations, and IQ boundaries are determined by the RX metadata. Hardware reconfiguration and recovery tests have been completed for single-channel RX, zero-IQ TX, and bidirectional modes. The durations are host API and observation times, not hardware sampling gaps, and there is no fixed millisecond latency guarantee.
 
-硬件变更或恢复失败时，双方流停止，设备配置缓存失效，不自动回滚并重新发射。应用应保留错误详情，停止并等待 IO 线程退出，销毁旧流，在确认设备状态后显式 configure 并重新创建/启动流；若 SDK 报告 rollback=failed / applied=unknown，需按 FIR 说明先完成 rf.reinit。参数校验失败或租借导致的 BUSY 不属于已执行硬件事务失败。
+When a hardware change or resume fails, both streams stop and the device configuration cache is invalidated; nothing is rolled back and transmission does not restart automatically. The application should keep the error details, stop and wait for the I/O threads to exit, destroy the old streams, and after confirming the device state, explicitly configure and recreate/start the streams; if the SDK reports rollback=failed / applied=unknown, first complete rf.reinit as described for FIR. Argument validation failures and BUSY caused by leases are not failures of an executed hardware transaction.
 
-这项能力不提供跨进程控制服务：另开一个 och 进程不能修改正在接收的软件所持设备。原始 och_command 修改仍禁止在存在流对象时执行，不能用 raw 命令绕过协调接口。参见 [持续接收并改参示例](../examples/reconfigure.cpp)。ABI 仍为 1，已有公共结构布局不变；新语义需匹配 0.3 或更新 DLL，RX correction 新增函数须匹配含这些导出的 DLL。
+This capability does not provide a cross-process control service: a separate och process cannot modify a device held by software that is receiving. Raw och_command modifications are still forbidden while stream objects exist, so raw commands cannot bypass the coordinating interface. See the [continuous receive with reconfiguration example](../examples/reconfigure.cpp). The ABI is still 1 and existing public struct layouts are unchanged; the new semantics need a 0.3 or newer DLL, and the new RX correction functions need a DLL that includes those exports.
 
-## RX 直流与 IQ 校正
+## RX DC and IQ correction
 
-0.3.1 新增独立 och_rx_correction_config，不扩展 och_config 或 och_device_info。输出先清零并填写 struct_size；dc_enabled 和 iq_enabled 均为 0/1，表示 AD9361 原生跟踪校正的开启状态。
+0.3.1 added a standalone och_rx_correction_config, without extending och_config or och_device_info. Zero the output first and fill in struct_size; dc_enabled and iq_enabled are both 0/1 and indicate whether the AD9361's native tracking correction is on.
 
-| C 函数 | C++ device 包装 | 用途 |
+| C function | C++ device wrapper | Purpose |
 |---|---|---|
-| och_get_rx_correction | rx_correction() | 回读 DC 和 IQ 两个当前状态 |
-| och_set_rx_dc_correction | set_rx_dc_correction(bool) | 同时控制 RF 与基带 DC offset tracking |
-| och_set_rx_iq_correction | set_rx_iq_correction(bool) | 控制 RX quadrature tracking |
+| och_get_rx_correction | rx_correction() | Read back the current DC and IQ state |
+| och_set_rx_dc_correction | set_rx_dc_correction(bool) | Control RF and baseband DC offset tracking together |
+| och_set_rx_iq_correction | set_rx_iq_correction(bool) | Control RX quadrature tracking |
 
-两项设置都作用于两个物理接收通道，不随 rx_mask 选择而变成逐通道开关。它们是芯片的接收跟踪功能，不进行主机 IQ 数据处理，也不触发 TX IQ 校准。0 表示停止持续跟踪更新，不清除已经得到的校正系数；IQ=0 仍保留硬件相位/增益校正路径，并非完全旁路 IQ 校正。1 表示启用跟踪，不表示已测量直流残留或镜像抑制度。
+Both settings apply to both physical receive channels and do not become per-channel switches based on the rx_mask selection. They are the chip's receive tracking functions; they do no host IQ processing and do not trigger TX IQ calibration. 0 stops continuous tracking updates and does not clear correction coefficients already obtained; IQ=0 still keeps the hardware phase/gain correction path, so it is not a complete bypass of IQ correction. 1 enables tracking and does not mean residual DC or image rejection has been measured.
 
 ~~~cpp
 auto correction = dev.rx_correction();
@@ -92,133 +92,133 @@ dev.set_rx_dc_correction(true);
 dev.set_rx_iq_correction(true);
 ~~~
 
-每次先检查 system_info? 的 rx_correction=1，缺失或不是 1 返回 OCH_UNSUPPORTED，已有流继续运行。查询不会暂停流。setter 拒绝非 0/1 值；与设备回读相同的设置直接成功，不清队列、不产生新 epoch。确实需要修改时，使用本节前述协调流程暂停双方；完成后回读两项状态，确认目标值生效且另一项未改变，再恢复原本运行的方向。写入失败或回读不一致会停止双方并使配置缓存失效，应用按重配置失败流程恢复。
+Each call first checks rx_correction=1 in system_info?; if it is missing or not 1, OCH_UNSUPPORTED is returned and existing streams keep running. Queries do not pause streams. The setters reject values other than 0/1; a setting equal to the device read-back succeeds immediately without flushing queues or creating a new epoch. When a change is really needed, both directions are paused using the coordinated flow described earlier in this section; afterwards both states are read back to confirm the target value took effect and the other one did not change, and then the directions that were running are resumed. A write failure or inconsistent read-back stops both directions and invalidates the configuration cache, and the application recovers following the reconfiguration failure flow.
 
-正常 configure 不写这两个开关，SDK 的 RF 重建、FIR/时钟操作会恢复最近成功保存的跟踪目标；rf_reinit 也恢复该目标。冷启动默认均为 1，断电/重新下载程序不保留 RAM 中的关闭请求。get_config 不包含它们，应使用专门的 getter 查询。SDK 检测到 RFDC/BBDC 混合状态或 SPI 失败会报错，不把混合状态伪装为 0；如果错误报告 rollback=failed / applied=unknown，需要先 rf_reinit 再重新配置和建流。缺少此能力的旧 SDK 仍可使用原先支持的功能，不应以固件名字替代能力字段判断。新 API 必须配套 0.3.1 或更新的 omnicore.dll 与头文件。
+A normal configure does not write these two switches; the SDK's RF rebuild and FIR/clock operations restore the most recently saved tracking targets, and so does rf_reinit. Both default to 1 on cold start, and a request to turn them off is kept in RAM only, so it does not survive a power cycle/reloading the program. get_config does not include them; query them with the dedicated getter. If the SDK detects a mixed RFDC/BBDC state or an SPI failure, it reports an error rather than disguising the mixed state as 0; if the error reports rollback=failed / applied=unknown, run rf_reinit first, then reconfigure and recreate the streams. Older SDKs without this capability can still use the features they supported; do not use the firmware name in place of the capability field. The new API requires omnicore.dll and headers from 0.3.1 or later.
 
-## USB-C 启动电源快照
+## USB-C boot power snapshot
 
-0.2.1 新增 och_get_power_status(device, &status, timeout_ms)，C++ 为 device.power_status(timeout_ms=500)。och_power_status 先清零并填写 struct_size；0.7.1 起，桥接固件 1.0.1 及以上（有 EP 0x03 OUT）时，函数先读空 EP83，再发送 `typec?` 查询，解析随后的 `HD3SS3220:` 回复，live=1；桥接固件 1.0.0 时读取 EP83 调试日志中的 HD3SS3220 启动寄存器快照，live=0。
+0.2.1 added och_get_power_status(device, &status, timeout_ms), and in C++ device.power_status(timeout_ms=500). Zero och_power_status and fill in struct_size first. Since 0.7.1, with bridge firmware 1.0.1 or later (which has EP 0x03 OUT), the function first drains EP83, then sends a `typec?` query and parses the `HD3SS3220:` reply that follows, with live=1; with bridge firmware 1.0.0, it reads the HD3SS3220 boot register snapshot from the EP83 debug log, with live=0.
 
-timeout_ms=0 只返回当前 device 句柄内的缓存；1..2000 允许在没有流对象时有界读取 EP83。有流对象时只读缓存，不与高速流争用日志端点。设备关闭后缓存销毁，不写磁盘。成功读取会消耗该 USB 调试端点的数据；另一个程序此前读取过日志时可能没有可用快照。
+timeout_ms=0 only returns the cache within the current device handle; 1..2000 allows a bounded read of EP83 when no stream objects exist. While stream objects exist, only the cache is read, so it never competes with high-speed streams for the log endpoint. The cache is discarded when the device is closed and is never written to disk. A successful read consumes the data of this USB debug endpoint; if another program read the log earlier, there may be no snapshot available.
 
-缺日志、没有 EP83 或等候超时均可正常返回 OCH_OK，同时 snapshot_valid=0、supports_3a=-1。返回 OK 只表示查询完成，不保证电源状态已知。snapshot_valid=1 且 conflicting_snapshots=0 后才可解释 raw_08/raw_09/raw_0a、attached_state、current_detected。仅有效 UFP 连接的 supports_3a 可为 0/1，其余为 -1；source_current_ma=-1 表示未知，包括 USB 默认电流公告，不应擅自填成 500/900 mA。
+A missing log, no EP83, or a wait timeout all return OCH_OK normally, with snapshot_valid=0 and supports_3a=-1. Returning OK only means the query completed, not that the power state is known. raw_08/raw_09/raw_0a, attached_state, and current_detected can only be interpreted when snapshot_valid=1 and conflicting_snapshots=0. Only a valid UFP connection can have supports_3a of 0/1; otherwise it is -1. source_current_ma=-1 means unknown, including the USB default current advertisement, and must not be filled in as 500/900 mA on your own.
 
-日志没有可靠启动编号或采样时间戳，彼此冲突的快照保持未知。它不是实时电流/电压测量、USB-PD 合约、LED GPIO 读回或电源在负载下的能力测试。CLI 将未知数值转换成 JSON null，并固定标注 source=startup_log、live=false；应用同样应保留这些限制，不能只把非零 supports_3a 当作 true，因为 -1 本身也非零。
+The log has no reliable boot number or sample timestamp, and conflicting snapshots stay unknown. It is not a live current/voltage measurement, a USB-PD contract, an LED GPIO read-back, or a test of the supply's capability under load. The CLI converts unknown values to JSON null and always labels them source=startup_log, live=false; applications should keep these limitations too, and must not just treat a non-zero supports_3a as true, because -1 is itself non-zero.
 
-调用此新 API 必须匹配 0.2.1 或更新的 DLL。既有 och_device_info 布局不变；och info --json 在原字段之外新增 power 对象，och find 仍只枚举设备。
+Calling this new API requires a 0.2.1 or newer DLL. The existing och_device_info layout is unchanged; och info --json adds a power object alongside the existing fields, and och find still only enumerates devices.
 
-## FIR 与共享时钟
+## FIR and shared clocks
 
-0.2 新增 och_fir_config、och_clock_config 及对应函数，已有 ABI 1 结构布局保持不变。调用新函数必须使用包含这些导出的 0.2 或更高版本 DLL；头文件升级不能让旧 DLL 自动拥有新能力。
+0.2 added och_fir_config, och_clock_config, and the corresponding functions, keeping existing ABI 1 struct layouts unchanged. Calling the new functions requires a 0.2 or later DLL that includes these exports; upgrading the header does not give an old DLL the new capabilities.
 
-| C 函数 | C++ device 包装 | 用途 |
+| C function | C++ device wrapper | Purpose |
 |---|---|---|
-| och_get_fir | fir(direction) | SDK 最近一次 SPI 校验的 FIR 配置快照 |
-| och_set_fir | set_fir(config) | 分块事务上传、校验并设置一个方向 |
-| och_set_fir_enabled | set_fir_enabled(rx,tx) | 在同一事务内设置两边启停 |
-| och_get_clock | clock() | 实际参考钟与两组六级时钟回读 |
-| och_set_clock | set_clock(config) | 检查并设置完整 RX/TX 链 |
-| och_set_sample_rate | set_sample_rate(hz) | SDK 安全计算并应用共享采样率；无精确时钟方案时改用最近可用速率 |
+| och_get_fir | fir(direction) | Snapshot of the FIR configuration most recently verified over SPI by the SDK |
+| och_set_fir | set_fir(config) | Upload in a chunked transaction, verify, and set one direction |
+| och_set_fir_enabled | set_fir_enabled(rx,tx) | Set enable for both sides in one transaction |
+| och_get_clock | clock() | Read back the actual reference clock and both sets of six-stage clocks |
+| och_set_clock | set_clock(config) | Check and set the complete RX/TX chains |
+| och_set_sample_rate | set_sample_rate(hz) | The SDK safely computes and applies the shared sample rate; when no exact clock solution exists, the nearest usable rate is used instead |
 
-FIR 配置先清零、填 struct_size、direction、channel_mask=3、factor、tap_count、gain_db、coefficients，再选择 enabled。CLI 的 load 默认 enabled=0；直接 C/C++ API 可明确填写启用状态。verified 和 crc32 为读取结果，设置时由核心计算 CRC 并验证。tap 数为 16 的倍数且最多 128，signed16 系数，RX gain 为 -12/-6/0/6 dB、TX gain 为 -6/0 dB、factor 为 1/2/4；TX factor 1 最多 64 taps，硬件时钟预算还可能降低上限。同方向两个通道使用同一组系数。
+For the FIR configuration, zero it first, fill in struct_size, direction, channel_mask=3, factor, tap_count, gain_db, and coefficients, then choose enabled. The CLI's load defaults to enabled=0; the C/C++ API can set the enable state explicitly. verified and crc32 are read results; when setting, the core computes and verifies the CRC. The tap count is a multiple of 16 and at most 128, with signed16 coefficients; RX gain is -12/-6/0/6 dB, TX gain is -6/0 dB, and factor is 1/2/4; TX factor 1 allows at most 64 taps, and the hardware clock budget may lower the limit further. Both channels of the same direction use the same set of coefficients.
 
-clock 的 rx_hz 是 BBPLL/ADC/R2/R1/RF/Fs，tx_hz 是 BBPLL/DAC/T2/T1/TF/Fs，单位均 Hz。reference_hz 读取固定 40 MHz 板级参考钟，写入 0 表示保持。0.3.2 的 `och_set_reference_source` 可通过 ADF4002 启用外部 10 MHz 驯服，但 AD9361 输入仍为 40 MHz，不能通过 `och_set_clock` 改这个值。RX/TX 的 BBPLL 和 Fs 必须一致。合法分频和 FIR 约束由 SDK 验证，不接受隐式降低采样率来满足限制。
+In clock, rx_hz is BBPLL/ADC/R2/R1/RF/Fs and tx_hz is BBPLL/DAC/T2/T1/TF/Fs, all in Hz. reference_hz reads the fixed 40 MHz board reference clock, and writing 0 means keep it. Since 0.3.2, `och_set_reference_source` can enable disciplining to an external 10 MHz through the ADF4002, but the AD9361 input is still 40 MHz and cannot be changed through `och_set_clock`. The BBPLL and Fs of RX/TX must match. Valid dividers and FIR constraints are verified by the SDK, and implicitly lowering the sample rate to satisfy the limits is not accepted.
 
-**最近可用采样率**：BBPLL 为小数分频（40 MHz 参考，模数 2088960），驱动按最近的小数字编程、回读时向下取整，SDK 要求回读与请求逐 Hz 一致，因此部分速率会被拒绝，例如 11.2 MSPS 需要 716.8 MHz 的 BBPLL。`och_set_sample_rate` 与 `och_configure` 在主机端复现 AD9361 驱动 `ad9361_calculate_rf_clock_chain` 的时钟链选择（按当前 FIR 抽取 / 插值因子）及 BBPLL 舍入，从请求值开始按 +1、−1、+2、−2 Hz…… 找到第一个能精确实现的整 Hz 速率，只向设备提交一次。11.2 MSPS 会变为 11200011 Hz，偏差通常在 20 Hz 以内（全范围建模最大约 33 Hz）。若设备仍拒绝（固件与模型不一致），再在设备上逐 Hz 尝试，最多 ±64 Hz。实际速率写入 `och_get_config` 的 `sample_rate`；同一句柄再次请求原速率时直接沿用。超出时钟或 FIR 范围的速率（如未启用 FIR 抽取时的 1 MSPS）仍按原错误失败。`och_set_clock` 指定的完整时钟链不做替换。
+**Nearest usable sample rate**: the BBPLL is a fractional divider (40 MHz reference, modulus 2088960); the driver programs the nearest fractional word and rounds down on read-back, and the SDK requires the read-back to match the request to the Hz, so some rates are rejected; for example, 11.2 MSPS needs a BBPLL of 716.8 MHz. `och_set_sample_rate` and `och_configure` reproduce on the host the clock chain selection of the AD9361 driver's `ad9361_calculate_rf_clock_chain` (using the current FIR decimation / interpolation factors) and the BBPLL rounding, search from the requested value at +1, −1, +2, −2 Hz, and so on for the first whole-Hz rate that can be hit exactly, and submit it to the device only once. 11.2 MSPS becomes 11200011 Hz; the offset is usually within 20 Hz (at most about 33 Hz when modeled over the whole range). If the device still rejects it (firmware and model disagree), it then tries Hz by Hz on the device, up to ±64 Hz. The actual rate is written to `sample_rate` in `och_get_config`, and a later request for the original rate on the same handle reuses it directly. Rates outside the clock or FIR range (such as 1 MSPS without FIR decimation enabled) still fail with the original error. A complete clock chain specified with `och_set_clock` is never substituted.
 
-0.3 起，typed FIR/clock 写操作使用上述协调重配置流程，可在已有流时调用；所有管理操作仍应串行执行。硬件写入失败后双方停止，销毁旧流，在必要的 rf.reinit 成功后重新 configure 并创建流；不要把失败前缓存当成已知实际状态。成功的 FIR 修改保留当前 Fs；正常 configure 保留已装载的 FIR。换 Fs 后要重新确认频响。原始命令 och_command 的修改仍要求无流对象，且会使配置缓存失效。
+Since 0.3, typed FIR/clock writes use the coordinated reconfiguration flow described above and can be called while streams exist; all management operations should still run serially. After a hardware write failure, both directions stop; destroy the old streams, and after any necessary rf.reinit succeeds, configure again and create the streams; do not treat the cache from before the failure as the known actual state. A successful FIR change keeps the current Fs, and a normal configure keeps the loaded FIR. After changing Fs, recheck the frequency response. Modifications through the raw och_command still require no stream objects and invalidate the configuration cache.
 
-FIR/clock/sample-rate 的能力检查与固定参考钟拒绝在暂停流之前完成，旧 SDK 不支持扩展或 reference_hz 请求与固定板级参考钟不符时，不停止已有流、不清空 IQ 队列。实际写入开始后的失败仍按重配置失败处理。
+Capability checks for FIR/clock/sample-rate and the rejection of the fixed reference clock happen before streams are paused: when an older SDK does not support the extension, or a reference_hz request does not match the fixed board reference clock, existing streams are not stopped and the IQ queues are not flushed. Failures after the actual write has started are still handled as reconfiguration failures.
 
-FTR 解析属于 CLI，公共 C API 接收已经验证的定长系数数组，不依赖文件格式。verified/CRC32 证明配置一致性，不是滤波器频响或 RF 性能测量。详细文件格式和生命周期见 [FIR 与时钟说明](fir.md)。
+FTR parsing belongs to the CLI; the public C API accepts an already validated fixed-length coefficient array and does not depend on a file format. verified/CRC32 prove configuration consistency, not the filter's frequency response or RF performance. For the detailed file format and lifecycle, see [FIR and Clocks](fir.md).
 
-## ADF4002 参考与外部 LO
+## ADF4002 reference and external LO
 
-参考与 LO API、PPS 频率 LOCK（0.3.4）、外部频率声明和内部频率恢复语义见 [ADF4002 与外部 LO](reference-lo.md)。`och_config` 不包含源选择字段；`configure` 保留独立选择，LO source setter 成功后同步配置里的实际名义频率。默认源由 SDK 启动配置决定，RX/TX 均为内部。
+For the reference and LO APIs, the PPS frequency LOCK (0.3.4), declaring external frequencies, and the semantics of restoring the internal frequency, see [ADF4002 and External LO](reference-lo.md). `och_config` contains no source selection fields; `configure` keeps the independent selection, and a successful LO source setter syncs the actual nominal frequency in the configuration. The default sources are determined by the SDK start-up configuration, internal for both RX and TX.
 
-## 样本与格式
+## Samples and formats
 
-recv 的容量/返回数量、send 的输入/接受数量均为**每通道复样本数**，不是标量数或所有通道总数。双通道按时间优先：I1(t0),Q1(t0),I2(t0),Q2(t0),I1(t1),Q1(t1)...。只选通道 2 时仅有该物理通道 I/Q。
+The capacity/return count of recv and the input/accepted count of send are all **complex samples per channel**, not scalar counts or totals across channels. Dual channel is time-major: I1(t0),Q1(t0),I2(t0),Q2(t0),I1(t1),Q1(t1)... When only channel 2 is selected, only that physical channel's I/Q is present.
 
-| 格式 | 每通道每复样本 | 定义 |
+| Format | Per complex sample per channel | Definition |
 |---|---:|---|
-| packed12 | 3 B | I=(b0<<4)\|(b1>>4)，Q=((b1&15)<<8)\|b2；分别符号扩展 12 位 |
-| sc16 | 4 B | 小端 int16 I/Q，wire 有符号 12 位值左对齐 4 位 |
-| fc32 | 8 B | 小端 float I/Q，wire 值除以 2048 |
-| sc8 | 2 B | signed int8 I/Q，仅在 usb_iq_bits=8 下可用 |
+| packed12 | 3 B | I=(b0<<4)\|(b1>>4), Q=((b1&15)<<8)\|b2; each sign-extended from 12 bits |
+| sc16 | 4 B | Little-endian int16 I/Q; the signed 12-bit wire value left-aligned by 4 bits |
+| fc32 | 8 B | Little-endian float I/Q; the wire value divided by 2048 |
+| sc8 | 2 B | Signed int8 I/Q; only available with usb_iq_bits=8 |
 
-双通道 recv 容量 65536 时，sc16 缓冲至少 65536×2×2×sizeof(int16_t) 字节。16 位格式不是未经缩放的 -2048..2047。
+With a dual-channel recv capacity of 65536, an sc16 buffer needs at least 65536×2×2×sizeof(int16_t) bytes. The 16-bit format is not the unscaled -2048..2047.
 
-TX 的 sc16 会丢弃低 4 位；fc32 按 12 位量化，半步远离零取整，超范围值饱和到 -2048..2047，NaN 映射为零。适配器不应依赖超范围输入保留原值。内部可选择 CPU 支持的向量化实现，公开格式和数值语义保持一致。
+TX sc16 drops the low 4 bits; fc32 is quantized to 12 bits with round half away from zero, out-of-range values saturate to -2048..2047, and NaN maps to zero. Adapters must not rely on out-of-range input keeping its value. Internally, a vectorized implementation supported by the CPU may be chosen, with the public format and numeric semantics kept the same.
 
-`och_config.usb_iq_bits` 使用原首个 reserved 槽，结构仍为 104 字节，ABI 1 不变。0/12 使用上述默认 12bit wire；8 仅允许 `rx_mask=tx_mask=3`，且需要 SDK `iq_format=1 iq8_2t2r=1`。任何流对象存在时不能改变 wire 格式，需要先销毁流。8bit RX 将 signed8 恢复为 sc16×256、fc32÷128 或低 4 位为零的 packed12；TX 使用原 12bit 量化后丢掉低 4 位。应用格式的尺寸不随 wire 改变；SC8 直通。详见 [8bit 扩展](iq8.md)。
+`och_config.usb_iq_bits` uses the former first reserved slot; the struct is still 104 bytes and ABI 1 is unchanged. 0/12 use the default 12-bit wire described above; 8 is only allowed with `rx_mask=tx_mask=3` and needs SDK `iq_format=1 iq8_2t2r=1`. The wire format cannot change while any stream object exists; destroy the streams first. 8-bit RX restores signed8 as sc16×256, fc32÷128, or packed12 with the low 4 bits zero; TX applies the original 12-bit quantization and then drops the low 4 bits. Application format sizes do not change with the wire; SC8 passes through. See [8-bit extension](iq8.md).
 
-## RX 元数据和租借
+## RX metadata and leases
 
-一次 recv/acquire 不混合多个 epoch 或已知间断：
+A single recv/acquire never mixes several epochs or known discontinuities:
 
-- epoch：流开始、设备 GAP、迟到命令、重配置或任何时间不连续时加 1，不是硬件块序号。
-- sample_index：当前 epoch 内每通道位置。
-- time_ticks / tick_rate：本批第一个样点的硬件时间（flags 含 HAS_TIME 时有效）与对应采样率，1 tick = 1 个样点。
-- flags：START、DISCONTINUITY、HOST_OVERFLOW、DEVICE_OVERFLOW、RECONFIGURED、HAS_TIME、END_OF_BURST、LATE。TIME_UNKNOWN 不再产生。
-- host_dropped_samples：已知的主机本地丢样。
-- device_dropped_samples：设备溢出丢掉的样点数，由块头时间差得到的精确值。
-- host_monotonic_ns：主机观察时刻，不是 ADC 采样时刻；采样时刻用 time_ticks。
+- epoch: incremented at stream start, device GAP, late command, reconfiguration, or any time discontinuity; it is not the hardware block sequence number.
+- sample_index: position per channel within the current epoch.
+- time_ticks / tick_rate: hardware time of the first sample in this batch (valid when flags contain HAS_TIME) and the corresponding sample rate, 1 tick = 1 sample.
+- flags: START, DISCONTINUITY, HOST_OVERFLOW, DEVICE_OVERFLOW, RECONFIGURED, HAS_TIME, END_OF_BURST, LATE. TIME_UNKNOWN is no longer produced.
+- host_dropped_samples: known local host drops.
+- device_dropped_samples: number of samples dropped by device overflow, an exact value derived from the block header time difference.
+- host_monotonic_ns: host observation time, not the ADC sampling time; use time_ticks for the sampling time.
 
-数据块与 EVT 从不同 USB 端点到达；EVT 的到达时刻不能替代数据边界。消费者应依据 IQ 元数据重置同步、滤波历史或帧解析。
+Data blocks and EVTs arrive on different USB endpoints, so the arrival time of an EVT cannot replace the data boundary. Consumers should reset sync, filter history, or frame parsing based on the IQ metadata.
 
-och_rx_acquire 返回当前 wire 格式的租借，容量单位为字节，与 args.format 无关。12bit 每复样本 3 字节，8bit 每复样本 2 字节；双通道分别为每时间帧 6/4 字节。每流最多一个租借，释放前不得再次 acquire、recv、destroy；运行中重配在存在租借时返回 BUSY。release 后指针立即失效。保持处理时间有界，避免长时间占用核心队列。
+och_rx_acquire returns a lease in the current wire format, with capacity in bytes, independent of args.format. 12-bit is 3 bytes per complex sample and 8-bit is 2 bytes; dual channel is 6/4 bytes per time frame respectively. Each stream can have at most one lease, and before releasing it you must not acquire, recv, or destroy again; reconfiguration during streaming returns BUSY while a lease exists. The pointer becomes invalid immediately after release. Keep processing time bounded to avoid holding the core queue for a long time.
 
-## 部分完成与时间
+## Partial completion and time
 
-send 可能只接受部分样本；一旦接受了样本就返回 OCH_OK，调用方始终按 accepted 消费对应前缀，再重试剩余部分，不能重发整块。TIMEOUT 表示期限内未接受样本或因协调重配置暂时中断，不等于永久断开。
+send may accept only part of the samples; once any samples are accepted it returns OCH_OK, and the caller always consumes the corresponding prefix by accepted and retries the rest, never resending the whole block. TIMEOUT means no samples were accepted within the deadline, or a temporary interruption due to coordinated reconfiguration; it does not mean a permanent disconnect.
 
-start 前 send 只预填不发射。停止后不会因为后来提交数据自动开启。flush 对齐补零并等待主机队列与 OUT 完成；补零数量见 tx_padding_samples。连续流的 send/flush 不带时间；需要在指定样点发射或得到播放完成时刻时，使用 `och_send_burst`（HAS_TIME/SOB/EOB），突发完成产生带样点时间的 `OCH_EVENT_TX_BURST_ACK`。硬件时间、PPS 对时与定时 RX 见 [硬件时间戳](timestamps.md)；跨设备 LO 相位相干同步不提供。独立的 PPS 接口为 `och_set_pps_enabled`、`och_get_pps_status` 和 `och_get_vcxo_status`（内部参考时 PPS 经 CH32 PA4 驯服 40 MHz），详见 [PPS API](pps.md)。
+send before start only prefills and does not transmit. After a stop, submitting data later never turns transmission on automatically. flush pads with zeros for alignment and waits for the host queue and OUT transfers to complete; the number of padded samples is in tx_padding_samples. send/flush on continuous streams carry no time; to transmit at a given sample or learn when playback completed, use `och_send_burst` (HAS_TIME/SOB/EOB), whose burst completion produces an `OCH_EVENT_TX_BURST_ACK` with the sample time. For hardware time, PPS time alignment, and timed RX, see [Hardware Timestamps](timestamps.md); phase-coherent LO sync across devices is not provided. The separate PPS interfaces are `och_set_pps_enabled`, `och_get_pps_status`, and `och_get_vcxo_status` (with the internal reference, PPS disciplines the 40 MHz through the CH32 PA4); see [PPS API](pps.md).
 
-有限数据 flush 之后、stop 关闭硬件之前，FIFO 排空可能产生 `tx_underflow` 和 `TX_STARVED`，这些尾部事件原样保留，应与连续供应期间的欠供分开看待，原因见 [架构：TX 的显式启动与停止](architecture.md#tx-的显式启动与停止)。需要精确的 burst 结束点时用 `och_send_burst`，以 `OCH_EVENT_TX_BURST_ACK` 的 `hw_time` 为准。
+After flushing finite data and before stop shuts off the hardware, draining the FIFO may produce `tx_underflow` and `TX_STARVED`. These trailing events are kept as is and should be considered separately from starvation during continuous supply; for why, see [Architecture: Explicit TX start and stop](architecture.md#explicit-tx-start-and-stop). When you need an exact burst end point, use `och_send_burst` and rely on the `hw_time` of `OCH_EVENT_TX_BURST_ACK`.
 
-## 事件与线程
+## Events and threads
 
-每设备有有界事件队列，och_poll_event 获取设备 EVT、主机溢出、传输故障、TX 欠供、重配置结果，以及 0.6.0 的定时事件（`RX_GAP`、`RX_LATE`、`TX_BURST_ACK`、`TX_LATE`、`TX_UNDERFLOW`、`TX_ERROR`、`TIME_INVALIDATED`；`hw_time`、`code`、`block` 给出样点时间、FPGA 事件码与块序号；0.6.1 起 `count` 为该记录代表的设备事件数，固件合并过载期间的欠流/GAP 时大于 1，见 [硬件时间戳](timestamps.md)）。应用应定期取出，event_drops 增加表示队列未及时处理或事件过密。
+Each device has a bounded event queue. och_poll_event retrieves device EVTs, host overflows, transport faults, TX starvation, reconfiguration results, and the timed events of 0.6.0 (`RX_GAP`, `RX_LATE`, `TX_BURST_ACK`, `TX_LATE`, `TX_UNDERFLOW`, `TX_ERROR`, `TIME_INVALIDATED`; `hw_time`, `code`, and `block` give the sample time, FPGA event code, and block sequence number; since 0.6.1, `count` is the number of device events the record stands for, greater than 1 when the firmware merges underflow/GAP events during overload; see [Hardware Timestamps](timestamps.md)). Applications should drain it regularly; an increasing event_drops means the queue was not processed in time or events were too dense.
 
-RX 与 TX 可并行；同一 RX 仅一个 consumer，同一 TX 仅一个 producer。stop 和协调重配置可与正在进行的收发并行，用于结束或暂时中断等待；destroy/close 不能与该句柄上的任何操作并发。确认 IO 线程退出后再销毁对象。配置与生命周期操作由应用串行管理。
+RX and TX can run in parallel; each RX has only one consumer and each TX only one producer. stop and coordinated reconfiguration can run in parallel with ongoing RX/TX, to end or temporarily interrupt waits; destroy/close must not run concurrently with any operation on that handle. Destroy objects only after confirming the I/O threads have exited. The application manages configuration and lifecycle operations serially.
 
-och_command 是 SDK 原始控制入口，修改型命令只允许没有流对象时使用；之后应 configure 重新建立一致配置。插件应优先使用标准配置 API，不单独打开相同 USB 设备与基座竞争。
+och_command is the SDK's raw control entry point; modifying commands are only allowed when no stream objects exist, and afterwards you should configure to re-establish a consistent configuration. Plugins should prefer the standard configuration API and must not open the same USB device separately to compete with the core.
 
-## 统计口径
+## Statistics
 
-- usb_bytes 是该流已完成 USB 请求的字节数；RX 包括 16 B 块头和补零，TX 不包括仅接受进入主机队列但尚未完成 USB 的部分。
-- samples 在 RX 表示已交给应用的每通道样本数，在 TX 表示已接受进入主机队列的每通道样本数。两者都不是 RF 测量，尤其 TX 不能用它断言全部样本已经发射。
-- host_dropped_samples、headers（已解析的成帧块数）、resyncs（块头校验失败后的重新同步次数，正常为 0）、transfer_errors、tx_starvation_events 属于该流；队列字节和峰值按当前 wire 字节计，12bit 为每复样本 3B，8bit 为 2B。
-- device_overflows、device_underflows、event_drops 属于该设备对象的观察期；RX/TX stats 会看到相同设备计数，不要把两份相加。device_overflows 按收到的 GAP 块计数，精确丢样量见 RX 元数据的 device_dropped_samples；device_underflows 按 TX 欠流事件计数（合并记录按 `count` 累加）。
-- 最大采样率 61.44 MSPS 是单通道的射频能力，不表示 USB 可同时承载四通道都满速。四通道 61.44 MSPS 总 wire 需求 737.28 MB/s；应按共享 USB 带宽选定双向速率，常用四通道测试使用 30.72 MSPS。
+- usb_bytes is the number of bytes of completed USB requests for the stream; for RX it includes the 16 B block headers and padding, and for TX it excludes data only accepted into the host queue whose USB transfer has not completed.
+- samples is, for RX, the number of per-channel samples delivered to the application, and for TX, the number of per-channel samples accepted into the host queue. Neither is an RF measurement; in particular, TX cannot use it to assert that all samples have been transmitted.
+- host_dropped_samples, headers (number of framed blocks parsed), resyncs (number of resynchronizations after a block header check failure, normally 0), transfer_errors, and tx_starvation_events belong to the stream; queue bytes and peaks are counted in current wire bytes, 3 B per complex sample for 12-bit and 2 B for 8-bit.
+- device_overflows, device_underflows, and event_drops belong to the observation period of the device object; RX/TX stats see the same device counts, so do not add the two together. device_overflows counts received GAP blocks, with the exact number of dropped samples in device_dropped_samples of the RX metadata; device_underflows counts TX underflow events (merged records accumulate by `count`).
+- The maximum sample rate of 61.44 MSPS is a single-channel RF capability and does not mean USB can carry all four channels at full speed at once. Four channels at 61.44 MSPS need 737.28 MB/s on the wire in total; choose the bidirectional rate based on the shared USB bandwidth. Common four-channel tests use 30.72 MSPS.
 
 ## RX RSSI
 
-`och_get_rx_rssi(device, &rssi)` 返回 `och_rx_rssi`，包含 `enabled`、`usb_rx_mask`、`valid[2]` 和 `rssi_db[2]`；`och_set_rx_rssi_enabled(device, 0|1)` 用于开关。C++ 接口为 `device.rx_rssi()` 和 `device.set_rx_rssi_enabled(bool)`。RSSI 上报在 SDK 冷启动后默认关闭，此时 `enabled=0`，两路都无效。数值是 AD9361 symbol RSSI，单位为相对 dB，越大越强，不是校准过的输入功率。ENSM 不在 RX/FDD 状态时 `valid=0`、`rssi_db=0`；`usb_rx_mask` 只表示 USB 上传掩码，2R2T 下两路接收机都在测量。这是纯查询，可以在 RX/TX 流运行时调用，不会暂停流，实测双通道 30.72 MSPS 接收时无间断。新 SDK（`rssi=1`）使用 `rx_rssi?`；旧 SDK 从 `system_status?` 中解析，同样可用，但较慢。
+`och_get_rx_rssi(device, &rssi)` returns `och_rx_rssi`, containing `enabled`, `usb_rx_mask`, `valid[2]`, and `rssi_db[2]`; `och_set_rx_rssi_enabled(device, 0|1)` turns it on and off. The C++ interface is `device.rx_rssi()` and `device.set_rx_rssi_enabled(bool)`. RSSI reporting is off by default after an SDK cold start, in which case `enabled=0` and both channels are invalid. The value is the AD9361 symbol RSSI in relative dB, higher is stronger, and is not calibrated input power. When the ENSM is not in the RX/FDD state, `valid=0` and `rssi_db=0`; `usb_rx_mask` only indicates the USB upload mask, and with 2R2T both receivers are measuring. This is a pure query that can be called while RX/TX streams are running without pausing them; measured with dual-channel 30.72 MSPS receive, there were no discontinuities. Newer SDKs (`rssi=1`) use `rx_rssi?`; older SDKs parse it from `system_status?`, which also works but is slower.
 
-## 板级 RGB、风扇与温度
+## Board RGB, fan, and temperature
 
-`och_get_rgb_status`、`och_set_rgb_enabled`、`och_get_fan_status`、`och_set_fan_enabled`、`och_get_core_temperature`（C++：`rgb_status()`、`fan_status()`、`core_temperature()` 等），能力与用法见 [板级控制](board-control.md)。这些调用不停止 IQ 流。
+`och_get_rgb_status`, `och_set_rgb_enabled`, `och_get_fan_status`, `och_set_fan_enabled`, `och_get_core_temperature` (C++: `rgb_status()`, `fan_status()`, `core_temperature()`, and so on); for capabilities and usage see [Board Control](board-control.md). These calls do not stop IQ streams.
 
-## 桥接固件
+## Bridge firmware
 
-`och_firmware_query`、`och_firmware_read_image`、`och_firmware_update`、`och_firmware_enter_bootloader`、`och_firmware_start_app` 只使用 EP0 厂商请求，不打开 SDK 控制通道，可在 Bootloader 模式下使用；设备被其他句柄占用时返回 `OCH_BUSY`。`och_get_firmware_info` 返回已打开设备的桥接固件信息。设备处于 Bootloader 时 `och_open` 返回 `OCH_UNSUPPORTED`。用法和恢复流程见 [桥接固件升级](firmware-update.md)。
+`och_firmware_query`, `och_firmware_read_image`, `och_firmware_update`, `och_firmware_enter_bootloader`, and `och_firmware_start_app` only use EP0 vendor requests and do not open the SDK control channel, so they work in bootloader mode; when the device is held by another handle, they return `OCH_BUSY`. `och_get_firmware_info` returns the bridge firmware information of an open device. While the device is in the bootloader, `och_open` returns `OCH_UNSUPPORTED`. For usage and recovery, see [Bridge Firmware Update](firmware-update.md).
 
-## 硬件时间
+## Hardware time
 
-| 函数 | 作用 |
+| Function | Purpose |
 |---|---|
-| `och_set_time_source(dev, src)` | PPS 源：`OCH_TIME_SOURCE_NONE` / `EXTERNAL`（J6）/ `INTERNAL`（AD9361 40 MHz 分频） |
-| `och_set_time(dev, ticks, at_next_pps)` | 立即或在下一个 PPS 沿装载 64 位样点时间 |
-| `och_get_time(dev, &status)` | `valid`、`armed`、`now`、`last_pps`、`pps_count`、`tick_rate`、`fpga_version` |
-| `och_stream_args.start_flags` | `OCH_RX_TIMED` 在 `start_time_lo/hi` 开始，`num_samples` 为 0 时连续 |
-| `och_rx_command(rx, flags, ticks, n)` | 运行中下发 RX 命令：定时、`OCH_RX_NOW` 或 `OCH_RX_STOP` |
-| `och_send_burst(tx, samples, n, &md, &accepted, timeout)` | `och_tx_metadata` 带 HAS_TIME / SOB / EOB 与样点时间 |
+| `och_set_time_source(dev, src)` | PPS source: `OCH_TIME_SOURCE_NONE` / `EXTERNAL` (J6) / `INTERNAL` (divided from the AD9361 40 MHz) |
+| `och_set_time(dev, ticks, at_next_pps)` | Load a 64-bit sample time immediately or on the next PPS edge |
+| `och_get_time(dev, &status)` | `valid`, `armed`, `now`, `last_pps`, `pps_count`, `tick_rate`, `fpga_version` |
+| `och_stream_args.start_flags` | `OCH_RX_TIMED` starts at `start_time_lo/hi`; continuous when `num_samples` is 0 |
+| `och_rx_command(rx, flags, ticks, n)` | Issue an RX command while running: timed, `OCH_RX_NOW`, or `OCH_RX_STOP` |
+| `och_send_burst(tx, samples, n, &md, &accepted, timeout)` | `och_tx_metadata` carries HAS_TIME / SOB / EOB and the sample time |
 
-新增字段均追加在结构末尾或占用原 reserved 位置，按 `struct_size` 兼容旧调用方，C ABI 仍为 1。0.6.1 在 `och_event` 末尾追加 `count`、`reserved_event`，0.6.0 及更早布局的 `struct_size` 仍被接受（读不到 `count`）。时序图与示例见 [硬件时间戳](timestamps.md)。
+New fields are all appended at the end of structs or occupy former reserved slots, staying compatible with older callers through `struct_size`; the C ABI is still 1. 0.6.1 appended `count` and `reserved_event` at the end of `och_event`; the `struct_size` of the 0.6.0 and earlier layout is still accepted (without access to `count`). For timing diagrams and examples, see [Hardware Timestamps](timestamps.md).
 
-## 多板同步
+## Multi-board sync
 
-需要固件能力 `sync=1`（SDK_CMD_1.2，FPGA 带 OC_SYNC_AXI）。单板接口：`och_get_sync_status`、`och_set_sync`、`och_sync_trigger`、`och_sync_clear`、`och_mcs_step`；`och_set_time_source` 增加 `OCH_TIME_SOURCE_SYNC`；事件 `OCH_EVENT_SYNC_IN`。多板编排：`och_multi_sync(devices, n, &args, results)`，`devices[0]` 为主板，`args.mode` 为 `OCH_SYNC_CHAIN`（菊花链，无需外部参考）或 `OCH_SYNC_COMMON`（公共 10 MHz + PPS）。新结构体都带 `struct_size`，用 `och_default_sync_config` / `och_default_multi_sync_args` 初始化。流程、接线与限制见 [多板同步](multi-board-sync.md)。
+Requires the firmware capability `sync=1` (SDK_CMD_1.2, FPGA with OC_SYNC_AXI). Single-board interfaces: `och_get_sync_status`, `och_set_sync`, `och_sync_trigger`, `och_sync_clear`, `och_mcs_step`; `och_set_time_source` gains `OCH_TIME_SOURCE_SYNC`; event `OCH_EVENT_SYNC_IN`. Multi-board orchestration: `och_multi_sync(devices, n, &args, results)`, where `devices[0]` is the master and `args.mode` is `OCH_SYNC_CHAIN` (daisy chain, no external reference needed) or `OCH_SYNC_COMMON` (common 10 MHz + PPS). All new structs carry `struct_size` and are initialized with `och_default_sync_config` / `och_default_multi_sync_args`. For the procedure, wiring, and limitations, see [Multi-Board Sync](multi-board-sync.md).

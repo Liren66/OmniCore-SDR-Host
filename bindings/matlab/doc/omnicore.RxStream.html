@@ -1,40 +1,40 @@
 <!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>omnicore.RxStream - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
 <body>
-<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.RxStream</div>
-<h1>omnicore.RxStream <span class="kind">句柄类</span></h1>
-<p class="purpose">从 omnicore.Device 连续接收</p>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">Functions and Classes</a> › omnicore.RxStream</div>
+<h1>omnicore.RxStream <span class="kind">handle class</span></h1>
+<p class="purpose">Continuous receive from an omnicore.Device</p>
 
-<h2>创建</h2>
+<h2>Creation</h2>
 <p class="syntax">rx = rxStream(dev)</p>
 <p class="syntax">rx = rxStream(dev, Name, Value)</p>
 <p class="syntax">rx = omnicore.RxStream(dev, Name, Value)</p>
-<p>创建流对象，但还不开始接收；调用 <code>start</code> 后设备开始把样点写入主机环形缓冲，<code>read</code> 从中取出。</p>
-<h3>名称-值参数</h3>
+<p>Creates the stream object without starting to receive; after <code>start</code>, the device begins writing samples into the host ring buffer, and <code>read</code> takes them out.</p>
+<h3>Name-value arguments</h3>
 <dl class="args">
-<dt>'OutputDataType' <span class="type">'single'（默认）| 'double' | 'int16' | 'int8'</span></dt><dd>见<a href="data_formats.html">样点格式与缩放</a>。</dd>
-<dt>'BufferBytes' <span class="type">字节，默认 64 MiB</span></dt><dd>主机环形缓冲。MATLAB 没有在读时，样点按线路格式（12 位每复样点 3 字节，8 位 2 字节）在这里等待：64 MiB 在双通道 30.72 MSPS 下约 0.36 s。</dd>
-<dt>'Timeout' <span class="type">秒，默认 1</span></dt><dd><code>read</code> 等待每一块数据的时间，之后也可以改 <code>rx.Timeout</code>。</dd>
+<dt>'OutputDataType' <span class="type">'single' (default) | 'double' | 'int16' | 'int8'</span></dt><dd>See <a href="data_formats.html">Sample Formats and Scaling</a>.</dd>
+<dt>'BufferBytes' <span class="type">bytes, default 64 MiB</span></dt><dd>Host ring buffer. While MATLAB is not reading, samples wait here in the wire format (3 bytes per complex sample for 12-bit, 2 bytes for 8-bit): 64 MiB is about 0.36 s at dual-channel 30.72 MSPS.</dd>
+<dt>'Timeout' <span class="type">seconds, default 1</span></dt><dd>How long <code>read</code> waits for each block of data; can also be changed later through <code>rx.Timeout</code>.</dd>
 </dl>
 
-<h2>属性</h2>
+<h2>Properties</h2>
 <table>
-<tr><td><code>Device</code></td><td>所属设备（只读）</td></tr>
-<tr><td><code>OutputDataType</code>, <code>BufferBytes</code></td><td>创建时的设置（只读）</td></tr>
-<tr><td><code>Timeout</code></td><td>秒，0 &lt; Timeout ≤ 3600，可修改</td></tr>
-<tr><td><code>IsRunning</code></td><td>流是否在运行（只读）</td></tr>
+<tr><td><code>Device</code></td><td>The device it belongs to (read-only)</td></tr>
+<tr><td><code>OutputDataType</code>, <code>BufferBytes</code></td><td>Settings at creation (read-only)</td></tr>
+<tr><td><code>Timeout</code></td><td>Seconds, 0 &lt; Timeout ≤ 3600, can be changed</td></tr>
+<tr><td><code>IsRunning</code></td><td>Whether the stream is running (read-only)</td></tr>
 </table>
 
-<h2>对象函数</h2>
-<div class="desc"><div class="syntax">start(rx)</div><p>开始接收；设备在两次 <code>read</code> 之间持续接收。已在运行时报错。</p></div>
-<div class="desc"><div class="syntax">start(rx, 'StartTime', t)</div><p>在硬件时间 <code>t</code>（秒）开始。第一次 <code>read</code> 要等到 <code>t</code>，所以 <code>Timeout</code> 要大于到 <code>t</code> 的延迟。</p></div>
-<div class="desc"><div class="syntax">[x, meta] = read(rx, n)</div><p>读每通道 <code>n</code> 个样点，<code>meta</code> 同 <a href="omnicore.Device.receive.html"><code>receive</code></a>。在两次 <code>read</code> 之间丢失的样点（缓冲溢出）记在 <code>meta.Gaps</code> 第 1 行。一块数据超过 <code>Timeout</code> 没到时返回已收到的部分；一个样点都没收到则报 <code>omnicore:TIMEOUT</code>。</p></div>
-<div class="desc"><div class="syntax">stop(rx)</div><p>停止，未读的样点被丢弃。之后可以再次 <code>start</code>，开始一个新的流（全双工时见<a href="streaming.html">启停规则</a>）。</p></div>
-<div class="desc"><div class="syntax">delete(rx)</div><p>停止并释放。</p></div>
+<h2>Object functions</h2>
+<div class="desc"><div class="syntax">start(rx)</div><p>Starts receiving; the device keeps receiving between <code>read</code> calls. Errors if already running.</p></div>
+<div class="desc"><div class="syntax">start(rx, 'StartTime', t)</div><p>Starts at hardware time <code>t</code> (seconds). The first <code>read</code> has to wait until <code>t</code>, so <code>Timeout</code> must be larger than the delay until <code>t</code>.</p></div>
+<div class="desc"><div class="syntax">[x, meta] = read(rx, n)</div><p>Reads <code>n</code> samples per channel; <code>meta</code> is the same as for <a href="omnicore.Device.receive.html"><code>receive</code></a>. Samples lost between two <code>read</code> calls (buffer overflow) are recorded in row 1 of <code>meta.Gaps</code>. If a block of data does not arrive within <code>Timeout</code>, what has been received is returned; if no samples at all were received, <code>omnicore:TIMEOUT</code> is raised.</p></div>
+<div class="desc"><div class="syntax">stop(rx)</div><p>Stops; unread samples are discarded. You can <code>start</code> again afterwards to begin a new stream (in full duplex, see the <a href="streaming.html">start/stop rules</a>).</p></div>
+<div class="desc"><div class="syntax">delete(rx)</div><p>Stops and releases.</p></div>
 
-<h2>示例</h2>
-<details open><summary>连续接收并统计丢样</summary>
+<h2>Examples</h2>
+<details open><summary>Continuous receive with drop counting</summary>
 <pre><code>dev = omnicore.Device('SampleRate', 15.36e6, 'RxChannels', 1);
 rx = rxStream(dev);
 start(rx);
@@ -42,23 +42,23 @@ lost = 0;
 for k = 1:200
     [x, meta] = read(rx, 65536);
     lost = lost + sum(meta.Gaps(:, 2));
-    % ... 处理 x ...
+    % ... process x ...
 end
 stop(rx);
-fprintf('丢失 %g 个样点\n', lost);</code></pre></details>
-<details><summary>运行中改频率</summary>
+fprintf('%g samples lost\n', lost);</code></pre></details>
+<details><summary>Change frequency while running</summary>
 <pre><code>start(rx);
 x1 = read(rx, 1e5);
-dev.RxFrequency = 2.46e9;          % 流不停
-[x2, meta] = read(rx, 1e5);         % meta.Reconfigured 为 true</code></pre></details>
+dev.RxFrequency = 2.46e9;          % the stream keeps running
+[x2, meta] = read(rx, 1e5);         % meta.Reconfigured is true</code></pre></details>
 
-<h2>提示</h2>
+<h2>Tips</h2>
 <ul>
-<li>每台设备只有一个 RX 流：流运行时 <code>receive</code> 和第二个流报 <code>omnicore:BUSY</code>。</li>
-<li>通道和 <code>IQBits</code> 需要先 <code>stop</code>；频率、增益可在运行中修改；改采样率时流暂停后继续。</li>
-<li>处理比实时慢时缓冲会溢出：加大 <code>BufferBytes</code>、减少每块的处理量，或改用 <code>receive</code> 一次采完。</li>
+<li>Each device has only one RX stream: while the stream is running, <code>receive</code> and a second stream raise <code>omnicore:BUSY</code>.</li>
+<li>Channels and <code>IQBits</code> require <code>stop</code> first; frequency and gain can be changed while running; changing the sample rate pauses the stream and then continues.</li>
+<li>When processing is slower than real time, the buffer overflows: increase <code>BufferBytes</code>, do less processing per block, or capture everything at once with <code>receive</code>.</li>
 </ul>
 
-<h2>另请参阅</h2>
-<p class="seealso"><a href="omnicore.Device.receive.html">receive</a><a href="omnicore.Receiver.html">omnicore.Receiver</a><a href="streaming.html">流、全双工与丢样</a></p>
+<h2>See also</h2>
+<p class="seealso"><a href="omnicore.Device.receive.html">receive</a><a href="omnicore.Receiver.html">omnicore.Receiver</a><a href="streaming.html">Streams, Full Duplex, and Dropped Samples</a></p>
 </body></html>

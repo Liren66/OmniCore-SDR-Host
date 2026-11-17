@@ -38,7 +38,9 @@ classdef ExamplesTest < matlab.unittest.TestCase
 
         function videoLinkDecodesEveryFrame(tc)
             r = video_link('Simulate', true, 'Seconds', 2, 'Plot', false, 'Video', '');
-            tc.verifyGreaterThan(r.Sent, 3);
+            % The loop runs for wall-clock 'Seconds', so a slow CI runner sends fewer frames;
+            % only require enough frames to exercise the link, then check every one decoded.
+            tc.verifyGreaterThanOrEqual(r.Sent, 2);
             tc.verifyEqual(r.Received, r.Sent);
             tc.verifyEqual(r.CfoHz, 300, 'AbsTol', 20);         % the simulated LO offset
             tc.verifyEqual(r.DelaySamples, 3000);                % the simulated channel delay

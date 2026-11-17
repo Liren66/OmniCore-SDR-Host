@@ -1,19 +1,19 @@
-# Linux 与 macOS 安装
+# Installing on Linux and macOS
 
-Linux 与 macOS 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，底层共用 libusb 1.0 异步传输（`src/transport/posix`）。Windows 见 [Windows 安装](../packaging/windows/INSTALL_WINDOWS.txt)。
+The Linux and macOS builds provide the same `och` command line, C ABI 1, and C++ wrapper as Windows, and share libusb 1.0 asynchronous transfers underneath (`src/transport/posix`). For Windows, see [Windows Installation](../packaging/windows/INSTALL_WINDOWS.txt).
 
-| 平台 | 发布包 | 已验证环境 |
+| Platform | Release package | Verified environment |
 |---|---|---|
-| Linux x86_64 | `OmniCoreHost-<版本>-linux-x86_64.tar.gz`，在 Ubuntu 22.04 上构建，glibc 不低于它的发行版都能运行；运行时需要系统的 `libusb-1.0-0` | Ubuntu 24.04.3、GCC 13、libusb 1.0.27、USB 3.0 5 Gbit/s。没有验证 Linux ARM64 和 Linux 下的 USB2 性能 |
-| macOS 12+ | `OmniCoreHost-<版本>-macos-universal.tar.gz`，arm64 + x86_64 通用二进制，libusb 静态链接，不需要 Homebrew | Apple Silicon、USB 3.0。Intel Mac 没有实机测试 |
+| Linux x86_64 | `OmniCoreHost-<version>-linux-x86_64.tar.gz`, built on Ubuntu 22.04, runs on distributions with the same or newer glibc; needs the system `libusb-1.0-0` at runtime | Ubuntu 24.04.3, GCC 13, libusb 1.0.27, USB 3.0 5 Gbit/s. Linux ARM64 and USB2 performance on Linux have not been verified |
+| macOS 12+ | `OmniCoreHost-<version>-macos-universal.tar.gz`, arm64 + x86_64 universal binary, libusb statically linked, no Homebrew needed | Apple Silicon, USB 3.0. Not tested on Intel Macs |
 
-性能与具体 USB 端口、线材有关，见 [测试结果](benchmarks.md)。
+Performance depends on the specific USB port and cable; see [Benchmarks](benchmarks.md).
 
-## 安装发布包
+## Installing the release package
 
-两个平台都推荐装到 `/opt/omnicore/<版本>`，再把 `bin/och` 软链接到 `/usr/local/bin`。程序用相对 RPATH 找到 `lib/` 下的库，不需要设置 `LD_LIBRARY_PATH`，但要保持 `bin/` 与 `lib/` 的相对位置和库的软链接。README、SDK 与文档也在这个目录里。
+On both platforms we recommend installing to `/opt/omnicore/<version>` and symlinking `bin/och` into `/usr/local/bin`. The programs find the libraries under `lib/` through a relative RPATH, so `LD_LIBRARY_PATH` is not needed, but the relative position of `bin/` and `lib/` and the library symlinks must be kept. The README, SDK, and documentation are also in this directory.
 
-**Linux**：
+**Linux**:
 
 ```bash
 tar -xzf OmniCoreHost-0.8.0-linux-x86_64.tar.gz
@@ -23,28 +23,28 @@ sudo install -m 0644 /opt/omnicore/0.8.0/share/omnicore/60-omnicore.rules /etc/u
 sudo udevadm control --reload-rules
 ```
 
-**macOS**（不需要驱动或 udev 规则）：
+**macOS** (no driver or udev rule needed):
 
 ```bash
 tar -xzf OmniCoreHost-0.8.0-macos-universal.tar.gz
-xattr -dr com.apple.quarantine OmniCoreHost-macos   # 浏览器下载的归档会被 Gatekeeper 隔离
+xattr -dr com.apple.quarantine OmniCoreHost-macos   # Gatekeeper quarantines archives downloaded by a browser
 sudo mkdir -p /opt/omnicore && sudo mv OmniCoreHost-macos /opt/omnicore/0.8.0
 sudo ln -sfn /opt/omnicore/0.8.0/bin/och /usr/local/bin/och
 ```
 
-之后在任意目录运行 `och version`、`och info`。应用本身不需要 sudo。
+Then run `och version` and `och info` from any directory. The application itself does not need sudo.
 
-## 从源码构建
+## Building from source
 
-**Linux**：
+**Linux**:
 
 ```bash
 sudo apt-get install build-essential cmake ninja-build pkg-config libusb-1.0-0-dev
-bash tools/build-linux.sh                      # 安装到 dist/OmniCoreHost-linux
+bash tools/build-linux.sh                      # installs to dist/OmniCoreHost-linux
 ./dist/OmniCoreHost-linux/bin/och info
 ```
 
-脚本优先使用 `/usr/bin` 下的工具，避免其他 SDK（如 Xilinx 工具链）自带的旧版 CMake 抢占 PATH；`OCH_JOBS` 控制编译并发，`OCH_BUILD_DIR`、`OCH_INSTALL_DIR` 指定输出目录。脚本不修改系统电源策略、固件或内核 USB 内存参数。也可以手动构建并安装：
+The script prefers the tools in `/usr/bin`, so that an old CMake shipped with another SDK (such as the Xilinx toolchain) does not take over PATH; `OCH_JOBS` controls build parallelism, and `OCH_BUILD_DIR` and `OCH_INSTALL_DIR` set the output directories. The script does not modify system power policy, firmware, or kernel USB memory parameters. You can also build and install by hand:
 
 ```bash
 /usr/bin/cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -52,7 +52,7 @@ bash tools/build-linux.sh                      # 安装到 dist/OmniCoreHost-lin
 sudo /usr/bin/cmake --install build/linux --prefix /opt/omnicore/0.8.0
 ```
 
-**macOS**：
+**macOS**:
 
 ```bash
 brew install cmake ninja pkg-config libusb
@@ -61,11 +61,11 @@ cmake --build build/macos
 cmake --install build/macos --prefix dist/OmniCoreHost-macos
 ```
 
-本机这样编译时动态链接 Homebrew 的 libusb；发布包由 `.github/workflows/release.yml` 静态链接 libusb 并编成通用二进制。
+A local build like this links Homebrew's libusb dynamically; the release package is built by `.github/workflows/release.yml` with libusb statically linked as a universal binary.
 
-## Linux：普通用户访问 USB
+## Linux: USB access for regular users
 
-若 `och info` 报 `LIBUSB_ERROR_ACCESS`，安装只匹配 `1a86:5537` 的 udev 规则（源码中为 `packaging/linux/60-omnicore.rules`，发布包中为 `share/omnicore/60-omnicore.rules`）：
+If `och info` reports `LIBUSB_ERROR_ACCESS`, install the udev rule that only matches `1a86:5537` (`packaging/linux/60-omnicore.rules` in the source tree, `share/omnicore/60-omnicore.rules` in the release package):
 
 ```bash
 sudo install -m 0644 packaging/linux/60-omnicore.rules /etc/udev/rules.d/60-omnicore.rules
@@ -73,9 +73,9 @@ sudo udevadm control --reload-rules
 sudo usermod -aG plugdev "$USER"
 ```
 
-重新登录以更新组成员身份，然后重新插拔设备。桌面会话通过 uaccess ACL 访问，SSH 用户使用 plugdev 组。检查动态库解析时用 `ldd "$(readlink -f /usr/local/bin/och)"`，让 ldd 按真实路径解析相对 RPATH。
+Log in again to update group membership, then replug the device. Desktop sessions get access through the uaccess ACL, and SSH users through the plugdev group. To check shared library resolution, use `ldd "$(readlink -f /usr/local/bin/och)"` so that ldd resolves the relative RPATH from the real path.
 
-## 运行与性能参数
+## Running and performance settings
 
 ```bash
 och find --json
@@ -85,30 +85,30 @@ och bench --rx --tx --iq-bits 8 --channels 1,2 --sample-rate 61.44M \
   --seconds 60 --amplitude 0 --attenuation 89.75 --json
 ```
 
-TX 吞吐测试发送全零 IQ，并设最大衰减 89.75 dB；不测射频功率、EVM 或接收灵敏度。普通 `bench` 返回 0 只代表命令完成，统计是否达标要看 JSON 的 `stability.pass`。Ctrl+C / SIGTERM 会清理流并返回中断码 130。文件接收、回放与发射音示例见 [README](../README.md#快速上手)。
+The TX throughput test sends all-zero IQ with the maximum attenuation of 89.75 dB; it does not measure RF power, EVM, or receive sensitivity. A plain `bench` returning 0 only means the command completed; whether the statistics pass is given by `stability.pass` in the JSON. Ctrl+C / SIGTERM clean up the streams and return the interrupt code 130. For file receive, playback, and tone transmit examples, see the [README](../README.md#quick-start).
 
-| 项目 | 说明 |
+| Item | Notes |
 |---|---|
-| USB 队列 | 默认每方向 32 × 196608 B，在 Linux 默认的 `usbfs_memory_mb=16` 下即可满速。只有增大 `--queue` / `--block` 后出现 `LIBUSB_ERROR_NO_MEM`，才需要评估调高 `/sys/module/usbcore/parameters/usbfs_memory_mb`；程序不会改动这个全局配置 |
-| 主机缓冲 | `--buffer-mib` 调整用户态环形缓冲（默认 64 MiB），与内核 USB 队列预算无关 |
-| macOS 睡眠 | 流运行期间程序会阻止系统空闲睡眠 |
-| macOS 双通道满速 | 双通道 61.44 MSPS 接收在测试用的 Mac 上偶有设备端溢出；需要零溢出时先用 `och bench --json` 确认 |
+| USB queue | By default 32 × 196608 B per direction, which reaches full speed with Linux's default `usbfs_memory_mb=16`. Only if `LIBUSB_ERROR_NO_MEM` appears after increasing `--queue` / `--block` do you need to consider raising `/sys/module/usbcore/parameters/usbfs_memory_mb`; the program never changes this global setting |
+| Host buffer | `--buffer-mib` sets the user-space ring buffer (default 64 MiB), independent of the kernel USB queue budget |
+| macOS sleep | The program prevents idle system sleep while streams are running |
+| macOS dual-channel full speed | Dual-channel 61.44 MSPS receive occasionally overflows on the device side on the test Mac; if you need zero overflows, confirm with `och bench --json` first |
 
-出现 `LIBUSB_ERROR_IO`、EPROTO 或持续 RX 溢出时，先记录 `lsusb -t`（macOS 为 `system_profiler SPUSBDataType`）、端口、固件及原始统计，换一个 USB3 接口或线材后复测。标称 5 Gbit/s 不代表连接能稳定收发；有溢出但平均速率接近目标的结果不能判为合格。
+When `LIBUSB_ERROR_IO`, EPROTO, or persistent RX overflows occur, first record `lsusb -t` (on macOS, `system_profiler SPUSBDataType`), the port, firmware, and raw statistics, then retest on a different USB3 port or cable. A nominal 5 Gbit/s does not mean the connection can stream reliably; a result with overflows is not a pass even if the average rate is close to the target.
 
-## SoapySDR 插件与 MATLAB 工具箱
+## SoapySDR plugin and MATLAB toolbox
 
-两者都是可选组件，发布包里不带插件；MATLAB 工具箱另有 zip。编译与使用见 [SoapySDR 插件](soapy.md) 和 [MATLAB 工具箱](matlab.md)。Linux 上插件装到 `/usr/local/lib/SoapySDR/modules<版本>/`，发行版自带的 SoapySDR 不一定搜索这个目录，找不到插件时设置 `SOAPY_SDR_PLUGIN_PATH`。USB 权限沿用上面的 udev 规则。
+Both are optional components: the release package does not include the plugin, and the MATLAB toolbox has its own zip. For building and usage, see [SoapySDR Plugin](soapy.md) and [MATLAB Toolbox](matlab.md). On Linux the plugin installs to `/usr/local/lib/SoapySDR/modules<version>/`; the SoapySDR shipped with your distribution may not search that directory, so set `SOAPY_SDR_PLUGIN_PATH` if the plugin is not found. USB permissions use the udev rule above.
 
-## SDK 集成
+## SDK integration
 
 ```cmake
 find_package(OmniCoreHost 0.8 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE OmniCore::omnicore)
 ```
 
-把安装目录加入 `CMAKE_PREFIX_PATH`。共享库为 Linux 的 `libomnicore.so.1`、macOS 的 `libomnicore.1.dylib`（ABI 1）。Linux 还需要系统的 libusb 1.0 和相容的 glibc / libstdc++。SDK 公共接口不含平台句柄。
+Add the install directory to `CMAKE_PREFIX_PATH`. The shared library is `libomnicore.so.1` on Linux and `libomnicore.1.dylib` on macOS (ABI 1). Linux also needs the system libusb 1.0 and a compatible glibc / libstdc++. The public SDK interface contains no platform handles.
 
-## 后端实现要点
+## Backend implementation notes
 
-后端使用预排队的异步请求和独立的 libusb 事件线程；Linux 上支持时使用 DMA 映射缓冲，不支持时自动改用普通缓冲。控制读取保持挂起，关闭时取消，并阻止关闭期间重新提交；取消的请求要等回调完成后才释放内存。设备独占靠进程锁加接口 claim，进程异常退出后锁自动释放。
+The backend uses pre-queued asynchronous requests and a dedicated libusb event thread; on Linux it uses DMA-mapped buffers where supported and falls back to ordinary buffers otherwise. Control reads stay pending, are cancelled on close, and are prevented from being resubmitted during close; cancelled requests are only freed after their callbacks complete. Device exclusivity relies on a process lock plus an interface claim, and the lock is released automatically if the process exits abnormally.

@@ -1,74 +1,74 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="540" viewBox="0 0 1000 540" role="img" aria-labelledby="t d"><title id="t">RX 块头时间戳、溢出间断与 epoch</title><desc id="d">16 KiB 块的块头时间、溢出 GAP、epoch 与采集 metadata 的对应关系</desc><defs><marker id="a-ink" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#52514e"/></marker><marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#2a78d6"/></marker><marker id="a-orange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#eb6834"/></marker><marker id="a-aqua" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#1baf7a"/></marker><marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#6250d6"/></marker><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#fdeee7"/><line x1="0" y1="0" x2="0" y2="7" stroke="#f4b49a" stroke-width="2.5"/></pattern><pattern id="pad" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#f3f2ee"/><line x1="0" y1="0" x2="0" y2="7" stroke="#d6d4cd" stroke-width="2.5"/></pattern></defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="540" viewBox="0 0 1000 540" role="img" aria-labelledby="t d"><title id="t">RX block timestamps, overflow gaps, and epochs</title><desc id="d">How 16 KiB block header times, overflow GAPs, epochs, and capture metadata relate</desc><defs><marker id="a-ink" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#52514e"/></marker><marker id="a-blue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#2a78d6"/></marker><marker id="a-orange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#eb6834"/></marker><marker id="a-aqua" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#1baf7a"/></marker><marker id="a-violet" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.8 L9,5 L0,9.2 Z" fill="#6250d6"/></marker><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#fdeee7"/><line x1="0" y1="0" x2="0" y2="7" stroke="#f4b49a" stroke-width="2.5"/></pattern><pattern id="pad" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#f3f2ee"/><line x1="0" y1="0" x2="0" y2="7" stroke="#d6d4cd" stroke-width="2.5"/></pattern></defs>
 <rect x="0.5" y="0.5" width="999" height="539" rx="14" fill="#fcfcfb" stroke="#e4e3df"/>
-<text x="28" y="42" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="20" font-weight="700" fill="#0b0b0b" text-anchor="start">RX 数据边界：块头时间戳、溢出间断与 epoch</text>
-<text x="28" y="66" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">每个 16 KiB 块带 16 B 头和首样点时间；溢出后下一块置 GAP，丢样数 = 两块时间戳之差（精确值）</text>
-<text x="28" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">USB 块流</text>
-<text x="28" y="145" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">设备 → 主机</text>
+<text x="28" y="42" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="20" font-weight="700" fill="#0b0b0b" text-anchor="start">RX data boundaries: block timestamps, overflow gaps, and epochs</text>
+<text x="28" y="66" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Each 16 KiB block has a 16 B header and first-sample time; after an overflow the next block sets GAP, and drops = timestamp difference (exact)</text>
+<text x="28" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">USB blocks</text>
+<text x="28" y="145" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">Device → host</text>
 <rect x="150" y="108" width="30" height="46" rx="5" fill="#2f2e2b" stroke="#2f2e2b" stroke-width="1"/>
-<text x="165" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">头</text>
-<text x="165" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">SOB</text>
+<text x="165" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Hdr</text>
+<text x="165" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">SOB</text>
 <text x="150" y="100" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">seq 0</text>
 <rect x="180" y="108" width="112" height="46" rx="5" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="236.0" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 0</text>
-<text x="236.0" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 帧</text>
+<text x="236.0" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 0</text>
+<text x="236.0" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 frames</text>
 <rect x="296" y="108" width="30" height="46" rx="5" fill="#2f2e2b" stroke="#2f2e2b" stroke-width="1"/>
-<text x="311" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">头</text>
+<text x="311" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Hdr</text>
 <text x="296" y="100" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">seq 1</text>
 <rect x="326" y="108" width="112" height="46" rx="5" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="382.0" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 2728</text>
-<text x="382.0" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 帧</text>
+<text x="382.0" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 2728</text>
+<text x="382.0" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 frames</text>
 <rect x="442" y="108" width="30" height="46" rx="5" fill="#2f2e2b" stroke="#2f2e2b" stroke-width="1"/>
-<text x="457" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">头</text>
-<text x="457" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">PAD</text>
+<text x="457" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Hdr</text>
+<text x="457" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">PAD</text>
 <text x="442" y="100" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">seq 2</text>
 <rect x="472" y="108" width="66" height="46" rx="5" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="505.0" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 5456</text>
-<text x="505.0" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">1904 帧</text>
+<text x="505.0" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 5456</text>
+<text x="505.0" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">1904 frames</text>
 <rect x="538" y="108" width="46" height="46" rx="5" fill="url(#pad)" stroke="#cfcdc6" stroke-width="1"/>
-<text x="561.0" y="136" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#52514e" text-anchor="middle">补零</text>
+<text x="561.0" y="136" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#52514e" text-anchor="middle">Pad</text>
 <rect x="592" y="108" width="90" height="46" rx="5" fill="url(#hatch)" stroke="#f4b49a" stroke-width="1"/>
-<text x="637" y="100" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#eb6834" text-anchor="middle">溢出 · 丢 N 帧</text>
+<text x="637" y="100" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#eb6834" text-anchor="middle">Overflow · N lost</text>
 <rect x="688" y="108" width="30" height="46" rx="5" fill="#eb6834" stroke="#eb6834" stroke-width="1"/>
-<text x="703" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">头</text>
-<text x="703" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">GAP</text>
+<text x="703" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Hdr</text>
+<text x="703" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="9" font-weight="600" fill="#ffffff" text-anchor="middle">GAP</text>
 <text x="688" y="100" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">seq 3</text>
 <rect x="718" y="108" width="112" height="46" rx="5" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="774.0" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 9000</text>
-<text x="774.0" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 帧</text>
+<text x="774.0" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 9000</text>
+<text x="774.0" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 frames</text>
 <rect x="834" y="108" width="30" height="46" rx="5" fill="#2f2e2b" stroke="#2f2e2b" stroke-width="1"/>
-<text x="849" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">头</text>
+<text x="849" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Hdr</text>
 <text x="834" y="100" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">seq 4</text>
 <rect x="864" y="108" width="112" height="46" rx="5" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="920.0" y="128" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 11728</text>
-<text x="920.0" y="143" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 帧</text>
-<text x="972" y="172" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="end">12bit 双通道：每块最多 2728 帧</text>
-<text x="28" y="218" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">事件</text>
-<text x="28" y="235" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">EVT / och_poll_event</text>
+<text x="920.0" y="128" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="middle">t = 11728</text>
+<text x="920.0" y="143" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">2728 frames</text>
+<text x="972" y="172" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="end">12-bit dual channel: up to 2728 frames per block</text>
+<text x="28" y="218" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">Events</text>
+<text x="28" y="235" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">EVT / och_poll_event</text>
 <path d="M165,154 V206" fill="none" stroke="#2a78d6" stroke-width="1.4" stroke-dasharray="3 3"/>
 <circle cx="165" cy="212" r="4.5" fill="#2a78d6"/>
-<text x="176" y="216" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">流开始 · epoch 1</text>
+<text x="176" y="216" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Stream start · epoch 1</text>
 <path d="M637,154 V206" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="3 3"/>
 <circle cx="637" cy="212" r="4.5" fill="#eb6834"/>
-<text x="626" y="216" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="end">RX_GAP 事件（rx_overflow_gap，带 hw_time）</text>
+<text x="626" y="216" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="end">RX_GAP event (rx_overflow_gap, with hw_time)</text>
 <path d="M703,154 V206" fill="none" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="3 3"/>
 <circle cx="703" cy="212" r="4.5" fill="#eb6834"/>
-<text x="714" y="216" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">GAP 块 → 新 epoch 2</text>
-<text x="28" y="272" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">应用 / 采集文件</text>
-<text x="28" y="289" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">16 B 头已剥离</text>
+<text x="714" y="216" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">GAP block → new epoch 2</text>
+<text x="28" y="272" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">App / capture file</text>
+<text x="28" y="289" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">16 B headers stripped</text>
 <rect x="150" y="250" width="436" height="50" rx="8" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="368" y="271" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="14" font-weight="700" fill="#2a78d6" text-anchor="middle">epoch 1 · time_ticks = 0</text>
+<text x="368" y="271" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14" font-weight="700" fill="#2a78d6" text-anchor="middle">epoch 1 · time_ticks = 0</text>
 <text x="368" y="290" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">flags: START | HAS_TIME</text>
 <path d="M637,244 V306" fill="none" stroke="#eb6834" stroke-width="2"/>
 <rect x="688" y="250" width="284" height="50" rx="8" fill="#e8f1fc" stroke="#a9c8ee" stroke-width="1"/>
-<text x="830" y="271" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="14" font-weight="700" fill="#2a78d6" text-anchor="middle">epoch 2 · time_ticks = 9000</text>
+<text x="830" y="271" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14" font-weight="700" fill="#2a78d6" text-anchor="middle">epoch 2 · time_ticks = 9000</text>
 <text x="830" y="290" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="10.5" font-weight="400" fill="#52514e" text-anchor="middle">START|DISCONTINUITY|DEVICE_OVERFLOW|HAS_TIME</text>
 <text x="637" y="326" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="12" font-weight="600" fill="#eb6834" text-anchor="middle">device_dropped_samples = 9000 − (5456 + 1904) = 1640</text>
-<text x="28" y="378" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">metadata.jsonl</text>
-<text x="28" y="395" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">与 IQ 文件同名</text>
+<text x="28" y="378" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="13" font-weight="700" fill="#0b0b0b" text-anchor="start">metadata.jsonl</text>
+<text x="28" y="395" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="start">Next to the IQ file</text>
 <rect x="150" y="356" width="822" height="148" rx="8" fill="#ffffff" stroke="#d9d7d0" stroke-width="1"/>
 <text x="164" y="384" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#0b0b0b" text-anchor="start">{"type":"capture", "format":"sc16", "config":{…}, "hardware_timestamps":true}</text>
 <text x="164" y="414" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="start">{"type":"boundary", "file_byte":0, "epoch":1, "flags":65, "device_dropped_samples":0, "time_ticks":0, …}</text>
 <text x="164" y="444" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="600" fill="#2a78d6" text-anchor="start">{"type":"boundary", "file_byte":…, "epoch":2, "flags":75, "device_dropped_samples":1640, "time_ticks":9000, …}</text>
 <text x="164" y="474" font-family="Consolas,'Cascadia Mono','Courier New',monospace" font-size="11" font-weight="400" fill="#0b0b0b" text-anchor="start">{"type":"end", "stats":{"samples_per_channel":…, "device_overflows":1, "resyncs":0, …}}</text>
-<text x="972" y="528" font-family="'Segoe UI','Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Noto Sans SC',sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="end">间断两侧不能当作连续采样拼接；按 time_ticks 可以把各段放回同一时间轴</text>
+<text x="972" y="528" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="11" font-weight="400" fill="#8a8984" text-anchor="end">Data on either side of a gap must not be joined as continuous; time_ticks places each segment back on one timeline</text>
 </svg>

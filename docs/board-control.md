@@ -1,60 +1,60 @@
-# RGB、风扇温控与 Zynq 温度
+# RGB, Temperature-Controlled Fan, and Zynq Temperature
 
-板级 SDK 默认开启 RGB 状态指示，按 15% 通道强度输出（每个通道最大 38/255）；风扇自动温控默认关闭，PWM 为 0%。开关设置在当前板上程序运行期间保留，关闭/重新打开 OCH 不会重置它们，`rf_reinit!` 也保留设置。重新启动板上程序后恢复默认值。
+The board SDK enables the RGB status indicator by default, at 15% channel intensity (at most 38/255 per channel); automatic fan control is off by default with PWM at 0%. These switch settings persist while the current program runs on the board: closing/reopening OCH does not reset them, and `rf_reinit!` keeps them too. They return to defaults after the board program restarts.
 
-## 命令行
+## Command line
 
-| 功能 | OCH 命令 | SDK 命令 |
+| Function | OCH command | SDK command |
 |---|---|---|
-| 开启/关闭 RGB | `och set rgb.enabled on` / `off` | `rgb_enable=1` / `0` |
-| RGB 开关查询 | `och get rgb.enabled` | `rgb_enable?` |
-| RGB 状态查询 | `och get rgb.status` | `rgb_status?` |
-| 开启/关闭自动温控 | `och set fan.enabled on` / `off` | `fan_enable=1` / `0` |
-| 温控开关查询 | `och get fan.enabled` | `fan_enable?` |
-| 风扇状态查询 | `och get fan.status` | `fan_status?` |
-| 核心温度 | `och get core.temperature` | `core_temp?` |
+| Turn RGB on/off | `och set rgb.enabled on` / `off` | `rgb_enable=1` / `0` |
+| Query RGB switch | `och get rgb.enabled` | `rgb_enable?` |
+| Query RGB state | `och get rgb.status` | `rgb_status?` |
+| Turn automatic fan control on/off | `och set fan.enabled on` / `off` | `fan_enable=1` / `0` |
+| Query fan control switch | `och get fan.enabled` | `fan_enable?` |
+| Query fan state | `och get fan.status` | `fan_status?` |
+| Core temperature | `och get core.temperature` | `core_temp?` |
 
-开关也接受 `0/1`。所有命令支持 `--json`。`och get system.status` 同时包含 RGB、风扇、Zynq 温度以及原有的 AD9361 温度，温度行分别标注 `source=zynq`、`source=ad9361`。独立核心温度查询在终端中额外显示摄氏度 `Celsius`，风扇状态额外显示占空比百分数 `duty_pct`。
+Switches also accept `0/1`. All commands support `--json`. `och get system.status` includes RGB, fan, Zynq temperature, and the existing AD9361 temperature, with the temperature lines labeled `source=zynq` and `source=ad9361`. The standalone core temperature query additionally shows degrees Celsius (`Celsius`) in the terminal, and the fan state additionally shows the duty cycle as a percentage (`duty_pct`).
 
-`och get system.info` 应包含 `board_rgb=1 fan_control=1 core_temp=1`。规范命令及 C/C++ 接口会先检查能力并验证响应；旧固件缺少能力时返回不支持。OCH 开关及状态查询不会停止 IQ 流，不改变射频配置或缓冲区。已有应用占用设备时，使用该应用内的 C/C++ 接口，不能通过另一个 OCH 进程操作它。
+`och get system.info` should include `board_rgb=1 fan_control=1 core_temp=1`. The canonical commands and the C/C++ interfaces check the capability first and validate the response; older firmware without the capability returns unsupported. OCH switch and status queries do not stop IQ streams and do not change the RF configuration or buffers. When an application already holds the device, use the C/C++ interface inside that application; it cannot be controlled from another OCH process.
 
-## RGB 状态
+## RGB states
 
-OCH 0.3.6 同时兼容当前 15% 与旧版 25% 固件，亮度按设备实际回报显示。下表为当前 15% 固件的颜色值。
+OCH 0.3.6 supports both the current 15% firmware and the older 25% firmware, and shows brightness as the device actually reports it. The table below gives the color values for the current 15% firmware.
 
-| 状态 | 颜色 | R/G/B | 闪烁 |
+| State | Color | R/G/B | Blink |
 |---|---|---|---|
-| initializing | 黄色 | 38/38/0 | 常亮 |
-| idle | 绿色 | 0/38/0 | 常亮 |
-| rx：RX 上传开启 | 蓝色 | 0/0/38 | 常亮 |
-| tx：TX 发射开启 | 紫色 | 38/0/38 | 常亮 |
-| duplex：RX 上传与 TX 发射开启 | 青色 | 0/38/38 | 常亮 |
-| recovering：桥接错误清理或 RX 恢复 | 橙色 | 38/10/0 | 1 Hz |
-| fault：RF、数字接口或桥接初始化失败 | 红色 | 38/0/0 | 常亮 |
-| overtemp：Zynq 高温告警 | 红色 | 38/0/0 | 4 Hz |
-| off | 黑色 | 0/0/0 | 熄灭 |
+| initializing | Yellow | 38/38/0 | Solid |
+| idle | Green | 0/38/0 | Solid |
+| rx: RX upload on | Blue | 0/0/38 | Solid |
+| tx: TX transmit on | Purple | 38/0/38 | Solid |
+| duplex: RX upload and TX transmit on | Cyan | 0/38/38 | Solid |
+| recovering: bridge error cleanup or RX recovery | Orange | 38/10/0 | 1 Hz |
+| fault: RF, digital interface, or bridge initialization failed | Red | 38/0/0 | Solid |
+| overtemp: Zynq over-temperature warning | Red | 38/0/0 | 4 Hz |
+| off | Black | 0/0/0 | Off |
 
-RGB 关闭优先，其余优先级为高温、故障、异常恢复、初始化、收发、空闲。错误恢复后不再根据历史错误计数报警。RGB 状态中的颜色字段是当前闪烁相位的输出值。状态依据 SDK 运行状态，不表示光学检测、实际 RF 功率或 ADF4002 硬件锁定。15% 是通道数值缩放，不是经过光度校准的感知亮度。
+RGB off takes priority; the rest are, in order of priority: over-temperature, fault, abnormal recovery, initializing, RX/TX, idle. After an error has recovered, no alarm is raised based on past error counts. The color fields in the RGB state are the output values of the current blink phase. The state reflects the SDK's running state, not optical detection, actual RF power, or ADF4002 hardware lock. 15% is a scaling of channel values, not a photometrically calibrated perceived brightness.
 
-## 温控策略
+## Fan control policy
 
-温控使用 Zynq XADC 内部温度，连续硬件转换、16 次平均，软件约每秒读取一次。有效温度以毫摄氏度传输；例如 `64500` 表示 64.5℃。温度无效时文本为 `unknown`，C API 数值置零但 `valid=0`，应用必须检查有效标志。超过 2.5 秒未获得有效软件采样，或 XADC 配置/读数异常时，温控开启会请求 100% PWM。
+Fan control uses the Zynq XADC internal temperature, with continuous hardware conversion and 16-sample averaging; software reads it about once per second. Valid temperatures are transferred in millidegrees Celsius; for example, `64500` means 64.5 °C. When the temperature is invalid, the text shows `unknown`, and the C API value is zero with `valid=0`; applications must check the valid flag. If no valid software sample has been obtained for more than 2.5 seconds, or the XADC configuration/reading is abnormal, enabled fan control requests 100% PWM.
 
-| 升温温度范围 | 高电平占空比 |
+| Rising temperature range | High-level duty cycle |
 |---|---:|
-| 小于 40℃ | 0% |
-| 40～小于 50℃ | 30% |
-| 50～小于 60℃ | 50% |
-| 60～小于 70℃ | 70% |
-| 70℃及以上 | 100% |
+| Below 40 °C | 0% |
+| 40 to below 50 °C | 30% |
+| 50 to below 60 °C | 50% |
+| 60 to below 70 °C | 70% |
+| 70 °C and above | 100% |
 
-降档需低于对应门限 2℃，例如从 50% 降到 30% 要低于 48℃。从 0% 启动时先输出 100% 约 500ms，随后按目标占空比运行。温控关闭立即请求 0%，高温不会自动改变开关。高温告警在 80℃触发，低于 75℃解除；这些是本项目的软件设定值。
+Stepping down requires falling 2 °C below the corresponding threshold; for example, going from 50% to 30% requires falling below 48 °C. When starting from 0%, it first outputs 100% for about 500 ms, then runs at the target duty cycle. Turning fan control off immediately requests 0%, and over-temperature does not change the switch automatically. The over-temperature warning triggers at 80 °C and clears below 75 °C; these are software settings of this project.
 
-`duty_permille`、`target_permille` 范围为 0～1000，700 对应 70%。PWM 固定 25kHz，风扇引脚 D19，RGB 引脚 E19。占空比表示 PWM 控制脚高电平比例，0% 是否实际停转以及最低启动占空比取决于所接风扇；接口不提供转速反馈。服务在主循环和已有延时/串口等待中执行，不使用新的计时器中断。
+`duty_permille` and `target_permille` range from 0 to 1000; 700 corresponds to 70%. PWM is fixed at 25 kHz, the fan pin is D19, and the RGB pin is E19. The duty cycle is the high-level fraction of the PWM control pin; whether 0% actually stops the fan and the minimum start-up duty cycle depend on the connected fan, and the interface provides no speed feedback. The service runs in the main loop and in existing delay/UART waits, without a new timer interrupt.
 
-## C/C++ 接口
+## C/C++ interface
 
-新增接口，不改变现有 ABI 1 结构：
+New interfaces that do not change existing ABI 1 structs:
 
 ```c
 och_rgb_status rgb = {0};
@@ -64,11 +64,11 @@ rgb.struct_size = sizeof(rgb);
 fan.struct_size = sizeof(fan);
 temp.struct_size = sizeof(temp);
 
-/* 检查每次调用的返回码；设备句柄由 och_open 获得。 */
+/* Check the return code of every call; the device handle comes from och_open. */
 int rc = och_get_core_temperature(device, &temp);
 if (rc == OCH_OK && temp.valid) {
     double celsius = temp.milli_celsius / 1000.0;
-    /* 使用 celsius。 */
+    /* Use celsius. */
 }
 rc = och_set_rgb_enabled(device, 1);
 rc = och_set_fan_enabled(device, 1);
@@ -77,6 +77,6 @@ rc = och_get_fan_status(device, &fan);
 rc = och_set_fan_enabled(device, 0);
 ```
 
-C++ 包装接口为 `device.rgb_status()`、`device.fan_status()`、`device.core_temperature()`、`device.set_rgb_enabled(bool)` 和 `device.set_fan_enabled(bool)`。设置操作验证回读；相同设置不重复写入。控制失败会返回错误，但不停止原有数据流。
+The C++ wrapper provides `device.rgb_status()`, `device.fan_status()`, `device.core_temperature()`, `device.set_rgb_enabled(bool)`, and `device.set_fan_enabled(bool)`. Set operations verify the read-back, and an identical setting is not written again. A control failure returns an error but does not stop existing streams.
 
-主机安装包仅更新 OCH。板卡需要导出包含 BOARD_CTRL_AXI 的硬件，并加载支持板控的 SDK ELF 或 BOOT.bin；安装器不会下载板上固件。
+The host installer only updates OCH. The board needs exported hardware that includes BOARD_CTRL_AXI and an SDK ELF or BOOT.bin with board control support loaded; the installer does not download board firmware.

@@ -1,49 +1,49 @@
-# 桥接固件升级
+# Bridge Firmware Update
 
-OCH 0.5.0 起可以通过 USB 升级 CH32H417 桥接固件，不需要 WCH-Link，也不依赖 Zynq SDK。
-升级包 `OmniCore-Bridge-<版本>.ocfw` 随 [OmniCore-SDR-Firmware Releases](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) 发布。
+Since OCH 0.5.0, the CH32H417 bridge firmware can be updated over USB without a WCH-Link and without depending on the Zynq SDK.
+The update package `OmniCore-Bridge-<version>.ocfw` is published with [OmniCore-SDR-Firmware Releases](https://github.com/Liren66/OmniCore-SDR-Firmware/releases).
 
-## 前提
+## Prerequisites
 
-- 设备上的桥接固件为 **1.0.0 及以上**（带 Bootloader）。更早的固件 `och firmware info` 显示 `legacy`，
-  需先用 WCH-Link 烧录一次 Firmware Release 中的 `Merge.bin`，步骤见
-  [Firmware README：升级 CH32 桥接固件](https://github.com/Liren66/OmniCore-SDR-Firmware#升级-ch32-桥接固件)。
-- 没有其他程序打开设备（升级与 `och_open` 使用同一把设备锁，占用时返回 BUSY）。
-- Windows 沿用已安装的 libusbK 驱动，Linux 沿用 udev 规则：Bootloader 与应用的 VID/PID、序列号和端点相同。
+- The bridge firmware on the device is **1.0.0 or later** (with a bootloader). For older firmware, `och firmware info` shows `legacy`,
+  and you first need to flash `Merge.bin` from the firmware release once with a WCH-Link. See
+  [Firmware README: Updating the CH32 bridge firmware](https://github.com/Liren66/OmniCore-SDR-Firmware#升级-ch32-桥接固件) for the steps.
+- No other program has the device open (the update uses the same device lock as `och_open` and returns BUSY while the device is in use).
+- Windows keeps using the installed libusbK driver and Linux the udev rule: the bootloader and the application share the same VID/PID, serial number, and endpoints.
 
-## 命令
+## Commands
 
-| 命令 | 含义 |
+| Command | Meaning |
 |---|---|
-| `och firmware` / `och firmware info` | 模式（application / bootloader / legacy）、版本、Bootloader 版本、构建号 |
-| `och firmware check FILE.ocfw` | 离线校验升级包（头、硬件 ID、CRC），显示版本 |
-| `och firmware update FILE.ocfw` | 进入 Bootloader → 擦除 → 写入 → 校验 → 重启，确认新版本运行（USB3 约 5 秒，USB2 约 10 秒） |
-| `och firmware boot` | 离开 Bootloader，启动已安装的应用 |
-| `och firmware enter` | 重启进入 Bootloader（恢复或调试用） |
+| `och firmware` / `och firmware info` | Mode (application / bootloader / legacy), version, bootloader version, build number |
+| `och firmware check FILE.ocfw` | Verify an update package offline (header, hardware ID, CRC) and show its version |
+| `och firmware update FILE.ocfw` | Enter bootloader → erase → write → verify → reboot, then confirm the new version is running (about 5 s on USB3, 10 s on USB2) |
+| `och firmware boot` | Leave the bootloader and start the installed application |
+| `och firmware enter` | Reboot into the bootloader (for recovery or debugging) |
 
-`och info` 额外显示桥接固件版本；设备处于 Bootloader 时，`och info` 和数据流命令直接提示用 `och firmware`。
-所有命令支持 `--serial` 和 `--json`。
+`och info` additionally shows the bridge firmware version. While the device is in the bootloader, `och info` and the streaming commands tell you to use `och firmware`.
+All commands accept `--serial` and `--json`.
 
-## 中断与恢复
+## Interruption and recovery
 
-Bootloader 在整包 CRC 通过后才写入应用第 0 页和应用头。升级中途断电、拔线或进程被结束时，
-设备重启后停留在 Bootloader（`application: missing`），再次执行 `och firmware update` 即可。
-Bootloader 只擦写应用区和标志扇区，stage-0 与 Bootloader 自身不会被 USB 升级改动。
+The bootloader writes application page 0 and the application header only after the CRC of the whole package has passed. If power is lost, the cable is unplugged, or the process is killed during an update,
+the device stays in the bootloader after restarting (`application: missing`); just run `och firmware update` again.
+The bootloader only erases and writes the application area and the flag sector; stage-0 and the bootloader itself are never changed by a USB update.
 
-Bootloader 优先使用 USB3，失败时退回 USB2。若 10 秒内没有主机完成枚举且应用完好，它自动返回应用；
-在 Bootloader 中卡死时，看门狗复位后也回到应用。
+The bootloader prefers USB3 and falls back to USB2 if that fails. If no host completes enumeration within 10 seconds and the application is intact, it returns to the application automatically;
+if it hangs in the bootloader, the watchdog reset also returns to the application.
 
 ## C API
 
 ```c
 och_firmware_info fw = { sizeof fw };
-och_firmware_query(NULL, &fw);                       /* 不打开设备，不访问 SDK */
+och_firmware_query(NULL, &fw);                       /* does not open the device or touch the SDK */
 och_firmware_update(NULL, "OmniCore-Bridge-1.0.1.ocfw", progress_cb, user);
 ```
 
-`och_firmware_read_image` 校验文件，`och_firmware_enter_bootloader` / `och_firmware_start_app` 切换模式，
-`och_get_firmware_info` 返回已打开设备在 `och_open` 时读取的桥接固件信息。版本按
-`major<<16 | minor<<8 | patch` 编码。进度回调的阶段为 `OCH_FW_STAGE_*`，写入阶段的 done/total 为字节数。
+`och_firmware_read_image` verifies a file, `och_firmware_enter_bootloader` / `och_firmware_start_app` switch modes,
+and `och_get_firmware_info` returns the bridge firmware information read at `och_open` for an open device. Versions are encoded as
+`major<<16 | minor<<8 | patch`. The progress callback stages are `OCH_FW_STAGE_*`; during the write stage, done/total are in bytes.
 
-设备侧协议（厂商请求 `0xB0`–`0xB5`、Flash 布局、`.ocfw` 格式）见 Firmware 仓库
-`OmniCore-SDR-Bridge/README.md` 与 `Common/ocfw.h`。
+For the device-side protocol (vendor requests `0xB0`–`0xB5`, flash layout, `.ocfw` format), see
+`OmniCore-SDR-Bridge/README.md` and `Common/ocfw.h` in the Firmware repository.

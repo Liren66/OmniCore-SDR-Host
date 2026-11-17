@@ -1,53 +1,53 @@
 <!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>omnicore.Receiver - OmniCoreSDR</title><link rel="stylesheet" href="omnicore.css"></head>
 <body>
-<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">函数和类</a> › omnicore.Receiver</div>
+<div class="crumbs"><a href="index.html">OmniCoreSDR for MATLAB</a> › <a href="functions.html">Functions and Classes</a> › omnicore.Receiver</div>
 <h1>omnicore.Receiver <span class="kind">System object</span></h1>
-<p class="purpose">按帧从 OmniCoreSDR 接收；也可在 Simulink 的 MATLAB System 模块中使用</p>
+<p class="purpose">Receive frames from an OmniCoreSDR; also usable in a Simulink MATLAB System block</p>
 
-<h2>创建</h2>
+<h2>Creation</h2>
 <p class="syntax">rx = omnicore.Receiver</p>
 <p class="syntax">rx = omnicore.Receiver(Name, Value)</p>
 
-<h2>用法</h2>
+<h2>Usage</h2>
 <p class="syntax">[y, valid, overflow] = rx()</p>
 <dl class="args">
-<dt>y</dt><dd><code>SamplesPerFrame</code> × <code>numel(ChannelMapping)</code> 复数帧，类型为 <code>OutputDataType</code>。</dd>
-<dt>valid</dt><dd>在 <code>Timeout</code> 内没有收满一帧时为 false，缺少的部分补零。</dd>
-<dt>overflow</dt><dd>本帧之前或之中丢过样点（MATLAB 没跟上）时为 true。</dd>
+<dt>y</dt><dd><code>SamplesPerFrame</code> × <code>numel(ChannelMapping)</code> complex frame of type <code>OutputDataType</code>.</dd>
+<dt>valid</dt><dd>False when a full frame was not received within <code>Timeout</code>; the missing part is zero-filled.</dd>
+<dt>overflow</dt><dd>True when samples were dropped before or during this frame (MATLAB did not keep up).</dd>
 </dl>
-<p>第一次调用时开始接收，<code>release(rx)</code> 停止。</p>
+<p>Receiving starts at the first call; <code>release(rx)</code> stops it.</p>
 
-<h2>属性</h2>
-<p>除标明“可调”的属性外，第一次调用后不能修改。可调属性的修改在<b>下一次调用</b>时生效，不中断接收。</p>
+<h2>Properties</h2>
+<p>Except for properties marked "tunable", properties cannot be changed after the first call. Changes to tunable properties take effect on the <b>next call</b> without interrupting reception.</p>
 <table>
-<tr><th>属性</th><th>默认值</th><th>说明</th></tr>
-<tr><td><code>Device</code></td><td><code>[]</code></td><td>要使用的 <code>omnicore.Device</code>（可与其他对象共用，release 时不关闭）。为空时按 <code>SerialNumber</code> 自己打开，release 时关闭</td></tr>
-<tr><td><code>SerialNumber</code></td><td><code>''</code></td><td><code>''</code> 表示唯一连接的设备</td></tr>
-<tr><td><code>SamplesPerFrame</code></td><td>4096</td><td>每帧样点数</td></tr>
-<tr><td><code>OutputDataType</code></td><td><code>'single'</code></td><td><code>'single'</code>、<code>'double'</code>、<code>'int16'</code>、<code>'int8'</code>（<code>IQBits</code> 8）</td></tr>
-<tr><td><code>ChannelMapping</code></td><td>1</td><td><code>1</code>、<code>2</code> 或 <code>[1 2]</code>；设置设备的 <code>RxChannels</code></td></tr>
-<tr><td><code>SampleRate</code></td><td>NaN</td><td>Hz；NaN 保持设备当前值</td></tr>
-<tr><td><code>CenterFrequency</code></td><td>NaN</td><td>Hz，<b>可调</b>；NaN 保持设备当前值</td></tr>
-<tr><td><code>Gain</code></td><td>NaN</td><td>dB，<b>可调</b>，标量或每通道；NaN 保持设备当前值</td></tr>
-<tr><td><code>GainMode</code></td><td><code>''</code></td><td><code>'manual'</code>、<code>'fast'</code>、<code>'slow'</code>、<code>'hybrid'</code>，<b>可调</b>；<code>''</code> 保持设备当前值</td></tr>
-<tr><td><code>BufferBytes</code></td><td>NaN</td><td>主机环形缓冲；NaN 为 64 MiB</td></tr>
-<tr><td><code>Timeout</code></td><td>1</td><td>等待每块数据的秒数</td></tr>
+<tr><th>Property</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>Device</code></td><td><code>[]</code></td><td>The <code>omnicore.Device</code> to use (can be shared with other objects and is not closed on release). When empty, the object opens the device itself by <code>SerialNumber</code> and closes it on release</td></tr>
+<tr><td><code>SerialNumber</code></td><td><code>''</code></td><td><code>''</code> means the only connected device</td></tr>
+<tr><td><code>SamplesPerFrame</code></td><td>4096</td><td>Samples per frame</td></tr>
+<tr><td><code>OutputDataType</code></td><td><code>'single'</code></td><td><code>'single'</code>, <code>'double'</code>, <code>'int16'</code>, <code>'int8'</code> (<code>IQBits</code> 8)</td></tr>
+<tr><td><code>ChannelMapping</code></td><td>1</td><td><code>1</code>, <code>2</code>, or <code>[1 2]</code>; sets the device's <code>RxChannels</code></td></tr>
+<tr><td><code>SampleRate</code></td><td>NaN</td><td>Hz; NaN keeps the device's current value</td></tr>
+<tr><td><code>CenterFrequency</code></td><td>NaN</td><td>Hz, <b>tunable</b>; NaN keeps the device's current value</td></tr>
+<tr><td><code>Gain</code></td><td>NaN</td><td>dB, <b>tunable</b>, scalar or per channel; NaN keeps the device's current value</td></tr>
+<tr><td><code>GainMode</code></td><td><code>''</code></td><td><code>'manual'</code>, <code>'fast'</code>, <code>'slow'</code>, <code>'hybrid'</code>, <b>tunable</b>; <code>''</code> keeps the device's current value</td></tr>
+<tr><td><code>BufferBytes</code></td><td>NaN</td><td>Host ring buffer; NaN means 64 MiB</td></tr>
+<tr><td><code>Timeout</code></td><td>1</td><td>Seconds to wait for each block of data</td></tr>
 </table>
 
-<h2>示例</h2>
-<details open><summary>逐帧接收</summary>
+<h2>Examples</h2>
+<details open><summary>Receive frame by frame</summary>
 <pre><code>rx = omnicore.Receiver('CenterFrequency', 2.45e9, 'SampleRate', 30.72e6, ...
                        'SamplesPerFrame', 65536);
 for k = 1:100
     [y, valid, overflow] = rx();
     if k == 50
-        rx.CenterFrequency = 2.46e9;    % 下一帧生效，接收不中断
+        rx.CenterFrequency = 2.46e9;    % takes effect on the next frame without interrupting reception
     end
 end
 release(rx);</code></pre></details>
-<details><summary>与 Transmitter 全双工</summary>
+<details><summary>Full duplex with Transmitter</summary>
 <pre><code>dev = omnicore.Device('RxChannels', 1, 'TxChannels', 1, 'TxFrequency', 2.45e9);
 rx = omnicore.Receiver('Device', dev, 'SamplesPerFrame', 30720);
 tx = omnicore.Transmitter('Device', dev, 'Gain', 20);
@@ -58,13 +58,13 @@ for k = 1:1000
 end
 release(rx); release(tx); delete(dev);</code></pre></details>
 
-<h2>提示</h2>
+<h2>Tips</h2>
 <ul>
-<li><b>全双工</b>：有流时不能改通道，所以要么把一个打开时就设好 <code>RxChannels</code> 和 <code>TxChannels</code> 的 <code>Device</code> 传给两个对象，要么在第一次调用前先 <code>setup(rx); setup(tx, x)</code>。Simulink 在仿真开始前初始化所有模块，两个模块用同一 <code>SerialNumber</code> 即可。</li>
-<li>重新调谐后的那一帧可能含有 PLL 过渡过程。</li>
-<li>在 Simulink 中，设定了 <code>SampleRate</code> 时模块的采样时间为 <code>SamplesPerFrame / SampleRate</code>。</li>
+<li><b>Full duplex</b>: channels cannot change while streams exist, so either pass a <code>Device</code> opened with <code>RxChannels</code> and <code>TxChannels</code> already set to both objects, or call <code>setup(rx); setup(tx, x)</code> before the first call. Simulink initializes all blocks before the simulation starts, so two blocks with the same <code>SerialNumber</code> are enough.</li>
+<li>The frame after a retune may contain the PLL transient.</li>
+<li>In Simulink, with <code>SampleRate</code> set, the block's sample time is <code>SamplesPerFrame / SampleRate</code>.</li>
 </ul>
 
-<h2>另请参阅</h2>
+<h2>See also</h2>
 <p class="seealso"><a href="omnicore.Transmitter.html">omnicore.Transmitter</a><a href="omnicore.RxStream.html">omnicore.RxStream</a><a href="simulink.html">Simulink</a></p>
 </body></html>

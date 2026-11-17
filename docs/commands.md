@@ -1,6 +1,6 @@
-# OmniCore Host 命令目录
+# OmniCore Host Command Catalog
 
-规范命令使用小写英文、点号分组和连字符：采样率始终写 `sample-rate`，射频本振始终包含 `lo`。`och commands` 查看完整目录、参数范围与操作类型，`och commands --json` 供脚本读取元数据；这两个命令无需连接设备。
+Canonical commands use lowercase English, dot-separated groups, and hyphens: the sample rate is always written `sample-rate`, and the RF LO always contains `lo`. `och commands` shows the full catalog with argument ranges and operation types, and `och commands --json` provides the metadata for scripts; neither command needs a connected device.
 
 ```powershell
 och get rx.sample-rate
@@ -18,110 +18,110 @@ och get rf.register 0x037
 och action usb.clear
 ```
 
-`get` 查询，`set` 设置，`action` 执行动作。部分命令只支持其中一种操作。多参数按表中顺序用空格分隔。设置操作不自动启动发送，只有显式设置 `tx.enabled on` 才请求打开 TX；USB 数据源还必须先有数据预填充。常规采集/发送请使用 `och rx`、`och tx` 和 `och bench`，由基座协调缓冲和启动顺序。
+`get` queries, `set` sets, and `action` performs an action. Some commands support only one of these operations. Multiple arguments are separated by spaces in the order given in the tables. Set operations never start transmitting automatically; TX is only requested on when `tx.enabled on` is set explicitly, and the USB data source must also be prefilled first. For normal capture/transmit, use `och rx`, `och tx`, and `och bench`, which let the core coordinate buffering and start order.
 
-所有规范频率和带宽以 Hz 为单位，增益/衰减以 dB 为单位，DDS 幅度以 -1..1 的比例为单位。数字支持十进制、小数、科学计数法及 `k`/`K`、`M`、`G` 后缀，例如 `30.72M` 等于 `30720000`。拒绝 NaN、Inf、尾随字符、空格嵌入、错误参数数量和不符合步进的数值。只有寄存器地址与桥控制位掩码额外允许 `0x` 十六进制。
+All canonical frequencies and bandwidths are in Hz, gain/attenuation in dB, and DDS amplitude as a ratio in -1..1. Numbers accept decimal, fractional, and scientific notation with `k`/`K`, `M`, `G` suffixes; for example `30.72M` equals `30720000`. NaN, Inf, trailing characters, embedded spaces, the wrong number of arguments, and values that do not match the step are rejected. Only register addresses and bridge control bit masks additionally accept `0x` hexadecimal.
 
-RX/TX 共用采样时钟。`rx.sample-rate`、`tx.sample-rate` 和 `clock.sample-rate` 都会影响两方向；并非两路独立采样率。实际可用速率还受 FIR 插值/抽取、ADC/DAC 时钟链限制。三种规范设置都使用新 SDK 的 `clock_sample_rate=` 时钟链生成和核验路径；对应的旧 raw 设置仍保留原行为。FIR 装载请使用专用 `och fir` 命令；自定义时钟链使用专用 `och clock` 命令，不应手工拼接上传/提交事务。
+RX/TX share the sample clock. `rx.sample-rate`, `tx.sample-rate`, and `clock.sample-rate` all affect both directions; there are no independent sample rates per direction. The usable rates are further limited by FIR interpolation/decimation and the ADC/DAC clock chain. All three canonical settings use the new SDK's `clock_sample_rate=` path for clock chain generation and verification; the corresponding old raw settings keep their original behavior. Use the dedicated `och fir` command to load FIRs and the dedicated `och clock` command for custom clock chains; do not assemble upload/commit transactions by hand.
 
-`get`/`set` 返回的主要标量字段会换算为规范单位，并使用规范名称。例如 SDK 的 `tx1_attenuation=10250` 会显示成 `tx1.attenuation=10.25`。多字段状态和额外诊断内容保留 SDK 格式。返回值是设备报告的值，可能有硬件量化；不要假设它必然等于请求值。
+The main scalar fields returned by `get`/`set` are converted to canonical units and use canonical names. For example, the SDK's `tx1_attenuation=10250` is shown as `tx1.attenuation=10.25`. Multi-field status and extra diagnostic content keep the SDK format. Returned values are what the device reports and may be quantized by the hardware; do not assume they always equal the requested value.
 
-## 射频与通道
+## RF and channels
 
-表中 `get/set` 对应同一 SDK 名称后缀 `?`/`=`；仅 get 的命令不会提供设置入口。
+`get/set` in the table correspond to the same SDK name with the suffix `?`/`=`; get-only commands provide no setter.
 
-| 规范名称 | 操作 | 参数、单位和约束 | SDK 原名 |
+| Canonical name | Operation | Arguments, units, and constraints | SDK name |
 |---|---|---|---|
-| `rx.sample-rate` | get/set | 整数 Hz，1..61,440,000；共享时钟，FIR 决定有效下限 | 查询 `rx_samp_freq?`，设置 `clock_sample_rate=` |
-| `tx.sample-rate` | get/set | 同上，改变两方向时钟 | 查询 `tx_samp_freq?`，设置 `clock_sample_rate=` |
-| `rx.lo-frequency` | get/set | 整数 Hz，70,000,000..6,000,000,000 | `rx_lo_freq`，SDK 单位 MHz |
-| `tx.lo-frequency` | get/set | 同上 | `tx_lo_freq`，SDK 单位 MHz |
-| `rx.lo-source` | get/set | `internal`/`0`、`external`/`1`；外部名义 RF 限 4 GHz，物理输入为 2 倍 | `rx_lo_source` |
-| `tx.lo-source` | get/set | 同上；与 RX 独立选择 | `tx_lo_source` |
-| `rx.rf-bandwidth` | get/set | 整数 Hz，200,000..56,000,000 | `rx_rf_bandwidth` |
-| `tx.rf-bandwidth` | get/set | 同上 | `tx_rf_bandwidth` |
-| `rx.dc-correction` | get/set | 布尔值；两个 RX 通道的 RF 与基带 DC 跟踪校正 | `rx_dc_correction` |
-| `rx.iq-correction` | get/set | 布尔值；两个 RX 通道的正交跟踪校正 | `rx_iq_correction` |
-| `rx.channels` | get/set | `off`/`0`、`ch1`/`1`、`ch2`/`2`、`both`/`3`/`1,2` | `rx_channel` |
-| `tx.channels` | get/set | 同上 | `tx_channel` |
-| `rx1.gain-mode` | get/set | `manual`/`0`、`fast`/`1`、`slow`/`2`、`hybrid`/`3` | `rx1_gc_mode` |
-| `rx2.gain-mode` | get/set | 同上 | `rx2_gc_mode` |
-| `rx1.gain` | get/set | 整数 dB，-3..76；当前频段可能进一步限制，手动增益模式下设置 | `rx1_rf_gain` |
-| `rx2.gain` | get/set | 同上 | `rx2_rf_gain` |
-| `tx1.attenuation` | get/set | 0..89.75 dB，步进 0.25 dB | `tx1_attenuation`，SDK 单位 mdB |
-| `tx2.attenuation` | get/set | 同上 | `tx2_attenuation`，SDK 单位 mdB |
-| `tx.source` | get/set | `dds`/`0`、`usb`/`1`；更改前停止 TX | `tx_source` |
-| `tx.enabled` | get/set | 布尔值；显式控制发送门控 | `tx_enable` |
-| `rx.fir-enabled` | get/set | 布尔值；启用已加载 FIR，建议优先使用完整 FIR 事务 | `rx_fir_en` |
-| `tx.fir-enabled` | get/set | 同上 | `tx_fir_en` |
-| `rx.fir-profile` | get/set | 兼容内置示例 profile `0`；加载会禁用相应 FIR | `rx_fir_config` |
-| `tx.fir-profile` | get/set | 同上 | `tx_fir_config` |
+| `rx.sample-rate` | get/set | Integer Hz, 1..61,440,000; shared clock, FIR determines the effective lower limit | Query `rx_samp_freq?`, set `clock_sample_rate=` |
+| `tx.sample-rate` | get/set | Same as above; changes the clock for both directions | Query `tx_samp_freq?`, set `clock_sample_rate=` |
+| `rx.lo-frequency` | get/set | Integer Hz, 70,000,000..6,000,000,000 | `rx_lo_freq`, SDK unit MHz |
+| `tx.lo-frequency` | get/set | Same as above | `tx_lo_freq`, SDK unit MHz |
+| `rx.lo-source` | get/set | `internal`/`0`, `external`/`1`; external nominal RF limited to 4 GHz, physical input is 2× | `rx_lo_source` |
+| `tx.lo-source` | get/set | Same as above; selected independently from RX | `tx_lo_source` |
+| `rx.rf-bandwidth` | get/set | Integer Hz, 200,000..56,000,000 | `rx_rf_bandwidth` |
+| `tx.rf-bandwidth` | get/set | Same as above | `tx_rf_bandwidth` |
+| `rx.dc-correction` | get/set | Boolean; RF and baseband DC tracking correction on both RX channels | `rx_dc_correction` |
+| `rx.iq-correction` | get/set | Boolean; quadrature tracking correction on both RX channels | `rx_iq_correction` |
+| `rx.channels` | get/set | `off`/`0`, `ch1`/`1`, `ch2`/`2`, `both`/`3`/`1,2` | `rx_channel` |
+| `tx.channels` | get/set | Same as above | `tx_channel` |
+| `rx1.gain-mode` | get/set | `manual`/`0`, `fast`/`1`, `slow`/`2`, `hybrid`/`3` | `rx1_gc_mode` |
+| `rx2.gain-mode` | get/set | Same as above | `rx2_gc_mode` |
+| `rx1.gain` | get/set | Integer dB, -3..76; the current band may limit it further; set in manual gain mode | `rx1_rf_gain` |
+| `rx2.gain` | get/set | Same as above | `rx2_rf_gain` |
+| `tx1.attenuation` | get/set | 0..89.75 dB in 0.25 dB steps | `tx1_attenuation`, SDK unit mdB |
+| `tx2.attenuation` | get/set | Same as above | `tx2_attenuation`, SDK unit mdB |
+| `tx.source` | get/set | `dds`/`0`, `usb`/`1`; stop TX before changing | `tx_source` |
+| `tx.enabled` | get/set | Boolean; explicitly controls the transmit gate | `tx_enable` |
+| `rx.fir-enabled` | get/set | Boolean; enables the loaded FIR; prefer the complete FIR transaction | `rx_fir_en` |
+| `tx.fir-enabled` | get/set | Same as above | `tx_fir_en` |
+| `rx.fir-profile` | get/set | Compatibility built-in example profile `0`; loading disables the corresponding FIR | `rx_fir_config` |
+| `tx.fir-profile` | get/set | Same as above | `tx_fir_config` |
 
-布尔值接受 `off`/`false`/`0` 和 `on`/`true`/`1`。通道掩码不是通道数量：`2` 表示第二通道，`3` 或 `both` 才表示两个通道。TX 关闭时 SDK 会保持实际硬件最大衰减，衰减查询返回保存的发送目标值。
+Booleans accept `off`/`false`/`0` and `on`/`true`/`1`. A channel mask is not a channel count: `2` means the second channel, and only `3` or `both` means both channels. When TX is off, the SDK keeps the actual hardware at maximum attenuation, and the attenuation query returns the saved transmit target value.
 
-两项 RX correction 命令要求 `system_info?` 中 `rx_correction=1`；设置时保留另一项并回读验证。`off` 只停止跟踪更新、不清除已有系数，完整语义见 [API：RX 直流与 IQ 校正](api.md#rx-直流与-iq-校正)。原始 SDK 写命令要求流已停止，持续收发的应用请用同进程 C/C++ setter。
+The two RX correction commands require `rx_correction=1` in `system_info?`; setting one keeps the other and verifies by read-back. `off` only stops tracking updates and does not clear existing coefficients; for the full semantics see [API: RX DC and IQ correction](api.md#rx-dc-and-iq-correction). Raw SDK write commands require streams to be stopped; applications that stream continuously should use the in-process C/C++ setters.
 
 ## DDS
 
-TX1、TX2 各有两个 tone，全部 12 个属性都可 get/set。频率以整数 Hz 设置，主机检查 0..4,294,967,295，SDK 再依据当前 TX 采样率检查不得超过 Nyquist 频率。相位为 I 路相位，Q 路保持 I + 270°；允许 0..360°、0.001° 步进，360° 回绕为 0°。scale 为 -1..1、0.000001 步进；两 tone 叠加可能产生削顶。
+TX1 and TX2 each have two tones, and all 12 properties support get/set. Frequencies are set as integer Hz; the host checks 0..4,294,967,295, and the SDK additionally checks against the current TX sample rate that it does not exceed the Nyquist frequency. Phase is the I-path phase, with the Q path kept at I + 270°; 0..360° is allowed in 0.001° steps, and 360° wraps to 0°. scale is -1..1 in 0.000001 steps; the sum of two tones may clip.
 
-| 规范名称 | SDK 原名 | 规范单位 |
+| Canonical name | SDK name | Canonical unit |
 |---|---|---|
 | `dds.tx1.tone1.frequency` | `dds_tx1_tone1_freq` | Hz |
-| `dds.tx1.tone1.phase` | `dds_tx1_tone1_phase` | 度 |
-| `dds.tx1.tone1.scale` | `dds_tx1_tone1_scale` | 比例；SDK 使用百万分之一单位 |
+| `dds.tx1.tone1.phase` | `dds_tx1_tone1_phase` | Degrees |
+| `dds.tx1.tone1.scale` | `dds_tx1_tone1_scale` | Ratio; the SDK uses millionths |
 | `dds.tx1.tone2.frequency` | `dds_tx1_tone2_freq` | Hz |
-| `dds.tx1.tone2.phase` | `dds_tx1_tone2_phase` | 度 |
-| `dds.tx1.tone2.scale` | `dds_tx1_tone2_scale` | 比例；SDK 使用百万分之一单位 |
+| `dds.tx1.tone2.phase` | `dds_tx1_tone2_phase` | Degrees |
+| `dds.tx1.tone2.scale` | `dds_tx1_tone2_scale` | Ratio; the SDK uses millionths |
 | `dds.tx2.tone1.frequency` | `dds_tx2_tone1_freq` | Hz |
-| `dds.tx2.tone1.phase` | `dds_tx2_tone1_phase` | 度 |
-| `dds.tx2.tone1.scale` | `dds_tx2_tone1_scale` | 比例；SDK 使用百万分之一单位 |
+| `dds.tx2.tone1.phase` | `dds_tx2_tone1_phase` | Degrees |
+| `dds.tx2.tone1.scale` | `dds_tx2_tone1_scale` | Ratio; the SDK uses millionths |
 | `dds.tx2.tone2.frequency` | `dds_tx2_tone2_freq` | Hz |
-| `dds.tx2.tone2.phase` | `dds_tx2_tone2_phase` | 度 |
-| `dds.tx2.tone2.scale` | `dds_tx2_tone2_scale` | 比例；SDK 使用百万分之一单位 |
+| `dds.tx2.tone2.phase` | `dds_tx2_tone2_phase` | Degrees |
+| `dds.tx2.tone2.scale` | `dds_tx2_tone2_scale` | Ratio; the SDK uses millionths |
 
-## 时钟、系统与 USB
+## Clocks, system, and USB
 
-`och get usb.iq-bits` / `och set usb.iq-bits 8|12`，映射 `iq_format?` / `iq_format=8|12`。8bit 需要匹配 SDK/FPGA、RX/TX mask 都为 3 和 USB TX source；格式改变前双向全停。常规流用 `--iq-bits 8` 自动协调设置。详见 [8bit 扩展](iq8.md)。
+`och get usb.iq-bits` / `och set usb.iq-bits 8|12` map to `iq_format?` / `iq_format=8|12`. 8-bit needs a matching SDK/FPGA, both RX/TX masks set to 3, and the USB TX source; both directions must be fully stopped before changing the format. Normal streams coordinate this setting automatically with `--iq-bits 8`. See [8-bit extension](iq8.md).
 
-| 规范名称 | 操作 | 参数与含义 | SDK 原名 |
+| Canonical name | Operation | Arguments and meaning | SDK name |
 |---|---|---|---|
-| `clock.chain` | get | 参考时钟和 RX/TX 各 6 级时钟链，Hz；完整链设置走 `och clock` | `clock_chain?` |
-| `clock.sample-rate` | get/set | 整数 Hz，1..61,440,000；共享链生成、校验，受 FIR 限制 | 查询 `rx_samp_freq?`；设置 `clock_sample_rate=` |
-| `clock.ref-source` | get/set | `internal`/`0` 自由运行、`external`/`1` ADF4002 外部 10 MHz 驯服；AD9361 仍为 40 MHz | `clock_ref_source?` / `=` |
-| `clock.ref-status` | get | 参考配置、GPIO 回读；仅 PPS 时 LOCK 来自 CH32 环路，10M+PPS 时为 ±1 ppm 频率 LOCK，无 PPS 隐藏 | `adf4002_status?` |
-| `clock.ref-test` | action | D5 闪三次后恢复选源；需人工确认，不能自动证明芯片通信/锁定 | `adf4002_self_test!` |
-| `pps.input-enabled` | get/set | `on`/`off` 或 `0`/`1`，默认关闭；内部参考时由 CH32 PA4 DAC 按 PPS 驯服 40 MHz，外部 10 MHz 时仅作参考 | `pps_input_en?` / `=` |
-| `pps.status` | get | 输入状态、DATA_CLK 测量频率/频偏；无输入不提供有效频率 | `pps_status?` |
-| `clock.vcxo-status` | get | 40 MHz 调谐模式（0 都不用/1 10M/2 PPS/3 10M+PPS）、ADF4002 与 PA4 归属、CH32 PPS 环路状态 | `vcxo_status?` |
-| `host.protocol` | get | 控制封装版本和能力 | `host_protocol?` |
-| `system.help` | get | SDK 自带完整命令帮助；原单位 | `help?` |
-| `system.info` | get | 固件、通道、数据格式、恢复能力 | `system_info?` |
-| `system.status` | get | RF、温度、RSSI、收发状态、故障历史 | `system_status?` |
-| `rf.register` | get | 一个寄存器地址，0..1023，允许 `0x037` | `register?55` 等 |
-| `rf.reinit` | action | 按 SDK 保存配置重新初始化 RF/PL；会中断传输 | `rf_reinit!` |
-| `digital.self-test` | action | 停流后运行数字接口测试 | `digital_self_test!` |
-| `usb.data-enabled` | get/set | 两个布尔值：RX enabled、TX enabled | `usb_data_en?` / `=` |
-| `usb.config` | get/set | CTRL0 整数位掩码 0..127，可十六进制；受 SDK 状态检查 | `usb_config?` / `=` |
-| `usb.rx` | set | 三个布尔值：enabled、dual-channel、select-channel2 | `usb_rx=` |
-| `usb.tx` | set | 四个布尔值：enabled、dual-channel、select-channel2、run | `usb_tx=` |
-| `usb.status` | get | FIFO、错误、吞吐估计和恢复计数 | `usb_status?` |
-| `usb.irq` | get | 中断状态、清错与历史 | `usb_irq?` |
-| `usb.clear` | action | 请求异步清错；保留历史、不复位 FIFO | `usb_clear!` |
-| `usb.stop` | action | 停 USB 路径；USB TX 源模式还会关闭 TX | `usb_stop!` |
+| `clock.chain` | get | Reference clock and the 6-stage RX/TX clock chains, Hz; complete chain settings go through `och clock` | `clock_chain?` |
+| `clock.sample-rate` | get/set | Integer Hz, 1..61,440,000; shared chain generation and verification, limited by FIR | Query `rx_samp_freq?`; set `clock_sample_rate=` |
+| `clock.ref-source` | get/set | `internal`/`0` free-running, `external`/`1` disciplined by the ADF4002 from external 10 MHz; the AD9361 still runs at 40 MHz | `clock_ref_source?` / `=` |
+| `clock.ref-status` | get | Reference configuration, GPIO read-back; with PPS only, LOCK comes from the CH32 loop, with 10M+PPS it is a ±1 ppm frequency LOCK, hidden without PPS | `adf4002_status?` |
+| `clock.ref-test` | action | D5 blinks three times, then the source selection is restored; needs manual confirmation and cannot automatically prove chip communication/lock | `adf4002_self_test!` |
+| `pps.input-enabled` | get/set | `on`/`off` or `0`/`1`, off by default; with the internal reference, the CH32 PA4 DAC disciplines the 40 MHz from PPS; with external 10 MHz it is for reference only | `pps_input_en?` / `=` |
+| `pps.status` | get | Input state, measured DATA_CLK frequency/offset; no valid frequency without input | `pps_status?` |
+| `clock.vcxo-status` | get | 40 MHz tuning mode (0 neither / 1 10M / 2 PPS / 3 10M+PPS), ownership of ADF4002 and PA4, CH32 PPS loop state | `vcxo_status?` |
+| `host.protocol` | get | Control wrapper version and capabilities | `host_protocol?` |
+| `system.help` | get | The SDK's built-in full command help, in original units | `help?` |
+| `system.info` | get | Firmware, channels, data formats, recovery capabilities | `system_info?` |
+| `system.status` | get | RF, temperature, RSSI, RX/TX state, fault history | `system_status?` |
+| `rf.register` | get | One register address, 0..1023, `0x037` accepted | `register?55` etc. |
+| `rf.reinit` | action | Reinitialize RF/PL from the configuration saved in the SDK; interrupts transport | `rf_reinit!` |
+| `digital.self-test` | action | Run the digital interface test after stopping streams | `digital_self_test!` |
+| `usb.data-enabled` | get/set | Two booleans: RX enabled, TX enabled | `usb_data_en?` / `=` |
+| `usb.config` | get/set | CTRL0 integer bit mask 0..127, hexadecimal allowed; subject to SDK state checks | `usb_config?` / `=` |
+| `usb.rx` | set | Three booleans: enabled, dual-channel, select-channel2 | `usb_rx=` |
+| `usb.tx` | set | Four booleans: enabled, dual-channel, select-channel2, run | `usb_tx=` |
+| `usb.status` | get | FIFO, errors, throughput estimate, and recovery counts | `usb_status?` |
+| `usb.irq` | get | Interrupt state, error clearing, and history | `usb_irq?` |
+| `usb.clear` | action | Request asynchronous error clearing; keeps history, does not reset FIFOs | `usb_clear!` |
+| `usb.stop` | action | Stop the USB path; in USB TX source mode it also turns TX off | `usb_stop!` |
 
-`usb.rx`、`usb.tx`、`usb.config` 是高级桥调试入口，不能绕过 SDK 的 TX 显式启用、预填充和状态检查。双通道时 select-channel2 不参与选择。RX 溢出由 FPGA 处理：当前块补零结束，下一块带 GAP 标志，基座据此开始新 epoch 并给出精确丢样数；不会找回丢失的 IQ 数据。
+`usb.rx`, `usb.tx`, and `usb.config` are advanced bridge debugging entry points and cannot bypass the SDK's explicit TX enable, prefill, and state checks. With dual channels, select-channel2 does not take part in selection. RX overflow is handled by the FPGA: the current block is finished with zero padding and the next block carries the GAP flag, from which the core starts a new epoch and reports the exact number of dropped samples; lost IQ data is not recovered.
 
-## 旧命令兼容
+## Legacy command compatibility
 
-旧 SDK 名称仍通过原始命令入口保留，例如 `och get rx_samp_freq`、`och set tx1_attenuation 10000`；旧动作可用 `och set 'usb_clear!'`。旧名称保留 SDK 原单位，**不会自动换算**：
+Old SDK names are still kept through the raw command entry point, e.g. `och get rx_samp_freq`, `och set tx1_attenuation 10000`; old actions can be used with `och set 'usb_clear!'`. Old names keep the SDK's original units and are **not converted automatically**:
 
-| 参数 | 规范命令 | 旧 SDK 命令 |
+| Parameter | Canonical command | Old SDK command |
 |---|---|---|
-| RX 本振 2.4 GHz | `och set rx.lo-frequency 2.4G` | `och set rx_lo_freq 2400`，单位 MHz |
-| TX1 衰减 10 dB | `och set tx1.attenuation 10` | `och set tx1_attenuation 10000`，单位 mdB |
-| DDS 幅度 0.25 | `och set dds.tx1.tone1.scale 0.25` | `och set dds_tx1_tone1_scale 250000` |
+| RX LO 2.4 GHz | `och set rx.lo-frequency 2.4G` | `och set rx_lo_freq 2400`, unit MHz |
+| TX1 attenuation 10 dB | `och set tx1.attenuation 10` | `och set tx1_attenuation 10000`, unit mdB |
+| DDS amplitude 0.25 | `och set dds.tx1.tone1.scale 0.25` | `och set dds_tx1_tone1_scale 250000` |
 
-SDK 原有 `ch32_` 到 `usb_` 的兼容别名仍属于 raw 命令层。规范目录只公布 `usb.*`。带参数的寄存器查询目前按保守策略要求没有流对象，停流并销毁流对象后再查询。FIR/时钟的 begin、data、commit、abort 等内部事务命令不在用户目录中；专用 API/CLI 负责参数校验、顺序、失败处理和回读确认。
+The SDK's existing compatibility aliases from `ch32_` to `usb_` still belong to the raw command layer; the canonical catalog only publishes `usb.*`. Register queries with arguments currently follow a conservative policy that requires no stream objects; stop and destroy the stream objects before querying. Internal FIR/clock transaction commands such as begin, data, commit, and abort are not in the user catalog; the dedicated API/CLI handles argument validation, ordering, failure handling, and read-back confirmation.
 
-目录实现位于 `apps/och/commands.hpp`，包含每项操作、参数数量、单位换算、步进、枚举和支持状态；通过 `och commands --json` 可读取机器可用的完整目录。该目录描述主机入口能力，不能替代 SDK 根据当前硬件状态进行的运行时校验。底层封装和 FIR/时钟事务见 [设备协议参考](protocol.md)。
+The catalog is implemented in `apps/och/commands.hpp`, which contains each operation, argument count, unit conversion, step, enumeration, and support state; `och commands --json` provides the complete machine-readable catalog. The catalog describes the capabilities of the host entry points and does not replace the runtime checks the SDK performs based on the current hardware state. For the underlying wrapper and FIR/clock transactions, see the [Device Protocol Reference](protocol.md).

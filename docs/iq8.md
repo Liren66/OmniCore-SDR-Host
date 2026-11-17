@@ -1,35 +1,35 @@
-# 2TX2RX 可选 signed8 USB IQ
+# Optional signed8 USB IQ for 2TX2RX
 
-8bit USB IQ 自 OCH 0.4.0 起提供，默认仍为 12bit，ABI 1 不变。需要固件的 `system_info?` 同时报告 `iq_format=1` 与 `iq8_2t2r=1`；当前要求的 FPGA `CH32H417_IP` 1.3 已包含 8bit 通路。
+8-bit USB IQ has been available since OCH 0.4.0. 12-bit remains the default and ABI 1 is unchanged. The firmware's `system_info?` must report both `iq_format=1` and `iq8_2t2r=1`; the currently required FPGA `CH32H417_IP` 1.3 already includes the 8-bit path.
 
-## Wire 与数值
+## Wire format and values
 
-![USB IQ 格式](images/wire-format.svg)
+![USB IQ formats](images/wire-format.svg)
 
-12bit 每通道每复样本为 3 字节 packed12。8bit 仅在 RX/TX mask 都为 3、TX source 为 USB 时选择；每时间帧为 `I1[11:4],Q1[11:4],I2[11:4],Q2[11:4]` 四字节，均为二补码 signed8。FPGA TX 恢复每个 12bit 值时补低 4 位零。通道顺序不变；每个 16 KiB 块的 16368 B 载荷正好容纳 4092 个 8bit 时间帧，块内总是整数个样点。
+12-bit uses 3 bytes of packed12 per complex sample per channel. 8-bit is selected only when both the RX and TX masks are 3 and the TX source is USB; each time frame is the four bytes `I1[11:4],Q1[11:4],I2[11:4],Q2[11:4]`, all two's-complement signed8. When restoring each 12-bit value, the FPGA TX path fills the low 4 bits with zeros. Channel order is unchanged; the 16368 B payload of each 16 KiB block holds exactly 4092 8-bit time frames, so a block always contains a whole number of samples.
 
-| 应用格式 | 每通道每复样本字节 | 8bit RX 输出 | 8bit TX 输入处理 |
+| Application format | Bytes per complex sample per channel | 8-bit RX output | 8-bit TX input handling |
 |---|---:|---|---|
-| packed12 | 3 | signed8 高位扩展为 12bit，低 4 位零 | 丢弃每个 12bit 值的低 4 位 |
-| sc16 | 4 | signed8 × 256，左对齐 | 取 signed16 的高 8 位 |
-| fc32 | 8 | signed8 ÷ 128 | 沿用旧 12bit 量化，再丢低 4 位 |
-| sc8 | 2 | signed8 I/Q 原样 | 原样 |
+| packed12 | 3 | signed8 extended to 12 bits in the high bits, low 4 bits zero | Drop the low 4 bits of each 12-bit value |
+| sc16 | 4 | signed8 × 256, left-aligned | Take the high 8 bits of the signed16 |
+| fc32 | 8 | signed8 ÷ 128 | Use the existing 12-bit quantization, then drop the low 4 bits |
+| sc8 | 2 | signed8 I/Q as is | As is |
 
-FC32 沿用半步远离零、饱和到 -2048..2047、NaN 为零、无穷饱和的原规则。8bit 降位是删除二补码低 4 位，不改成另一个 8bit 四舍五入规则。例如 12bit 的 -1 变成 signed8 的 -1，并在 FPGA 恢复为 12bit 的 -16。
+FC32 keeps the original rules: round half away from zero, saturate to -2048..2047, NaN becomes zero, infinities saturate. Reducing to 8 bits deletes the low 4 bits of the two's-complement value; it is not replaced by a separate 8-bit rounding rule. For example, 12-bit -1 becomes signed8 -1, which the FPGA restores to 12-bit -16.
 
-## 配置与兼容
+## Configuration and compatibility
 
-`och_config.usb_iq_bits` 占原 `reserved[0]`，偏移 76、结构大小 104 字节，其他既有成员偏移不变。0 或 12 为默认旧格式；8 需要两个 channel mask 都为 3。`och_default_config` 置 0，旧应用的零保留槽保持原行为。`OCH_SC8=3` 新增且不改变旧枚举值；SC8 仅在 8bit wire 下创建流。
+`och_config.usb_iq_bits` occupies the former `reserved[0]` at offset 76 with a struct size of 104 bytes; the offsets of all existing members are unchanged. 0 or 12 selects the default legacy format; 8 requires both channel masks to be 3. `och_default_config` sets it to 0, so the zeroed reserved slot of older applications keeps the original behavior. `OCH_SC8=3` is new and does not change existing enum values; SC8 streams can only be created with the 8-bit wire format.
 
-SDK `system_info?` 必须有 `iq_format=1`，8bit 还要求 PL 能力 `iq8_2t2r=1`。缺少扩展的旧 SDK 仍可配置 12bit，新主机不会向其发送新命令。每个新主机配置事务先全停并清理，在支持扩展时先恢复 12bit，再应用通道/源，最后按需选择 8bit，避免继承上一句柄遗留的 8bit。格式写后查询严格核对 requested/applied、busy/error、verified 和 scope。
+The SDK `system_info?` must contain `iq_format=1`, and 8-bit additionally requires the PL capability `iq8_2t2r=1`. Older SDKs without the extension can still be configured for 12-bit, and a newer host never sends them the new commands. Each configuration transaction on a new host first stops everything and cleans up; when the extension is supported it first restores 12-bit, then applies channels/sources, and finally selects 8-bit if requested, so 8-bit left over from a previous handle is never inherited. After writing the format, the query strictly checks requested/applied, busy/error, verified, and scope.
 
-存在任意流对象时改变 wire 位数返回 BUSY，需先 stop/destroy 双向流，再 configure/create。普通频率、增益、时钟等重配置保留线格式，仍使用既有暂停、清理、零预填及重启机制。RX/TX 允许按原顺序分别启动、停止；约束的是两个通道 mask，不要求两个 USB enable 在每个瞬间同时为 1。
+Changing the wire bit width while any stream object exists returns BUSY; stop/destroy the streams in both directions first, then configure/create. Ordinary reconfiguration of frequency, gain, clocks, and so on keeps the wire format and still uses the existing pause, cleanup, zero prefill, and restart mechanism. RX and TX may be started and stopped separately in the original order; the constraint is on the two channel masks, not on both USB enables being 1 at every instant.
 
-IQ8 的 TX 启动使用 1536 raw FIFO 组门槛（与 SDK 相同），12bit 仍保留原双通道 2700/单通道 1350。第一 16KiB 包在 IQ8 下约填入 2046 主 FIFO 组，足够启动；等待旧 2700 会因 FIFO 无空间接受第二包而卡住。主机异步提交 USB 大块，轮询硬件水位，不等整个 USB 块完成才打开 TX_RUN。
+TX start with IQ8 uses a threshold of 1536 raw FIFO groups (same as the SDK); 12-bit keeps the original 2700 for dual-channel / 1350 for single-channel. With IQ8, the first 16 KiB packet fills about 2046 main FIFO groups, which is enough to start; waiting for the old 2700 would stall because the FIFO has no room to accept the second packet. The host submits large USB transfers asynchronously and polls the hardware level, rather than waiting for a whole USB transfer to complete before enabling TX_RUN.
 
-`och_rx_acquire` 总是返回当前 wire，独立于应用 `format`。8bit 双通道样本数为 `bytes / 4`；12bit 双通道为 `bytes / 6`。`och_recv` 进行所选应用格式转换。所有样本索引、丢样、TX padding、预填均按每通道时间样本计；USB/ring 字节按当前 wire 计。
+`och_rx_acquire` always returns the current wire format, independent of the application `format`. The dual-channel sample count is `bytes / 4` for 8-bit and `bytes / 6` for 12-bit. `och_recv` converts to the selected application format. All sample indices, drops, TX padding, and prefill are counted in time samples per channel; USB/ring bytes are counted in the current wire format.
 
-## CLI 与示例
+## CLI and examples
 
 ```powershell
 och get system.info
@@ -38,22 +38,22 @@ och bench --rx --tx --channels 1,2 --iq-bits 8 --sample-rate 30.72M --seconds 10
 och bench --rx --tx --channels 1,2 --iq-bits 12 --sample-rate 30.72M --seconds 10 --attenuation 89.75 --amplitude 0 --json
 ```
 
-bench 自动为 8bit 选择 sc8，为 12bit 选择 packed12，并只支持这两种原生应用格式。SC16/FC32 转换须通过 API 的 `och_send` / `och_recv` 测试；不能用 bench 或零拷贝 RX 冒充转换测试。以上命令输出零 IQ，TX 衰减为 89.75 dB，不读写 IQ 文件。
+bench automatically picks sc8 for 8-bit and packed12 for 12-bit, and only supports these two native application formats. SC16/FC32 conversion has to be tested through the API's `och_send` / `och_recv`; bench or zero-copy RX must not be passed off as a conversion test. The commands above transmit zero IQ with 89.75 dB TX attenuation and do not read or write IQ files.
 
-31.25 MSPS 时 8bit 双通道每方向为 125 MB/s；30.72 MSPS 时为 122.88 MB/s（双向 245.76 MB/s）；61.44 MSPS 时每方向 245.76 MB/s（双向 491.52 MB/s）。每块 16 B 头（约 0.1%）及 USB 协议开销另计。CLI JSON `usb_MBps` 为该流累计 USB 字节除以 `elapsed_seconds`，含启动/停止开销；不是独立稳态窗口的速率。
+At 31.25 MSPS, 8-bit dual-channel is 125 MB/s per direction; at 30.72 MSPS it is 122.88 MB/s (245.76 MB/s both directions); at 61.44 MSPS it is 245.76 MB/s per direction (491.52 MB/s both directions). The 16 B header per block (about 0.1%) and USB protocol overhead come on top. The CLI JSON `usb_MBps` is the stream's cumulative USB bytes divided by `elapsed_seconds`, including start/stop overhead; it is not the rate over a separate steady-state window.
 
-`examples/duplex_iq8.cpp` 展示双通道 SC8 接收和双通道零 IQ 发送，使用独立 TX producer。改变应用 args.format 可用 SC16/FC32/packed12，缓冲按应用格式尺寸分配。
+`examples/duplex_iq8.cpp` shows dual-channel SC8 receive and dual-channel zero-IQ transmit with a separate TX producer. Changing the application args.format lets you use SC16/FC32/packed12; buffers are sized for the application format.
 
-通过 SoapySDR 插件使用时，在设备参数里写 `iq_bits=8`（如 `driver=omnicore,iq_bits=8`）。这时两个通道都要开，原生格式为 CS8，也可以用 CS16 / CF32。全双工还要写 `rx_mask=3,tx_mask=3`。2T2R 61.44 MSPS 在 GNU Radio 中的验收结果见 [SoapySDR 插件](soapy.md)。
+When using the SoapySDR plugin, put `iq_bits=8` in the device arguments (e.g. `driver=omnicore,iq_bits=8`). Both channels must then be enabled; the native format is CS8, and CS16 / CF32 can also be used. Full duplex additionally needs `rx_mask=3,tx_mask=3`. For the acceptance results of 2T2R 61.44 MSPS in GNU Radio, see [SoapySDR Plugin](soapy.md).
 
-SDK 控制命令为 `iq_format?`、`iq_format=8` 和 `iq_format=12`；规范 CLI 名为 `usb.iq-bits`。CH32 数据/控制固件保持透明传输。新 SDK 查询包括 `iq_format=8 requested=8 applied=8 supported=12,8 cfg_busy=0 cfg_error=0 verified=1 scope=2tx2rx`；后续诊断字段允许附加。
+The SDK control commands are `iq_format?`, `iq_format=8`, and `iq_format=12`; the canonical CLI name is `usb.iq-bits`. The CH32 data/control firmware passes data through transparently. A query on a new SDK includes `iq_format=8 requested=8 applied=8 supported=12,8 cfg_busy=0 cfg_error=0 verified=1 scope=2tx2rx`; further diagnostic fields may be appended.
 
-## 实测性能
+## Measured performance
 
-| 主机 | 配置 | 时长 | RX / TX MB/s | 溢出 / 欠流 / 主机丢样 |
+| Host | Configuration | Duration | RX / TX MB/s | Overflow / underflow / host drops |
 |---|---|---:|---:|---|
-| Windows 11，USB3 5 Gbit/s | 8bit 2RX + 2TX，61.44 MSPS | 300 秒 | 245.7 / 245.7 | 0 / 0 / 0 |
-| Ubuntu 24.04，USB3 5 Gbit/s | 8bit 2RX + 2TX，61.44 MSPS | 300 秒 | 245.8 / 245.7 | 0 / 0 / 0 |
-| Windows 11，USB3 5 Gbit/s | 8bit 2RX + 2TX，50 MSPS | 300 秒 | 200.0 / 200.0 | 0 / 0 / 0 |
+| Windows 11, USB3 5 Gbit/s | 8-bit 2RX + 2TX, 61.44 MSPS | 300 s | 245.7 / 245.7 | 0 / 0 / 0 |
+| Ubuntu 24.04, USB3 5 Gbit/s | 8-bit 2RX + 2TX, 61.44 MSPS | 300 s | 245.8 / 245.7 | 0 / 0 / 0 |
+| Windows 11, USB3 5 Gbit/s | 8-bit 2RX + 2TX, 50 MSPS | 300 s | 200.0 / 200.0 | 0 / 0 / 0 |
 
-理论 wire 速率为 245.76 MB/s（61.44 MSPS × 2 通道 × 2 字节）。结果与主机、USB 控制器和端口有关，不代表任意主机长期零丢样；50 MSPS 档位留有吞吐余量。
+The theoretical wire rate is 245.76 MB/s (61.44 MSPS × 2 channels × 2 bytes). Results depend on the host, USB controller, and port, and do not guarantee zero drops over long periods on any host; the 50 MSPS setting leaves throughput headroom.

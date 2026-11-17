@@ -1,10 +1,10 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OmniCore 实时扫频</title>
+<title>OmniCore Live Sweep</title>
 <style>
   :root {
     --bg: #0b0e14; --panel: #121722; --panel-2: #171d2a; --line: #232b3b; --text: #e6e9ef;
@@ -70,55 +70,55 @@
 </head>
 <body>
 <header>
-  <h1>OmniCore SDR <span>实时扫频</span></h1>
-  <span id="status" class="pill">连接中</span>
+  <h1>OmniCore SDR <span>Live sweep</span></h1>
+  <span id="status" class="pill">Connecting</span>
   <span id="cfgline" class="num"></span>
 </header>
 
 <div class="cards">
-  <div class="card"><div class="k">每遍耗时</div><div class="v num" id="c-sweep">—</div><div class="s num" id="c-sweep-s">&nbsp;</div></div>
-  <div class="card"><div class="k">扫描速度</div><div class="v num" id="c-speed">—</div><div class="s num" id="c-speed-s">&nbsp;</div></div>
-  <div class="card"><div class="k">切频 · 同频段（中位）</div><div class="v num" id="c-retune">—</div><div class="s num" id="c-retune-s">&nbsp;</div></div>
-  <div class="card"><div class="k">切频 · 跨增益表（中位）</div><div class="v num" id="c-table">—</div><div class="s num" id="c-table-s">&nbsp;</div></div>
-  <div class="card"><div class="k">每步总耗时（中位）</div><div class="v num" id="c-step">—</div><div class="s num" id="c-step-s">&nbsp;</div></div>
-  <div class="card"><div class="k">数据完整性</div><div class="v num" id="c-ok">—</div><div class="s num" id="c-ok-s">&nbsp;</div></div>
+  <div class="card"><div class="k">Time per sweep</div><div class="v num" id="c-sweep">—</div><div class="s num" id="c-sweep-s">&nbsp;</div></div>
+  <div class="card"><div class="k">Sweep speed</div><div class="v num" id="c-speed">—</div><div class="s num" id="c-speed-s">&nbsp;</div></div>
+  <div class="card"><div class="k">Retune · same band (median)</div><div class="v num" id="c-retune">—</div><div class="s num" id="c-retune-s">&nbsp;</div></div>
+  <div class="card"><div class="k">Retune · across gain tables (median)</div><div class="v num" id="c-table">—</div><div class="s num" id="c-table-s">&nbsp;</div></div>
+  <div class="card"><div class="k">Total per step (median)</div><div class="v num" id="c-step">—</div><div class="s num" id="c-step-s">&nbsp;</div></div>
+  <div class="card"><div class="k">Data integrity</div><div class="v num" id="c-ok">—</div><div class="s num" id="c-ok-s">&nbsp;</div></div>
 </div>
 
 <div class="body">
   <aside>
     <section class="box">
-      <h2>频段</h2>
+      <h2>Range</h2>
       <div class="presets" id="presets"></div>
-      <div class="row"><label>起止 MHz</label>
+      <div class="row"><label>Start–stop MHz</label>
         <div class="pair"><input id="start" type="number" min="70" max="6000" step="1"><input id="stop" type="number" min="70" max="6000" step="1"></div></div>
-      <div class="row"><label>采样率</label>
+      <div class="row"><label>Sample rate</label>
         <select id="rate"><option value="61440000">61.44 MSPS</option><option value="30720000">30.72 MSPS</option>
           <option value="15360000">15.36 MSPS</option><option value="7680000">7.68 MSPS</option></select></div>
-      <div class="row"><label>增益 <span id="gainv" class="num"></span></label><input id="gain" type="range" min="0" max="70" step="1"></div>
-      <div class="row"><label>每段保留</label>
+      <div class="row"><label>Gain <span id="gainv" class="num"></span></label><input id="gain" type="range" min="0" max="70" step="1"></div>
+      <div class="row"><label>Kept per step</label>
         <select id="usable"><option value="0.5">50%</option><option value="0.6">60%</option><option value="0.75">75%</option><option value="0.85">85%</option></select></div>
-      <div class="row"><label>平均次数</label>
+      <div class="row"><label>Averages</label>
         <select id="average"><option>4</option><option>8</option><option>16</option><option>32</option></select></div>
-      <div class="actions"><button class="primary" id="apply">应用</button><button id="toggle">停止</button></div>
-      <p class="hint">在频谱或瀑布图上拖动框选即可放大扫描；双击回到全频段。</p>
+      <div class="actions"><button class="primary" id="apply">Apply</button><button id="toggle">Stop</button></div>
+      <p class="hint">Drag a box on the spectrum or waterfall to zoom the sweep; double-click to return to the full range.</p>
     </section>
     <section class="box">
-      <h2>显示</h2>
-      <label class="check"><input type="checkbox" id="auto" checked> 自动色阶</label>
-      <div class="row"><label>下限 <span id="lov" class="num"></span></label><input id="lo" type="range" min="-130" max="-20" step="1"></div>
-      <div class="row"><label>上限 <span id="hiv" class="num"></span></label><input id="hi" type="range" min="-110" max="0" step="1"></div>
-      <label class="check"><input type="checkbox" id="hold" checked> 最大保持 <button id="clear" style="margin-left:auto;padding:2px 8px">清除</button></label>
+      <h2>Display</h2>
+      <label class="check"><input type="checkbox" id="auto" checked> Auto color scale</label>
+      <div class="row"><label>Low <span id="lov" class="num"></span></label><input id="lo" type="range" min="-130" max="-20" step="1"></div>
+      <div class="row"><label>High <span id="hiv" class="num"></span></label><input id="hi" type="range" min="-110" max="0" step="1"></div>
+      <label class="check"><input type="checkbox" id="hold" checked> Max hold <button id="clear" style="margin-left:auto;padding:2px 8px">Clear</button></label>
     </section>
     <section class="box">
-      <h2>切频耗时分布（最近 5 遍）</h2>
+      <h2>Retune time distribution (last 5 sweeps)</h2>
       <canvas id="hist"></canvas>
     </section>
     <section class="box">
-      <h2>最强信号</h2>
-      <ul id="peaks"><li><span class="hint">等待数据…</span></li></ul>
+      <h2>Strongest signals</h2>
+      <ul id="peaks"><li><span class="hint">Waiting for data…</span></li></ul>
     </section>
     <section class="box">
-      <h2>日志</h2>
+      <h2>Log</h2>
       <pre id="log"></pre>
     </section>
   </aside>
@@ -136,8 +136,8 @@
   const $ = id => document.getElementById(id);
   const WF_ROWS = 150; // about 2.5 min of full-band sweeps
   const PRESETS = [
-    ["全频段", 70, 6000], ["FM 广播", 87, 109], ["蜂窝 0.7–2.7G", 700, 2700],
-    ["2.4G ISM", 2390, 2500], ["5G WiFi", 5150, 5850], ["L 波段", 1000, 2000],
+    ["Full range", 70, 6000], ["FM broadcast", 87, 109], ["Cellular 0.7–2.7G", 700, 2700],
+    ["2.4G ISM", 2390, 2500], ["5G WiFi", 5150, 5850], ["L band", 1000, 2000],
   ];
   const S = { meta: null, rows: [], hold: null, lo: -100, hi: -40, cursor: null, sel: null, hover: null,
               running: false, stats: null };
@@ -289,11 +289,11 @@
     const out = [];
     for (const i of idx) { if (out.every(j => Math.abs(j - i) > sep)) out.push(i); if (out.length >= 6) break; }
     const ul = $("peaks"); ul.innerHTML = "";
-    if (!out.length) { ul.innerHTML = '<li><span class="hint">没有明显高于噪底的信号</span></li>'; return; }
+    if (!out.length) { ul.innerHTML = '<li><span class="hint">No signals clearly above the noise floor</span></li>'; return; }
     for (const i of out) {
       const li = document.createElement("li"), f = f0 + i * hz;
       li.innerHTML = `<span class="num">${fmtHz(f, f >= 1e9 ? 4 : 2)}</span><span class="num">${db[i].toFixed(1)} dBFS</span>`;
-      li.title = "点击放大到该信号附近";
+      li.title = "Click to zoom in around this signal";
       li.onclick = () => zoomTo(f - 20e6, f + 20e6);
       ul.appendChild(li);
     }
@@ -312,19 +312,19 @@
   function showStats(s) {
     S.stats = s;
     setCard("c-sweep", s.seconds >= 1 ? s.seconds.toFixed(2) : (s.seconds * 1e3).toFixed(1), s.seconds >= 1 ? "s" : "ms",
-            `第 ${s.sweeps} 遍 · ${s.steps} 步`);
+            `sweep ${s.sweeps} · ${s.steps} steps`);
     if (s.steps > 1)
       setCard("c-speed", s.ghz_per_second >= 1 ? s.ghz_per_second.toFixed(2) : (s.ghz_per_second * 1e3).toFixed(0),
-              s.ghz_per_second >= 1 ? "GHz/s" : "MHz/s", `${s.steps_per_second.toFixed(0)} 步/秒`);
+              s.ghz_per_second >= 1 ? "GHz/s" : "MHz/s", `${s.steps_per_second.toFixed(0)} steps/s`);
     else // the range fits one step: a fixed-tuned receiver, nothing is swept
-      setCard("c-speed", "固定调谐", "", `每秒 ${(1 / s.seconds).toFixed(0)} 帧频谱`);
-    setCard("c-retune", s.retune_ms ? s.retune_ms.toFixed(2) : "—", s.retune_ms ? "ms" : "", s.steps > 1 ? `理论上限 ${(1e3 / s.retune_ms).toFixed(0)} 次/秒` : "单步，无需切频");
+      setCard("c-speed", "Fixed tuning", "", `${(1 / s.seconds).toFixed(0)} spectra/s`);
+    setCard("c-retune", s.retune_ms ? s.retune_ms.toFixed(2) : "—", s.retune_ms ? "ms" : "", s.steps > 1 ? `theoretical max ${(1e3 / s.retune_ms).toFixed(0)} retunes/s` : "single step, no retuning");
     setCard("c-table", s.retune_gain_table_ms ? s.retune_gain_table_ms.toFixed(1) : "—", s.retune_gain_table_ms ? "ms" : "",
-            s.gain_table_steps ? `本遍 ${s.gain_table_steps} 步（1.3 / 4 GHz）` : "本遍未跨增益表");
-    setCard("c-step", s.step_ms.toFixed(2), "ms", `其中采集 ${s.capture_ms.toFixed(2)} ms`);
+            s.gain_table_steps ? `${s.gain_table_steps} steps this sweep (1.3 / 4 GHz)` : "no gain-table crossing this sweep");
+    setCard("c-step", s.step_ms.toFixed(2), "ms", `of which capture ${s.capture_ms.toFixed(2)} ms`);
     const bad = s.rx_gaps + s.restarts + (s.host_dropped ? 1 : 0);
     $("c-ok").style.color = bad ? "var(--bad)" : "var(--good)";
-    setCard("c-ok", bad ? "有间断" : "无间断", "", `RX 间断 ${s.rx_gaps} · 丢样 ${s.host_dropped} · 重采 ${s.restarts}`);
+    setCard("c-ok", bad ? "Gaps" : "No gaps", "", `RX gaps ${s.rx_gaps} · dropped ${s.host_dropped} · re-captures ${s.restarts}`);
     drawHist(s);
   }
   function drawHist(s) {
@@ -366,7 +366,7 @@
     $("start").value = +(c.start / 1e6).toFixed(3); $("stop").value = +(c.stop / 1e6).toFixed(3);
     $("rate").value = String(Math.round(c.rate)); $("gain").value = c.gain; $("gainv").textContent = c.gain + " dB";
     $("usable").value = String(c.usable); $("average").value = String(c.average);
-    $("cfgline").textContent = `${fmtHz(c.start)} – ${fmtHz(c.stop)} · ${(c.rate / 1e6).toFixed(2)} MSPS · 增益 ${c.gain} dB · 保留 ${Math.round(c.usable * 100)}% · 平均 ${c.average}`;
+    $("cfgline").textContent = `${fmtHz(c.start)} – ${fmtHz(c.stop)} · ${(c.rate / 1e6).toFixed(2)} MSPS · gain ${c.gain} dB · kept ${Math.round(c.usable * 100)}% · avg ${c.average}`;
   }
   function zoomTo(a, b) {
     a = Math.max(70e6, a); b = Math.min(6e9, b); if (b - a < 1e6) b = a + 1e6;
@@ -374,7 +374,7 @@
   }
   async function post(path, body) {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!r.ok) log("错误：" + ((await r.json().catch(() => ({}))).error || r.status));
+    if (!r.ok) log("Error: " + ((await r.json().catch(() => ({}))).error || r.status));
   }
   function apply() { post("/config", readForm()); }
 
@@ -411,12 +411,12 @@
     const lines = el.textContent.split("\n"); if (lines.length > 80) el.textContent = lines.slice(-80).join("\n");
     el.scrollTop = el.scrollHeight;
   }
-  const STATUS = { running: "运行中", starting: "启动中", stopped: "已停止", error: "出错" };
+  const STATUS = { running: "Running", starting: "Starting", stopped: "Stopped", error: "Error" };
   function setStatus(s) {
     const el = $("status"); el.className = "pill " + s.state; el.textContent = STATUS[s.state] || s.state;
     S.running = s.state === "running" || s.state === "starting";
-    $("toggle").textContent = S.running ? "停止" : "开始";
-    if (s.message) log((s.state === "error" ? "错误：" : "") + s.message);
+    $("toggle").textContent = S.running ? "Stop" : "Start";
+    if (s.message) log((s.state === "error" ? "Error: " : "") + s.message);
   }
 
   // ---------- events ----------
@@ -442,7 +442,7 @@
         case "log": log(m.line); break;
       }
     };
-    es.onerror = () => { setStatus({ state: "error", message: "" }); $("status").textContent = "连接断开，重连中"; };
+    es.onerror = () => { setStatus({ state: "error", message: "" }); $("status").textContent = "Disconnected, reconnecting"; };
   }
   showLevels();
   connect();
