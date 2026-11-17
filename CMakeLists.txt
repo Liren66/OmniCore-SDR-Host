@@ -168,7 +168,8 @@ if (WIN32 OR APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniCoreHostConfig.cmake
             ${CMAKE_CURRENT_BINARY_DIR}/OmniCoreHostConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OmniCoreHost)
     install(DIRECTORY include/ DESTINATION include)
-    install(DIRECTORY docs/ DESTINATION docs PATTERN "src" EXCLUDE)
+    install(DIRECTORY docs/ DESTINATION docs PATTERN "src" EXCLUDE
+            PATTERN "index.md" EXCLUDE PATTERN "changelog.md" EXCLUDE PATTERN "requirements.txt" EXCLUDE)
     install(DIRECTORY examples/ DESTINATION examples)
     install(FILES README.md README.zh-CN.md LICENSE DESTINATION .)
 endif ()
