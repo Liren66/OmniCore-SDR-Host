@@ -2,13 +2,15 @@
 
 `bindings/soapy` 是 OmniCoreSDR 的 SoapySDR 模块，驱动名 `omnicore`。装好之后，所有支持 SoapySDR 的软件都能直接使用这块板：GNU Radio（`gr-soapy`，3.9 起自带；GNU Radio 4 也自带 Soapy 块）、SDR++、SDRangel、CubicSDR、Pothos，以及 SoapySDR 的 Python / C++ 接口。
 
-插件只用公共 C ABI（`och.h`），不依赖 OCH 内部代码。设计与映射细节见仓库根目录的 `SOAPY_PLAN.md`。
+插件只用公共 C ABI（`och.h`），不依赖 OCH 内部代码，与 MATLAB 工具箱共用 `bindings/common/` 中的参数映射、交织和时间换算。
 
 | 状态 | 内容 |
 |---|---|
-| 已实机验证（macOS） | 设备发现与参数、RX 单/双通道（CS16/CF32）、溢出与时间戳、定时与定长 RX、GNU Radio `rx_time` 标签 |
-| 已实现、待实机验证 | TX 连续与突发发送、`readStreamStatus`、全双工、8bit 模式 |
-| 不支持 | 多板同步、FIR 装载、时钟链手动配置（用 `och` 命令行） |
+| 已实机验证（macOS，SoapySDR 0.8.1，GNU Radio 3.10） | 设备发现与参数；RX 单/双通道（CS16/CF32）、溢出与时间戳、定时与定长 RX；TX 连续与突发发送（含定时突发、1 个样点的短突发）、`readStreamStatus`；全双工 2T2R（12bit 30.72 MSPS、8bit 61.44 MSPS）；运行中改本振 / 增益 / 采样率；GNU Radio 流图启停 20 次、`rx_time` 标签 |
+| 已实现、待实机验证 | Linux、Windows（只在 CI 中编译）；外部 10 MHz + PPS 下的对时；用回环线核对通道对应关系；GQRX、SDR++、SDRangel |
+| 不支持 | 多板同步编排（`och sync`）、FIR 装载、时钟链手动配置（用 `och` 命令行） |
+
+验收脚本在 `bindings/soapy/hwtest/`：`rx_accept.py`、`tx_accept.py`、`duplex_accept.py`（不接回环线）、`gr_rx_time.py`、`grc_run.py`。
 
 ## 编译与安装
 
@@ -143,7 +145,7 @@ OCH 对设备有跨进程独占锁：插件打开设备期间，`och` 命令行�
 - **时间标签**：source 在启动、改频率、改采样率和溢出之后打 `rx_time`、`rx_rate`、`rx_freq` 标签。
 - **发送**：sink 支持长度标签突发（`set_length_tag_name`），但 gr-soapy **不支持定时发送**（不读 `tx_time`/`tx_sob`/`tx_eob` 标签）。需要定时发送时，直接用 SoapySDR 的 Python / C++ 接口。
 - **运行中改参数**：改 RX 本振、增益不会丢数据。改 TX 本振、带宽或采样率时，设备会短暂暂停传输，全双工下 RX 会丢几十到一两百毫秒的数据。source 会把每段空档都上报，并重新打 `rx_time` 标签。
-- **启停**：整个流图停止再启动没有问题。全双工时只停一个方向再单独重启会失败（core 要求两个方向都停下才能重开），下一版 core 会放宽。
+- **启停**：整个流图停止再启动没有问题。全双工时只停一个方向再单独重启会失败：core 要求两个方向都停下才能重开（见 [架构](architecture.md#tx-的显式启动与停止)）。可以单独开关 RX / TX 的软件（如 SDRangel）会受此影响。
 
 示例流图在 `examples/soapy/`。
 

@@ -5,7 +5,7 @@
 - **MEX 网关** `omnicore_mex`：只调用公共 C ABI（`och.h`），和 `och` 命令行用同一套库。
 - **MATLAB 包** `+omnicore`：在网关之上提供 `Device`、`RxStream`、`TxStream` 三个句柄类，以及 `Receiver`、`Transmitter` 两个 System object（Simulink 中作为 MATLAB System 模块使用）。
 
-支持 MATLAB R2018a 及以后版本。代码不用 `arguments` 块，也不用 `Name=Value` 写法；R2021a 起你自己的代码当然可以用 `Name=Value`。设计和验收记录见仓库根目录的 `MEX_PLAN.md`。
+支持 MATLAB R2018a 及以后版本。代码不用 `arguments` 块，也不用 `Name=Value` 写法；R2021a 起你自己的代码当然可以用 `Name=Value`。测试在 `bindings/matlab/tests/`（`OfflineTest` 不接设备，`*HardwareTest` 需要设备）。
 
 | 状态 | 内容 |
 |---|---|

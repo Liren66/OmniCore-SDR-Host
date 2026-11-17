@@ -1,6 +1,6 @@
 # PPS 时钟频率监控与 40 MHz 驯服
 
-PPS 计数器测量 AD9361 数字接口的 DATA_CLK 频率；没有 UTC 时间、IQ 硬件时间戳或定时收发功能。默认关闭；不需要外部 PPS 也可以正常启动和收发。在 PA4 调谐硬件上（SDK `vcxo=1`），只用 PPS、不用外部 10 MHz 时，CH32 会按这些计数驱动 PA4 DAC 驯服板载 40 MHz，见下文 [40 MHz 调谐模式](#40-mhz-调谐模式sdk-vcxo1)。
+PPS 计数器测量 AD9361 数字接口的 DATA_CLK 频率，本文介绍这项监控和 40 MHz 驯服；它本身不提供 UTC 时间。用 PPS 装载样点时间、定时收发见 [硬件时间戳](timestamps.md)。默认关闭；不需要外部 PPS 也可以正常启动和收发。在 PA4 调谐硬件上（SDK `vcxo=1`），只用 PPS、不用外部 10 MHz 时，CH32 会按这些计数驱动 PA4 DAC 驯服板载 40 MHz，见下文 [40 MHz 调谐模式](#40-mhz-调谐模式sdk-vcxo1)。
 
 ## 使用
 

@@ -91,7 +91,7 @@ och clock set --rx-chain "983.04M,245.76M,122.88M,61.44M,30.72M,30.72M" --tx-cha
 
 这是 FIR 旁路时的链格式示例，实际需与启用的 FIR 因子匹配。每组必须恰好六个正整数 Hz，可带 k/M/G 后缀，逗号内不放空格。RX 顺序 BBPLL、ADC、R2、R1、RF、采样率；TX 顺序 BBPLL、DAC、T2、T1、TF、采样率。两边 BBPLL 和最终采样率必须一致；合法分频、时钟范围及 FIR 运算预算由 SDK 再检查。成功输出为实际回读结果。
 
-AD9361 参考钟为固定 40 MHz，不能通过 clock set 修改。0.3.2 可用 ADF4002 将这个 40 MHz 振荡器驯服到外部 10 MHz，详见 [参考与外部 LO](reference-lo.md)。PPS 仅支持频率监控；PPS 调频、相干多设备同步和定时收发仍不支持；外部参考选源本身不构成相干同步或锁定证明。
+AD9361 参考钟为固定 40 MHz，不能通过 clock set 修改。0.3.2 可用 ADF4002 将这个 40 MHz 振荡器驯服到外部 10 MHz，详见 [参考与外部 LO](reference-lo.md)。PPS 驯服见 [PPS](pps.md)，定时收发见 [硬件时间戳](timestamps.md)，多板采样时钟同步见 [多板同步](multi-board-sync.md)；外部参考选源本身不构成相干同步或锁定证明。
 
 ## C/C++ 对应接口
 

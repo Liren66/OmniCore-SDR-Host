@@ -52,7 +52,7 @@ open 会取得设备所有权、确认协议版本、停止旧 USB 数据会话�
 - 有 RX 租借尚未 release 时返回 OCH_BUSY，硬件不变。使用租借的应用应先与消费者协调释放，再重试改参；不能一边持有指针一边等待重配置完成。
 - 控制和生命周期调用由一个管理线程串行执行。destroy/close 不得与该设备/流上的任何操作并发；flush 也不应与改参或 send 并发。
 
-RX 重配时丢弃旧队列，已知的本地主机丢样计入 host_dropped_samples。恢复后等待新的完整启动头，epoch 保持单调递增，首块带 OCH_META_START | OCH_META_DISCONTINUITY | OCH_META_TIME_UNKNOWN | OCH_META_RECONFIGURED（新增值 32）。重配本身不伪装成 DEVICE_OVERFLOW；设备侧停顿和丢样仍不可精确计数。下游应在该边界清除滤波、同步和解调历史，并使用新配置解释后续数据。
+RX 重配时丢弃旧队列，已知的本地主机丢样计入 host_dropped_samples。恢复后的第一个成帧块开启新 epoch（单调递增），带 OCH_META_START | OCH_META_DISCONTINUITY | OCH_META_RECONFIGURED（值 32）| OCH_META_HAS_TIME。重配本身不伪装成 DEVICE_OVERFLOW；暂停期间没有采样，`time_ticks` 可给出新段在时间轴上的位置，但改变采样率后硬件时间作废（`OCH_EVENT_TIME_INVALIDATED`）。下游应在该边界清除滤波、同步和解调历史，并使用新配置解释后续数据。
 
 TX 重配时丢弃旧排队数据并取消旧 USB 请求，避免把旧配置下的样本重放到新配置。原本正在 TX 的方向恢复前自动预填 4 个 transfer_bytes 大小的零 IQ 块，样本数计入 tx_padding_samples；新配置与零块提交后，先放行原生产者继续 send，在硬件启动过程中补充队列，再先恢复 RX、最后启动 TX。生产者应在 TIMEOUT 后继续重试，不必等待管理线程的配置调用返回；若恢复失败，核心重新阻止 TX 数据操作并停止双方。尚未启动或已经停止的 TX 不会因此启动。此前 send 接受的样本不保证已从 DAC 发出，也可能在重配中丢弃。
 
@@ -72,7 +72,7 @@ OCH_EVENT_RECONFIGURED（新增值 6）报告成功重配的恢复方向、间�
 
 硬件变更或恢复失败时，双方流停止，设备配置缓存失效，不自动回滚并重新发射。应用应保留错误详情，停止并等待 IO 线程退出，销毁旧流，在确认设备状态后显式 configure 并重新创建/启动流；若 SDK 报告 rollback=failed / applied=unknown，需按 FIR 说明先完成 rf.reinit。参数校验失败或租借导致的 BUSY 不属于已执行硬件事务失败。
 
-这项能力不提供跨进程控制服务：另开一个 och.exe 不能修改正在接收的软件所持设备。原始 och_command 修改仍禁止在存在流对象时执行，不能用 raw 命令绕过协调接口。本版不附带 OnAir 数据源或 SoapySDR 驱动。参见 [持续接收并改参示例](../examples/reconfigure.cpp)。ABI 仍为 1，已有公共结构布局不变；新语义需匹配 0.3 或更新 DLL，RX correction 新增函数须匹配含这些导出的 DLL。
+这项能力不提供跨进程控制服务：另开一个 och.exe 不能修改正在接收的软件所持设备。原始 och_command 修改仍禁止在存在流对象时执行，不能用 raw 命令绕过协调接口。参见 [持续接收并改参示例](../examples/reconfigure.cpp)。ABI 仍为 1，已有公共结构布局不变；新语义需匹配 0.3 或更新 DLL，RX correction 新增函数须匹配含这些导出的 DLL。
 
 ## RX 直流与 IQ 校正
 

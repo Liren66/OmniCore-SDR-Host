@@ -17,13 +17,13 @@
               ↓                           ↑
       当前wire租借 或应用格式转换     应用格式转当前wire
                 └─────────────┬──────────────┘
-                       libusbK 后端
+     libusbK 后端（Windows）/ libusb 后端（Linux、macOS）
                               │
              CH32H417 USB 3.0/2.0 ↔ FPGA ↔ AD9361
                          ZYNQ 控制接口
 ~~~
 
-CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux libusb 1.0。0.3 为 OnAir 等持续收样应用补齐运行中改参的生命周期能力；本版不包含 OnAir 数据源实现；核心库本身不依赖 SoapySDR，插件是可选的单独模块。
+CLI 与应用适配层调用同一公共接口；SoapySDR 插件（`bindings/soapy/`，见 [SoapySDR 插件](soapy.md)）和 MATLAB 工具箱（`bindings/matlab/`，见 [MATLAB 工具箱](matlab.md)）就是这样的适配层，只使用公开 C 接口，由 `bindings_use_public_api` 测试保证；两者共用 `bindings/common/` 里的映射与流逻辑。公共 API 不暴露 libusbK 句柄、Windows OVERLAPPED 或 FPGA 寄存器，给未来后端留下替换空间。当前后端为 Windows libusbK 与 Linux / macOS 共用的 libusb 1.0。0.3 为 OnAir 等持续收样应用补齐运行中改参的生命周期能力；本版不包含 OnAir 数据源实现；核心库本身不依赖 SoapySDR，插件是可选的单独模块。
 
 控制面逐条发送 SDK 命令并分离异步 EVT；数据面使用独立的 RX/TX USB 请求队列和生产者/消费者。一个 RX 流只能有一个应用消费者，一个 TX 流只能有一个应用生产者。RX 与 TX 可以并发。设备配置、打开、关闭、创建/销毁流应由应用管理线程串行执行。
 
@@ -104,4 +104,4 @@ start 时核心先等待 FPGA TX FIFO 达到约一个成帧块（每块组数 �
 
 后续插件负责第三方软件的设备枚举、参数映射、缓冲策略和数据类型转换。它可以使用 C++ 包装，也可以直接调用 C ABI。硬件公共状态（共享采样率、射频 LO、通道 mask）由设备对象管理，不能由不同插件假定独立时钟。
 
-适配器必须向上层传播间断、设备错误、主机队列溢出和 TX 欠供，不可只交付 IQ 而丢弃元数据。0.6.0 起每批 RX 样点带硬件时间（`time_ticks`），适配器应向上层传递，以支持定时收发和 PPS 对时。多设备同步需要共享 J3 10 MHz 和 J6 PPS；本版未实现 AD9361 多芯片同步（MCS），各板 LO 相位不相干。
+适配器必须向上层传播间断、设备错误、主机队列溢出和 TX 欠供，不可只交付 IQ 而丢弃元数据。0.6.0 起每批 RX 样点带硬件时间（`time_ticks`），适配器应向上层传递，以支持定时收发和 PPS 对时。多设备同步由 `och_multi_sync` 完成（共享 10 MHz、AD9361 多芯片同步 MCS、公共时间装载），见 [多板同步](multi-board-sync.md)；MCS 只对齐采样时钟，各板 LO 相位仍不相干。

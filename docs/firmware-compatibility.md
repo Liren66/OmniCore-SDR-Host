@@ -2,13 +2,17 @@
 
 主机安装器只安装 Windows 程序、主机 C/C++ 开发接口和目标数据口的 libusbK 驱动，不含板级 SDK 源码副本、ELF、BOOT.bin 或 FPGA bitstream，不自动烧写 CH32、SDK、FPGA 或启动 Flash。把软件装到新电脑后仍须连接具有匹配固件的 OmniCoreSDR。
 
-## 0.6.0：成帧传输为唯一格式
+## 版本对应
 
-OCH 0.6.0 只支持成帧 USB 传输（每个 16 KiB 块带 16 B 头和样点时间），需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`，提示加载 FPGA `CH32H417_IP` 1.3 与 `SDK_CMD_1.1`。
+OCH 0.6.0 起只支持成帧 USB 传输（每个 16 KiB 块带 16 B 头和样点时间），需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上。打开设备时若 `system_info?` 不含 `transport=framed16k`，`och_open` 返回 `OCH_UNSUPPORTED`，提示加载 FPGA `CH32H417_IP` 1.3 与 `SDK_CMD_1.1`。
+
+当前版本 OCH 0.8.0 推荐使用固件 [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)（Zynq `SDK_CMD_1.2_20261107_SYNC` + CH32 桥接 1.0.1）。0.7.2、0.8.0 没有新的固件要求：0.7.2 增加 macOS 支持并重构核心，0.8.0 增加 SoapySDR 插件与 MATLAB 工具箱，两者都只调用公开 C 接口。
 
 | OCH | Zynq 固件（BOOT.bin） | FPGA `CH32H417_IP` | SDK 标识 | CH32 桥接 |
 |---|---|---|---|---|
-| **0.7.1** | 同 0.7.0；每次都能读到 USB-C 电流需 CH32 桥接 1.0.1（[v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)） | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1**（1.0.0 仍可用，USB-C 电流只在上电后第一次可读） |
+| **0.8.0** | 同 0.7.1，推荐 v2026.11.08 | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1**（1.0.0 仍可用） |
+| 0.7.2 | 同 0.7.1 | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | 1.0.1（1.0.0 仍可用） |
+| 0.7.1 | 同 0.7.0；每次都能读到 USB-C 电流需 CH32 桥接 1.0.1（[v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)） | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | **1.0.1**（1.0.0 仍可用，USB-C 电流只在上电后第一次可读） |
 | 0.7.0 | v2026.11.07 及以上；`och sync` 需要 v2026.11.07.2（SDK_CMD_1.2，FPGA 带 OC_SYNC_AXI 1.0） | 1.3（`0x01030001`） | `SDK_CMD_1.2_20261107_SYNC` | 1.0.0（不变） |
 | 0.6.1 | v2026.11.07 及以上，推荐 v2026.11.07.1 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_EVTCOUNT`（v2026.11.07.1） | 1.0.0（不变） |
 | 0.6.0 | v2026.11.07 及以上 | 1.3（`0x01030001`） | `SDK_CMD_1.1_20261107_FRAMED` | 1.0.0（不变） |

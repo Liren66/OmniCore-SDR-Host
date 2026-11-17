@@ -4,24 +4,25 @@ OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机
 
 | 版本 | 平台 | 接口 | 许可证 |
 |---|---|---|---|
-| **0.8.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
+| **0.8.0**（C ABI 1） | Windows 10/11 x64（libusbK）<br>Linux x86_64（libusb 1.0）<br>macOS 12+ 通用二进制（libusb 1.0；Intel Mac 未实机测试） | 纯 C ABI + 仅头文件 C++ RAII 包装 | GPL-3.0-or-later |
 
 ![OmniCore Host 架构](docs/images/architecture.svg)
 
 > [!IMPORTANT]
-> **0.6.x 需要 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07) 及以上；推荐 [v2026.11.07.1](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.1)，过载时欠流 / GAP 事件合并上报，0.6.1 按 `count` 计数。** USB 传输改为成帧格式（每个 16 KiB 块带 16 字节头和 64 位样点时间），并新增硬件时间戳、PPS 对时、定时 RX 与定时 TX。旧固件请继续使用 OCH 0.5.x，两者不能混用，见 [固件兼容性](docs/firmware-compatibility.md)。
-
-> [!NOTE]
-> **0.7.1：`och info` / `och power` 每次都能读到 USB-C 电流，需要 CH32 桥接固件 1.0.1（固件 [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)，`och firmware update OmniCore-Bridge-1.0.1.ocfw`）。** 桥接固件 1.0.0 下只有上电后第一次可读。
+> **推荐固件 [v2026.11.08](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.08)：Zynq `SDK_CMD_1.2_20261107_SYNC`、FPGA `CH32H417_IP` 1.3、CH32 桥接 1.0.1。**
 >
-> **0.7.0 新增多板同步（`och sync`），需要 Zynq 固件 [v2026.11.07.2](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07.2)（SDK_CMD_1.2）。** 其余功能在 v2026.11.07 及以上的固件上照常可用，见 [多板同步](docs/multi-board-sync.md)。
+> - 最低要求 Zynq 固件 [v2026.11.07](https://github.com/Liren66/OmniCore-SDR-Firmware/releases/tag/v2026.11.07)（成帧 USB 传输：每个 16 KiB 块带 16 字节头和 64 位样点时间）。更旧的固件只能用 OCH 0.5.x，两者不能混用。
+> - 多板同步（`och sync`）需要 Zynq 固件 v2026.11.07.2 及以上（`SDK_CMD_1.2`）。
+> - `och info` / `och power` 每次都读到 USB-C 电流，需要桥接固件 1.0.1（`och firmware update OmniCore-Bridge-1.0.1.ocfw`）；1.0.0 下只有上电后第一次可读。
+>
+> 各版本对应关系见 [固件兼容性](docs/firmware-compatibility.md)。
 
 ## 目录
 
 1. [功能](#功能)
 2. [快速上手](#快速上手)
 3. [命令行](#命令行)
-4. [Linux 配置](#linux-配置)
+4. [Linux 与 macOS 配置](#linux-与-macos-配置)
 5. [测试结果](#测试结果)
 6. [C/C++ 开发](#cc-开发)（含 [硬件时间](#硬件时间)）
 7. [GNU Radio 与 SoapySDR](#gnu-radio-与-soapysdr)
@@ -73,7 +74,16 @@ sudo install -m 0644 packaging/linux/60-omnicore.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
 
-运行无需 sudo。USB 权限、目录布局与性能参数见 [Linux 配置](#linux-配置)；完整说明见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt) / [Linux 安装](docs/INSTALL_LINUX.md)。
+**macOS**：解压 `OmniCoreHost-0.8.0-macos-universal.tar.gz`（arm64 + x86_64 通用二进制，libusb 已静态链接，不需要 Homebrew），无需安装驱动：
+
+```bash
+tar -xzf OmniCoreHost-0.8.0-macos-universal.tar.gz
+xattr -dr com.apple.quarantine OmniCoreHost-macos   # 浏览器下载的归档会被 Gatekeeper 隔离
+sudo mkdir -p /opt/omnicore && sudo mv OmniCoreHost-macos /opt/omnicore/0.8.0
+sudo ln -sfn /opt/omnicore/0.8.0/bin/och /usr/local/bin/och
+```
+
+运行无需 sudo。USB 权限、目录布局与性能参数见 [Linux 与 macOS 配置](#linux-与-macos-配置)；完整说明见 [Windows 安装](packaging/windows/INSTALL_WINDOWS.txt) / [Linux 安装](docs/INSTALL_LINUX.md)。
 
 ### 2. 连接设备
 
@@ -108,7 +118,7 @@ och bench --rx --tx --channels 1,2 --sample-rate 30.72M --seconds 10
 
 ### 设备固件要求
 
-安装包只含主机软件，不自动烧写板级固件。0.6.x 需要 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) v2026.11.07 及以上的 `BOOT.bin`（FPGA `CH32H417_IP` 1.3、`SDK_CMD_1.1`）；打开设备时检查 `transport=framed16k`，不满足则拒绝连接。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/firmware-update.md)。设备还需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/firmware-compatibility.md)。
+安装包只含主机软件，不自动烧写板级固件。需要 [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware/releases) v2026.11.07 及以上的 `BOOT.bin`（FPGA `CH32H417_IP` 1.3、`SDK_CMD_1.1` 及以上），推荐 v2026.11.08（`SDK_CMD_1.2`、桥接 1.0.1）；打开设备时检查 `transport=framed16k`，不满足则拒绝连接。CH32 桥接固件可用 `och firmware update FILE.ocfw` 手动通过 USB 升级，见 [桥接固件升级](docs/firmware-update.md)。设备还需 SDK 命令封装 v1 与 CH32 诊断协议 v4；扩展功能按 `och get system.info` 返回的能力字段启用（如 `rx_correction=1`、`external_lo=1`、`pps_monitor=1`），缺少时只拒绝对应功能。TX FIR 插值 ×2 / ×4 需要包含 TX 系数回读修复的 SDK 固件，旧固件只能使用插值 1。详见 [固件兼容性](docs/firmware-compatibility.md)。
 
 ## 命令行
 
@@ -118,7 +128,7 @@ CH32 桥接固件 1.0.0 及以上可直接通过 USB 升级，升级包从 [Omni
 
 ```bash
 och firmware info                                  # 当前版本与模式
-och firmware update OmniCore-Bridge-1.0.0.ocfw     # 约 5 秒，中断后可重新执行
+och firmware update OmniCore-Bridge-1.0.1.ocfw     # 约 5 秒，中断后可重新执行
 ```
 
 `och firmware info` 显示 `legacy` 或 `Bootloader: none` 时，需先用 WCH-Link 烧录一次 `Merge.bin`。
@@ -197,9 +207,12 @@ och set fan.enabled on
 
 完整参数见 [命令行参考](docs/cli.md)。
 
-## Linux 配置
+## Linux 与 macOS 配置
 
-Linux 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，底层使用 libusb 1.0 异步传输。已在 Ubuntu 24.04.3 x86_64 + USB3 上验证；其他发行版建议从源码构建，ARM64 与 Linux 下的 USB2 性能尚未测试。
+Linux 与 macOS 版提供与 Windows 相同的 `och` 命令行、C ABI 1 和 C++ 包装，底层共用 libusb 1.0 异步传输（`src/transport/posix`）。
+
+- **Linux**：已在 Ubuntu 24.04.3 x86_64 + USB3 上验证；其他发行版建议从源码构建，ARM64 与 Linux 下的 USB2 性能尚未测试。下表为 Linux 的配置项。
+- **macOS**：发布包为 macOS 12+ 通用二进制，不需要驱动或 udev 规则；流运行期间程序会阻止系统空闲睡眠。已在 Apple Silicon + USB3 上实机使用（SoapySDR 插件、MATLAB 工具箱与 [扫频示例](docs/sweep.md) 的验收均在 macOS 上完成）。双通道 61.44 MSPS 接收在测试用的 Mac 上偶有设备端溢出，需要零溢出时先用 `och bench --json` 确认。从源码构建：`brew install cmake ninja pkg-config libusb`，再 `cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/macos`。
 
 | 项目 | 配置 |
 |---|---|
@@ -378,7 +391,7 @@ cmake --build build-examples
 
 `bindings/soapy/` 是 OmniCoreSDR 的 [SoapySDR](https://github.com/pothosware/SoapySDR) 插件，驱动名 `omnicore`。装好后，GNU Radio（gr-soapy）、SDR++、SDRangel 以及 SoapySDR 的 Python / C++ 接口都能直接使用这块板。插件只调用公开的 C 接口（`omnicore/och.h`），和 `och` 命令行用的是同一套库。
 
-插件需要和机器上的 SoapySDR 用同一版本、同一种编译器编译，所以只提供源码，安装包和 Linux 发布包里都不带。Linux / macOS 编译：
+插件需要和机器上的 SoapySDR 用同一版本、同一种编译器编译，所以只提供源码，Windows 安装包和 Linux / macOS 发布包里都不带。Linux / macOS 编译：
 
 ```bash
 # 先装 SoapySDR 开发包：Debian/Ubuntu 为 libsoapysdr-dev，macOS 为 brew install soapysdr
@@ -432,7 +445,14 @@ powershell -NoProfile -File packaging/windows/build-package.ps1 -StageDir build/
 ```bash
 # Linux：编译并安装到 dist/OmniCoreHost-linux
 bash tools/build-linux.sh
+
+# macOS：先 brew install cmake ninja pkg-config libusb
+cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/macos
+cmake --install build/macos --prefix dist/OmniCoreHost-macos
 ```
+
+发布用的 Linux / macOS 归档由 `.github/workflows/release.yml` 生成；macOS 版在流水线里静态链接 libusb 并编成通用二进制，本机按上面的方法编译时动态链接 Homebrew 的 libusb。
 
 加 `-DOCH_BUILD_SOAPY=ON` 会同时编译 SoapySDR 插件（需要 SoapySDR 开发包，见上一节）。默认关闭，`tools/build.ps1`、`tools/build-linux.sh` 和安装包都不包含插件。
 
@@ -452,16 +472,16 @@ OmniCoreHost/
 │   ├── core/           设备、配置事务、流线程、射频与板控
 │   ├── dsp/            IQ 编解码
 │   ├── protocol/       16 KiB 成帧块解析与生成
-│   └── transport/      libusbK (Windows) / libusb (Linux) 传输层
+│   └── transport/      传输层：win/ libusbK（Windows）、posix/ libusb（Linux、macOS）、fake/ 离线测试
 ├── bindings/
 │   ├── common/         各插件共用的映射、交织、RX 时间与 TX 突发逻辑及其离线测试
 │   ├── matlab/         MATLAB 工具箱：MEX 网关（mex/）、+omnicore 包、参考文档（doc/）、示例、测试与实机验收脚本
 │   └── soapy/          SoapySDR 插件（driver=omnicore）与实机验收脚本（hwtest/）
-├── examples/           C++ 示例、FTR 示例、GNU Radio 流图（soapy/）
-├── tests/              成帧解析单元测试、硬件时间戳板上测试
+├── examples/           C++ 示例、扫频瀑布图（sweep，含 Python 绘图与网页演示）、FTR 示例、GNU Radio 流图（soapy/）
+├── tests/              离线测试（成帧解析、FakeLink 传输、多板同步编排）与硬件时间戳板上测试
 ├── docs/               使用与开发文档、插图
 ├── cmake/              CMake 包配置模板
-├── tools/              构建脚本、吞吐扫描（bench_sweep.py）
+├── tools/              构建脚本（含在 macOS / Linux 上检查 Windows 版能否编译的交叉编译脚本）、吞吐扫描（bench_sweep.py）
 ├── packaging/
 │   ├── windows/        Inno 安装包脚本、MSVC 导入库生成、驱动助手源码（driver/）
 │   └── linux/          udev 规则

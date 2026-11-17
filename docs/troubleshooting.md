@@ -8,6 +8,8 @@
 
 ## 电源查询显示 unknown
 
+桥接固件 1.0.1 及以上时，och power / och info 每次通过 `typec?` 实时查询 USB-C 状态（`live=true`），不会出现下面的情况；仍为 unknown 时先用 `och firmware info` 确认桥接版本。以下说明只适用于桥接固件 1.0.0。
+
 och power status 使用现有 CH32 EP83 启动日志，只有完整、无冲突且有效的 UFP 快照才能给出 supports_3a=true/false。没有 EP83、日志尚未到达、被其他程序消费或存在冲突快照都可能是 unknown，不等于不支持 3 A。info 也会读取并消费这段日志；缓存仅属于当前进程中的设备句柄，关闭句柄或退出进程后销毁。因而先 info 显示 3 A、再 power status 显示 unknown，并不表示 3 A 消失或供电下降。
 
 启动日志不提供可靠启动编号、实时连接状态或 LED GPIO 读回。主机仅报告已有信息，不会为取得结果而修改/下载 CH32、SDK 或 FPGA，也不假装测量当前供电电流。若同一日志显示 3 A，只说明该启动快照中的检测结果，不能据此证明线缆/电源在当前负载下表现。
@@ -62,8 +64,8 @@ RX 的 RECONFIGURED、START、DISCONTINUITY 标志意味着新数据段，下游
 
 ## 与第三方软件的关系
 
-GNU Radio（gr-soapy）、SDR++、SDRangel 和 SoapySDR 的 Python / C++ 接口可以通过 SoapySDR 插件（驱动名 `omnicore`）使用 OmniCoreSDR。插件需要从源码编译，安装包不带，见 [SoapySDR 插件](soapy.md)；插件相关的问题见那里的“排错”一节。MATLAB 目前还没有适配层。
+GNU Radio（gr-soapy）、SDR++、SDRangel 和 SoapySDR 的 Python / C++ 接口可以通过 SoapySDR 插件（驱动名 `omnicore`）使用 OmniCoreSDR。插件需要从源码编译，安装包不带，见 [SoapySDR 插件](soapy.md)；插件相关的问题见那里的“排错”一节。MATLAB 使用自带的工具箱（不经过 SoapySDR），问题见 [MATLAB 工具箱](matlab.md#排错)。
 
 通过插件运行时，上面“运行中改参”一节同样适用：改 TX 本振、带宽或采样率会让传输短暂暂停，全双工下 RX 会出现空档，插件会把它报成 OVERFLOW 并重新打时间标签。插件的写入会在调用方给的超时时间内等待暂停结束，所以 gr-soapy 只有在暂停超过 100 ms 时才会报 `TIMEOUT`。
 
-外部 PPS 支持频率监控；开启后没有输入时显示 `no_signal`，频率无效。尚不支持硬件时间戳、精确定时 TX、PPS 闭环调频、设备间同步或多软件同时独占同一设备。首次发行安装器还需要在干净 Windows 主机及不同安全策略上实测。
+外部 PPS 开启后没有输入时显示 `no_signal`，频率无效。硬件时间戳、定时 RX / TX 见 [硬件时间戳](timestamps.md)，PPS 驯服 40 MHz 见 [PPS](pps.md)，多板同步见 [多板同步](multi-board-sync.md)。同一块板同一时间只能被一个进程打开，多个软件不能同时使用。Windows 安装器的首次驱动安装还需要在干净 Windows 主机及不同安全策略上实测。
