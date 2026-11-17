@@ -4,6 +4,7 @@ The official images used by the README and `docs/`, kept as SVG diagrams and PNG
 
 | File | Contents | Data source |
 |---|---|---|
+| `banner-light.svg` / `banner-dark.svg` | README header banner (I/Q constellation, waveform, wordmark) for light and dark GitHub themes; Chinese subtitle versions in `zh-CN/` | `README.md` / `README.zh-CN.md` |
 | `architecture.svg` | Software layers, control plane / data plane, USB link, and board components | `docs/architecture.md` |
 | `rx-boundaries.svg` | RX framed block header time, overflow GAP, epochs, and metadata records | Metadata flags in `src/core/stream.cpp` |
 | `timestamps.svg` | Timing of PPS alignment, timed RX, timed TX bursts, and events | `docs/timestamps.md`, FPGA `CH32H417_IP` 1.3 |
