@@ -1,6 +1,6 @@
 # OmniCore Host (OCH)
 
-[English](README.md) | 简体中文
+[English](README.md) | 简体中文 · **在线文档：<https://liren66.github.io/OmniCore-SDR-Host/zh-CN/>**
 
 OmniCore Host 是 **OmniCoreSDR**（AD9361 + Zynq + CH32H417 USB 桥）的主机端软件：C++17 运行库、命令行工具 `och` 和公共 C/C++ SDK。它负责设备发现、射频控制、连续 IQ 收发、RX 数据边界恢复与吞吐测试，可作为 GNU Radio、MATLAB、SDRangel 等上层软件的接入基础；[OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir)（OnAir 的 fork）已通过它原生支持 RX、TX 与全双工。
 

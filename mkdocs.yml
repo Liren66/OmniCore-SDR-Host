@@ -1,0 +1,145 @@
+# Documentation site for OmniCore Host, published to GitHub Pages by .github/workflows/docs.yml.
+# Theme overrides and the link-rewriting hook live in tools/mkdocs/.
+# Local preview:  pip install -r docs/requirements.txt && mkdocs serve
+site_name: OmniCore Host
+site_description: Host software, C/C++ SDK, SoapySDR plugin and MATLAB toolbox for the OmniCoreSDR (AD9361 + Zynq + CH32H417 USB bridge)
+site_url: https://liren66.github.io/OmniCore-SDR-Host/
+repo_url: https://github.com/Liren66/OmniCore-SDR-Host
+repo_name: Liren66/OmniCore-SDR-Host
+edit_uri: edit/main/docs/
+copyright: Copyright © 2026 OmniCoreSDR contributors · GPL-3.0-or-later
+
+docs_dir: docs
+# Pages and images sit side by side (api.html next to images/), so the raw HTML <img src="images/..">
+# in the Markdown resolves the same way on the site as on GitHub.
+use_directory_urls: false
+exclude_docs: |
+  images/README.md
+  requirements.txt
+
+theme:
+  name: material
+  custom_dir: tools/mkdocs/overrides
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle: {icon: material/brightness-auto, name: Switch to light mode}
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle: {icon: material/brightness-7, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle: {icon: material/brightness-4, name: Switch to system preference}
+  icon:
+    repo: fontawesome/brands/github
+
+hooks:
+  - tools/mkdocs/hooks.py
+
+plugins:
+  - search:
+      lang: [en, zh]
+      # jieba (docs/requirements.txt) segments Chinese at build time with zero-width spaces (​);
+      # splitting on them makes Chinese words searchable. '_' is not a separator, so identifiers
+      # such as och_send_burst stay whole.
+      separator: '[\s​\-]+'
+  - callouts
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh-CN
+          name: 简体中文
+          build: true
+          site_description: OmniCoreSDR（AD9361 + Zynq + CH32H417 USB 桥）的主机软件、C/C++ SDK、SoapySDR 插件与 MATLAB 工具箱
+          nav_translations:
+            Home: 首页
+            Getting Started: 入门
+            Features: 功能
+            Integrations: 集成
+            Reference: 参考
+            Changelog: 更新记录
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - toc:
+      permalink: true
+      # GitHub-compatible heading anchors (keep Chinese characters), so links written for
+      # GitHub such as api.md#rx-直流与-iq-校正 work on the site too.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: info
+    unrecognized_links: warn
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Liren66/OmniCore-SDR-Host
+    - icon: material/download
+      link: https://github.com/Liren66/OmniCore-SDR-Host/releases
+      name: Releases
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - install.md
+      - cli.md
+      - troubleshooting.md
+      - firmware-update.md
+      - firmware-compatibility.md
+  - Features:
+      - timestamps.md
+      - multi-board-sync.md
+      - sweep.md
+      - iq8.md
+      - fir.md
+      - reference-lo.md
+      - pps.md
+      - board-control.md
+  - Integrations:
+      - api.md
+      - soapy.md
+      - matlab.md
+  - Reference:
+      - commands.md
+      - protocol.md
+      - architecture.md
+      - benchmarks.md
+      - Changelog: changelog.md
