@@ -274,6 +274,16 @@ delete(dev)
 | [桥接固件升级](docs/zh-CN/firmware-update.md) | [8bit USB IQ](docs/zh-CN/iq8.md) · [FIR 与时钟](docs/zh-CN/fir.md) | [Windows 安装](packaging/windows/INSTALL_WINDOWS.zh-CN.txt) | [测试结果](docs/zh-CN/benchmarks.md) |
 | [固件兼容性](docs/zh-CN/firmware-compatibility.md) | [参考与外部 LO](docs/zh-CN/reference-lo.md) · [PPS](docs/zh-CN/pps.md) | [从源码构建](docs/zh-CN/development.md) | [板级控制](docs/zh-CN/board-control.md) · [更新记录](CHANGELOG.md) |
 
+## 相关仓库
+
+| 仓库 | 内容 |
+|---|---|
+| [OmniCore-SDR-Hardware](https://github.com/Liren66/OmniCore-SDR-Hardware) | Altium Designer 工程、原理图、PCB、集成元件库，以及 FDM / CNC 外壳文件 |
+| [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) | Zynq-7020 / AD9361 FPGA 与 no-OS 固件、CH32H417 USB 3.0 桥接固件、FT2232 JTAG EEPROM 工具 |
+| [OmniCore-SDR-Linux](https://github.com/Liren66/OmniCore-SDR-Linux) | 板端 Linux 镜像：SDK 命令固件运行在用户态（USB 3.0 / OCH 用法不变），另有以太网 libiio 通路 |
+| [OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) | OnAir 的 fork，通过 OmniCore Host 原生支持 RX、TX、全双工与 RSSI |
+| [cuRF-stream](https://github.com/oy159/cuRF-stream) | 以 OmniCore SDR 为前端，在笔记本 GPU 上实时显示宽带频谱占用与信号识别 |
+
 ## 许可证
 
 Copyright (C) 2026 OmniCoreSDR contributors。本工程源码采用 [GNU 通用公共许可证第 3 版或更新版本](LICENSE)（`SPDX-License-Identifier: GPL-3.0-or-later`），提交到本项目的贡献同样按此许可证授权。本程序按“原样”提供，不附带任何担保。libusbK、libwdi 等第三方组件沿用各自许可证，见 `third_party/driver/NOTICES.txt`。

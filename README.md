@@ -274,6 +274,16 @@ The full documentation is at **<https://liren66.github.io/OmniCore-SDR-Host/>** 
 | [Bridge Firmware Update](docs/firmware-update.md) | [8-bit USB IQ](docs/iq8.md) · [FIR and Clocks](docs/fir.md) | [Windows Installation](packaging/windows/INSTALL_WINDOWS.txt) | [Benchmarks](docs/benchmarks.md) |
 | [Firmware Compatibility](docs/firmware-compatibility.md) | [Reference and LO](docs/reference-lo.md) · [PPS](docs/pps.md) | [Building from Source](docs/development.md) | [Board Control](docs/board-control.md) · [Changelog](CHANGELOG.md) |
 
+## Related Repositories
+
+| Repository | Contents |
+|---|---|
+| [OmniCore-SDR-Hardware](https://github.com/Liren66/OmniCore-SDR-Hardware) | Altium Designer project, schematics, PCB, component library, and FDM / CNC enclosure files |
+| [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) | Zynq-7020 / AD9361 FPGA and no-OS firmware, CH32H417 USB 3.0 bridge firmware, FT2232 JTAG EEPROM tool |
+| [OmniCore-SDR-Linux](https://github.com/Liren66/OmniCore-SDR-Linux) | Board-side Linux image: the SDK command firmware in user space (USB 3.0 / OCH unchanged) plus libiio over Ethernet |
+| [OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) | OnAir fork with native RX, TX, full duplex, and RSSI through OmniCore Host |
+| [cuRF-stream](https://github.com/oy159/cuRF-stream) | Real-time wideband spectrum occupancy and signal recognition on a laptop GPU, fed by OmniCore SDR |
+
 ## License
 
 Copyright (C) 2026 OmniCoreSDR contributors. Licensed under the [GNU General Public License v3.0 or later](LICENSE) (`SPDX-License-Identifier: GPL-3.0-or-later`); contributions are accepted under the same license. This program is provided "as is", without any warranty. Third-party components such as libusbK and libwdi keep their own licenses; see `third_party/driver/NOTICES.txt`.
