@@ -95,3 +95,13 @@ dev.configure(cfg);
 och::stream rx(dev, och::stream_args(OCH_RX));
 rx.start();
 ```
+
+## Related repositories
+
+| Repository | Contents |
+|---|---|
+| [OmniCore-SDR-Hardware](https://github.com/Liren66/OmniCore-SDR-Hardware) | Altium Designer project, schematics, PCB, component library, and FDM / CNC enclosure files |
+| [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) | Zynq-7020 / AD9361 FPGA and no-OS firmware, CH32H417 USB 3.0 bridge firmware, FT2232 JTAG EEPROM tool |
+| [OmniCore-SDR-Linux](https://github.com/Liren66/OmniCore-SDR-Linux) | Board-side Linux image: the SDK command firmware in user space (USB 3.0 / OCH unchanged) plus libiio over Ethernet |
+| [OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) | OnAir fork with native RX, TX, full duplex, and RSSI through OmniCore Host |
+| [cuRF-stream](https://github.com/oy159/cuRF-stream) | Real-time wideband spectrum occupancy and signal recognition on a laptop GPU, fed by OmniCore SDR |

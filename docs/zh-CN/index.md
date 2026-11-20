@@ -95,3 +95,13 @@ dev.configure(cfg);
 och::stream rx(dev, och::stream_args(OCH_RX));
 rx.start();
 ```
+
+## 相关仓库
+
+| 仓库 | 内容 |
+|---|---|
+| [OmniCore-SDR-Hardware](https://github.com/Liren66/OmniCore-SDR-Hardware) | Altium Designer 工程、原理图、PCB、集成元件库，以及 FDM / CNC 外壳文件 |
+| [OmniCore-SDR-Firmware](https://github.com/Liren66/OmniCore-SDR-Firmware) | Zynq-7020 / AD9361 FPGA 与 no-OS 固件、CH32H417 USB 3.0 桥接固件、FT2232 JTAG EEPROM 工具 |
+| [OmniCore-SDR-Linux](https://github.com/Liren66/OmniCore-SDR-Linux) | 板端 Linux 镜像：SDK 命令固件运行在用户态（USB 3.0 / OCH 用法不变），另有以太网 libiio 通路 |
+| [OmniCore-SDR-OnAir](https://github.com/Liren66/OmniCore-SDR-OnAir) | OnAir 的 fork，通过 OmniCore Host 原生支持 RX、TX、全双工与 RSSI |
+| [cuRF-stream](https://github.com/oy159/cuRF-stream) | 以 OmniCore SDR 为前端，在笔记本 GPU 上实时显示宽带频谱占用与信号识别 |
